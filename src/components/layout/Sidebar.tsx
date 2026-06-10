@@ -1,0 +1,287 @@
+"use client";
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { cn } from "@/lib/utils";
+import {
+  LayoutDashboard, Package, Warehouse, ShoppingCart, BookOpen,
+  Receipt, Wallet, Users, ClipboardCheck, FileText, Truck,
+  BarChart3, PanelLeftClose, PanelLeft, Flame, Boxes, CreditCard,
+  Banknote, CalendarDays, Car, TrendingUp, Clock, FolderOpen, MessageSquarePlus,
+  ShieldCheck, Building2, KeyRound, FileDown,
+} from "lucide-react";
+
+interface SidebarProps {
+  role: string;
+  userName: string;
+  collapsed: boolean;
+  onToggle: () => void;
+  enabledFeatures?: string[];
+}
+
+interface NavItem {
+  label: string;
+  href: string;
+  icon: React.ReactNode;
+  featureKey?: string; // if set, hidden when not in enabledFeatures (unless enabledFeatures is empty)
+}
+
+interface NavSection {
+  label?: string;
+  items: NavItem[];
+}
+
+function getNavSections(role: string, base: string): NavSection[] {
+  const dashboard = { label: "Dashboard", href: base, icon: <LayoutDashboard className="w-4 h-4" /> };
+
+  if (role === "ADMIN" || role === "MANAGER") {
+    return [
+      { items: [dashboard] },
+      {
+        label: "Operations",
+        items: [
+          { label: "Inventory",         href: `${base}/inventory`,          icon: <Boxes className="w-4 h-4" />,       featureKey: "inventory"          },
+          { label: "Godown",            href: `${base}/godown`,             icon: <Warehouse className="w-4 h-4" />,   featureKey: "godown"             },
+          { label: "Vehicle Management",href: `${base}/vehicle-management`, icon: <Car className="w-4 h-4" />,        featureKey: "vehicle_management" },
+          { label: "Delivery Plan",     href: `${base}/delivery-plan`,      icon: <Truck className="w-4 h-4" />,      featureKey: "delivery_plan"      },
+        ],
+      },
+      {
+        label: "Accounts",
+        items: [
+          { label: "Customer Management", href: `${base}/customer-management`, icon: <Users className="w-4 h-4" />,       featureKey: "customer_management" },
+          { label: "Office Transactions", href: `${base}/office-transactions`, icon: <Receipt className="w-4 h-4" />,     featureKey: "office_transactions" },
+          { label: "Commercial Sales",    href: `${base}/commercial-sales`,    icon: <ShoppingCart className="w-4 h-4" />,featureKey: "commercial_sales"    },
+          { label: "Credit Ledger",       href: `${base}/credit-ledger`,       icon: <CreditCard className="w-4 h-4" />, featureKey: "credit_ledger"       },
+          { label: "GST Invoicing",       href: `${base}/gst-invoicing`,       icon: <FileText className="w-4 h-4" />,   featureKey: "gst_invoicing"       },
+        ],
+      },
+      {
+        label: "Finance",
+        items: [
+          { label: "Salaries & Drawings", href: `${base}/salaries`,           icon: <Wallet className="w-4 h-4" />,      featureKey: "salaries"           },
+          { label: "My Salary",           href: `${base}/my-salary`,          icon: <Banknote className="w-4 h-4" /> },
+          { label: "Expenses & Vehicles", href: `${base}/expenses`,           icon: <BarChart3 className="w-4 h-4" />,   featureKey: "expenses"           },
+          { label: "Expense Categories",  href: `${base}/expense-categories`, icon: <TrendingUp className="w-4 h-4" />,  featureKey: "expense_categories" },
+          { label: "Daily Closing",       href: `${base}/daily-closing`,      icon: <ClipboardCheck className="w-4 h-4" />, featureKey: "daily_closing"  },
+        ],
+      },
+      {
+        label: "People",
+        items: [
+          ...(role === "ADMIN" ? [{ label: "Staff Management", href: `${base}/staff-management`, icon: <Users className="w-4 h-4" />, featureKey: "staff_management" }] : []),
+          { label: "Approvals",       href: `${base}/approvals`,       icon: <BookOpen className="w-4 h-4" />,    featureKey: "approvals"       },
+          { label: "Leave Management",href: `${base}/leave-management`,icon: <CalendarDays className="w-4 h-4" />,featureKey: "leave_management"},
+          { label: "Attendance",      href: `${base}/attendance`,      icon: <Clock className="w-4 h-4" />,       featureKey: "attendance"      },
+        ],
+      },
+      {
+        label: "Intelligence",
+        items: [
+          { label: "Analytics",        href: `${base}/analytics`,        icon: <TrendingUp className="w-4 h-4" />,     featureKey: "analytics"        },
+          { label: "Payment Receipts", href: `${base}/payment-receipts`, icon: <Receipt className="w-4 h-4" />,       featureKey: "payment_receipts" },
+          { label: "Documents",        href: `${base}/documents`,        icon: <FolderOpen className="w-4 h-4" />,    featureKey: "documents"        },
+          { label: "Complaints",       href: `${base}/complaints`,       icon: <MessageSquarePlus className="w-4 h-4" />, featureKey: "complaints"  },
+          { label: "Data Export",      href: `${base}/export`,           icon: <FileDown className="w-4 h-4" />,      featureKey: "export"           },
+        ],
+      },
+      {
+        label: "Enterprise",
+        items: [
+          { label: "Branches", href: `${base}/branches`, icon: <Building2 className="w-4 h-4" />, featureKey: "branches" },
+          ...(role === "ADMIN" ? [
+            { label: "API Gateway",   href: `${base}/api-keys`, icon: <KeyRound className="w-4 h-4" />,   featureKey: "api_gateway" },
+            { label: "Security / 2FA",href: `${base}/security`, icon: <ShieldCheck className="w-4 h-4" />,featureKey: "security"    },
+          ] : []),
+        ],
+      },
+    ];
+  }
+
+  if (role === "GODOWN_KEEPER") {
+    return [
+      { items: [dashboard] },
+      {
+        label: "Operations",
+        items: [
+          { label: "Godown & Fleet", href: `${base}/godown`,     icon: <Warehouse className="w-4 h-4" />, featureKey: "godown"     },
+          { label: "Inventory",      href: `${base}/inventory`,  icon: <Boxes className="w-4 h-4" />,     featureKey: "inventory"  },
+        ],
+      },
+      {
+        label: "My Account",
+        items: [
+          { label: "My Salary",       href: `${base}/my-salary`,       icon: <Banknote className="w-4 h-4" />    },
+          { label: "Leave Management",href: `${base}/leave-management`, icon: <CalendarDays className="w-4 h-4" />, featureKey: "leave_management" },
+        ],
+      },
+    ];
+  }
+
+  if (role === "STAFF") {
+    return [
+      { items: [dashboard] },
+      {
+        label: "Modules",
+        items: [
+          { label: "Customer Management", href: `${base}/customer-management`, icon: <Users className="w-4 h-4" />,        featureKey: "customer_management" },
+          { label: "Office Transactions", href: `${base}/office-transactions`, icon: <Receipt className="w-4 h-4" />,      featureKey: "office_transactions" },
+          { label: "Commercial Sales",    href: `${base}/commercial-sales`,    icon: <ShoppingCart className="w-4 h-4" />, featureKey: "commercial_sales"    },
+          { label: "Credit Ledger",       href: `${base}/credit-ledger`,       icon: <CreditCard className="w-4 h-4" />,  featureKey: "credit_ledger"       },
+          { label: "GST Invoicing",       href: `${base}/gst-invoicing`,       icon: <FileText className="w-4 h-4" />,    featureKey: "gst_invoicing"       },
+          { label: "Office Stock",        href: `${base}/inventory`,           icon: <Boxes className="w-4 h-4" />,       featureKey: "inventory"           },
+        ],
+      },
+      {
+        label: "My Account",
+        items: [
+          { label: "My Salary",        href: `${base}/my-salary`,        icon: <Banknote className="w-4 h-4" />  },
+          { label: "Leave Management", href: `${base}/leave-management`, icon: <CalendarDays className="w-4 h-4" />, featureKey: "leave_management" },
+          { label: "Payment Receipts", href: `${base}/payment-receipts`, icon: <Receipt className="w-4 h-4" />,     featureKey: "payment_receipts" },
+        ],
+      },
+    ];
+  }
+
+  if (role === "DELIVERY_BOY") {
+    return [
+      { items: [dashboard] },
+      {
+        label: "Deliveries",
+        items: [
+          { label: "My Deliveries",  href: `${base}/my-deliveries`,  icon: <Truck className="w-4 h-4" />   },
+          { label: "Delivery Ledger",href: `${base}/delivery-ledger`,icon: <Package className="w-4 h-4" /> },
+          { label: "Credit Ledger",  href: `${base}/credit-ledger`,  icon: <CreditCard className="w-4 h-4" />, featureKey: "credit_ledger" },
+        ],
+      },
+      {
+        label: "My Account",
+        items: [
+          { label: "My Salary",       href: `${base}/my-salary`,       icon: <Banknote className="w-4 h-4" />    },
+          { label: "Leave Management",href: `${base}/leave-management`, icon: <CalendarDays className="w-4 h-4" />, featureKey: "leave_management" },
+        ],
+      },
+    ];
+  }
+
+  return [{ items: [dashboard] }];
+}
+
+function filterSections(sections: NavSection[], enabledFeatures: string[]): NavSection[] {
+  // Empty array = all features enabled (backward compat for old agencies)
+  if (enabledFeatures.length === 0) return sections;
+  return sections
+    .map((section) => ({
+      ...section,
+      items: section.items.filter(
+        (item) => !item.featureKey || enabledFeatures.includes(item.featureKey)
+      ),
+    }))
+    .filter((section) => section.items.length > 0);
+}
+
+function getBase(role: string) {
+  const map: Record<string, string> = {
+    ADMIN: "/admin", MANAGER: "/manager",
+    GODOWN_KEEPER: "/godown-keeper", STAFF: "/staff", DELIVERY_BOY: "/delivery-boy",
+  };
+  return map[role] ?? "/";
+}
+
+const ROLE_LABELS: Record<string, string> = {
+  ADMIN: "Admin", MANAGER: "Manager",
+  GODOWN_KEEPER: "Godown Keeper", STAFF: "Staff", DELIVERY_BOY: "Delivery Boy",
+};
+
+export function Sidebar({ role, userName, collapsed, onToggle, enabledFeatures = [] }: SidebarProps) {
+  const pathname = usePathname();
+  const base = getBase(role);
+  const sections = filterSections(getNavSections(role, base), enabledFeatures);
+
+  return (
+    <aside
+      className="fixed inset-y-0 left-0 z-40 flex flex-col transition-all duration-200"
+      style={{
+        width: collapsed ? 52 : 220,
+        background: "var(--color-sidebar)",
+        borderRight: "1px solid var(--color-sidebar-border)",
+      }}
+    >
+      {/* Logo */}
+      <div
+        className="flex items-center h-[52px] flex-shrink-0"
+        style={{ padding: collapsed ? "0 14px" : "0 16px", borderBottom: "1px solid var(--color-sidebar-border)" }}
+      >
+        <div className="w-7 h-7 rounded-md bg-blue-600 flex items-center justify-center flex-shrink-0">
+          <Flame className="w-4 h-4 text-white" />
+        </div>
+        {!collapsed && (
+          <span className="ml-2.5 text-[14px] font-semibold text-zinc-900 tracking-tight">GasAgency</span>
+        )}
+      </div>
+
+      {/* Nav */}
+      <nav className="flex-1 overflow-y-auto py-3" style={{ padding: collapsed ? "12px 6px" : "12px 8px" }}>
+        {sections.map((section, si) => (
+          <div key={si} className={si > 0 ? "mt-4" : ""}>
+            {section.label && !collapsed && (
+              <p className="nav-section-label px-2">{section.label}</p>
+            )}
+            {section.items.map((item) => {
+              const isActive = pathname === item.href ||
+                (item.href !== base && pathname.startsWith(item.href));
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  title={collapsed ? item.label : undefined}
+                  className={cn(
+                    "nav-item",
+                    isActive && "active",
+                    collapsed && "justify-center px-0"
+                  )}
+                  style={{ height: 32 }}
+                >
+                  <span className="nav-icon flex-shrink-0">{item.icon}</span>
+                  {!collapsed && <span className="truncate">{item.label}</span>}
+                </Link>
+              );
+            })}
+          </div>
+        ))}
+      </nav>
+
+      {/* User + collapse */}
+      <div
+        className="flex-shrink-0"
+        style={{ borderTop: "1px solid var(--color-sidebar-border)", padding: collapsed ? "8px 6px" : "8px" }}
+      >
+        {!collapsed && (
+          <div className="flex items-center gap-2.5 px-2 py-2 rounded-md mb-1" style={{ background: "var(--color-sidebar-hover)" }}>
+            <div
+              className="w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold text-white flex-shrink-0"
+              style={{ background: "#2563EB" }}
+            >
+              {userName.charAt(0).toUpperCase()}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-[12px] font-medium text-zinc-900 truncate leading-none mb-0.5">{userName}</p>
+              <p className="text-[11px] leading-none" style={{ color: "var(--color-text-secondary)" }}>{ROLE_LABELS[role]}</p>
+            </div>
+          </div>
+        )}
+        <button
+          onClick={onToggle}
+          className={cn("nav-item w-full", collapsed && "justify-center px-0")}
+          style={{ height: 30 }}
+          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+        >
+          {collapsed
+            ? <PanelLeft className="w-4 h-4 flex-shrink-0" />
+            : <><PanelLeftClose className="w-4 h-4 flex-shrink-0 nav-icon" /><span className="text-[12px]">Collapse</span></>
+          }
+        </button>
+      </div>
+    </aside>
+  );
+}

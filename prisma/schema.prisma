@@ -1,0 +1,1058 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  SYSTEM_ADMIN
+  ADMIN
+  MANAGER
+  GODOWN_KEEPER
+  STAFF
+  DELIVERY_BOY
+}
+
+enum AgencyStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CORRECTION_NEEDED
+}
+
+enum PaymentMode {
+  CASH
+  ONLINE
+  CREDIT
+}
+
+enum TransactionType {
+  NEW_CONNECTION
+  REGULATOR
+  PIPE
+  OTHER
+  CYLINDER_REFILL
+}
+
+enum CustomerType {
+  DOMESTIC
+  COMMERCIAL
+}
+
+enum VehicleAssetType {
+  VEHICLE
+  AGENCY
+}
+
+enum VehicleStatus {
+  ACTIVE
+  INACTIVE
+  MAINTENANCE
+}
+
+enum TripStatus {
+  LOADED
+  OUT_FOR_DELIVERY
+  RETURNED
+  PARTIAL_RETURN
+}
+
+enum GodownMoveType {
+  RECEIVED        // Product arrived at godown from company
+  DISPATCHED      // Product sent from godown to office
+}
+
+enum SalaryEntryType {
+  SALARY          // Regular monthly salary payment
+  DRAWING         // Owner drawing
+  ADVANCE         // Advance given (udhari)
+  ADVANCE_RECOVERY // Advance recovered from salary
+  BONUS           // Bonus payment
+  DEDUCTION       // Deduction from salary
+}
+
+enum AdvanceStatus {
+  PENDING         // Advance outstanding
+  PARTIAL         // Partially recovered
+  RECOVERED       // Fully recovered
+}
+
+enum SalaryRequestStatus {
+  PENDING         // Awaiting admin approval
+  APPROVED        // Approved and processed
+  REJECTED        // Rejected by admin
+}
+
+enum LeaveType {
+  CASUAL
+  SICK
+  EARNED
+  HALF_DAY
+  EMERGENCY
+  MATERNITY
+  PATERNITY
+  UNPAID
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model Agency {
+  id              String       @id @default(cuid())
+  name            String
+  ownerName       String
+  email           String       @unique
+  phone           String
+  address         String
+  city            String
+  state           String
+  gstin           String?
+  distributorCode String?
+  oilCompany      String?
+  licenseNo       String?
+  status          AgencyStatus @default(ACTIVE)
+  plan            String       @default("basic")
+  notes           String?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  // ── Phase 1: Agency upgrades ────────────────────────────────
+  logoBase64       String?   @db.Text          // Base64-encoded agency logo
+  subscriptionPlan String    @default("basic") // basic | professional | enterprise
+  trialEndsAt      DateTime?                   // Trial expiry date (null = no trial)
+  maxUsers         Int       @default(10)       // Max concurrent users allowed
+  timezone         String    @default("Asia/Kolkata") // Agency local timezone
+  whatsappApiKey   String?                     // Meta WhatsApp Business API key
+
+  users              User[]
+  products           Product[]
+  customers          Customer[]
+  godownRecords      GodownRecord[]
+  godownInventory    GodownInventory[]
+  stockRecords       StockRecord[]
+  dailySummaries     DailySummary[]
+  sectionSummaries   SectionSummary[]
+  deliveryRecords    DeliveryRecord[]
+  commercialSales    CommercialSale[]
+  officeTransactions OfficeTransaction[]
+  creditEntries      CreditLedgerEntry[]
+  salaryDrawings     SalaryDrawing[]
+  salaryProfiles     EmployeeSalaryProfile[]
+  salaryAdvances     SalaryAdvance[]
+  salaryBonuses      SalaryBonus[]
+  salaryRequests     SalaryPaymentRequest[]
+  leaveRequests      LeaveRequest[]
+  expenses           Expense[]
+  vehicles           VehicleAgencyAsset[]
+  gstInvoices        GstInvoice[]
+  dailyClosings      DailyClosing[]
+  deliveryVehicles   DeliveryVehicle[]
+  vehicleTripLogs    VehicleTripLog[]
+
+  // Phase 1 relations
+  subscription       AgencySubscription?
+  notifications      Notification[]
+  messageLogs        MessageLog[]
+  deliveryTargets    DeliveryTarget[]
+  customerComplaints CustomerComplaint[]
+  deliveryRoutes     DeliveryRoute[]
+
+  // Phase 2 relations
+  expenseCategories  ExpenseCategory[]
+  attendanceRecords  Attendance[]
+  paymentReceipts    PaymentReceipt[]
+  documents          Document[]
+
+  // Phase 3 relations
+  branches           Branch[]
+  apiKeys            ApiKey[]
+  webhooks           Webhook[]
+
+  // Phase 4 relations
+  rolePermissions    RolePermission[]
+  leaveBalances      LeaveBalance[]
+
+  // Feature gating — keys of features enabled for this agency (empty = all features)
+  enabledFeatures    String[]          @default([])
+}
+
+model User {
+  id             String   @id @default(cuid())
+  name           String
+  email          String   @unique
+  phone          String?
+  password       String
+  role           Role
+  isActive       Boolean  @default(true)
+  agencyId       String?
+  agency         Agency?  @relation(fields: [agencyId], references: [id])
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  // Extended employee profile fields
+  bankAccountNo  String?  // Bank account number
+  bankName       String?  // Bank name (e.g., SBI, HDFC)
+  ifscCode       String?  // IFSC code
+  aadhaarNo      String?  // 12-digit Aadhaar number (AES-256-GCM encrypted)
+  panNo          String?  // 10-char PAN card number (AES-256-GCM encrypted)
+  photoBase64    String?  @db.Text  // Base64-encoded profile photo (thumbnail)
+
+  // Security & session tracking
+  passwordChangedAt   DateTime?  // Invalidates tokens issued before this time
+  lastLoginAt         DateTime?  // Last successful login timestamp
+  lastLoginIp         String?    // IP address of last login
+
+  // ── Phase 1: User security upgrades ────────────────────────
+  failedLoginAttempts  Int       @default(0)   // Resets to 0 on successful login
+  lockedUntil          DateTime?               // Account locked until this timestamp
+  twoFactorSecret      String?                 // TOTP base32 secret (Phase 3 2FA)
+  twoFactorEnabled     Boolean   @default(false) // Whether TOTP 2FA is active
+  twoFactorBackupCodes String[]  @default([])  // SHA-256 hashed one-time backup codes
+
+  dailySummaries     DailySummary[]     @relation("SubmittedBy")
+  managedSummaries   DailySummary[]     @relation("ApprovedByManager")
+  adminSummaries     DailySummary[]     @relation("ApprovedByAdmin")
+  godownRecords      GodownRecord[]
+  officeTransactions OfficeTransaction[]
+  salaryDrawings     SalaryDrawing[]
+  salaryProfile      EmployeeSalaryProfile?
+  salaryAdvances     SalaryAdvance[]
+  salaryBonuses      SalaryBonus[]
+  expenses           Expense[]
+  deliveries         DeliveryRecord[]
+  creditEntries      CreditLedgerEntry[]
+  commercialSales    CommercialSale[]
+  assignedVehicle    DeliveryVehicle?   @relation("AssignedDeliveryBoy")
+  vehicleTripLogs    VehicleTripLog[]
+  godownInventory    GodownInventory[]
+  refreshTokens      RefreshToken[]
+
+  // Salary approval workflow
+  salaryRequestsAsEmployee  SalaryPaymentRequest[] @relation("SalaryRequestEmployee")
+  salaryRequestsMade        SalaryPaymentRequest[] @relation("SalaryRequestedBy")
+  salaryRequestsReviewed    SalaryPaymentRequest[] @relation("SalaryReviewedBy")
+
+  // Leave management
+  leaveRequests             LeaveRequest[]         @relation("EmployeeLeaves")
+  reviewedLeaves            LeaveRequest[]         @relation("ReviewedLeaves")
+
+  // Phase 1 relations
+  notifications             Notification[]
+  deliveryTargets           DeliveryTarget[]
+  resolvedComplaints        CustomerComplaint[]    @relation("ComplaintResolver")
+  assignedRoutes            DeliveryRoute[]
+
+  // Phase 2 relations
+  attendance                Attendance[]
+  collectedReceipts         PaymentReceipt[]
+  uploadedDocuments         Document[]
+
+  // Phase 4 relations
+  leaveBalances             LeaveBalance[]
+}
+
+model Product {
+  id         String  @id @default(cuid())
+  name       String
+  unitCost   Float   @default(0)
+  saleRate   Float   @default(0)
+  margin     Float   @default(0)
+  isActive   Boolean @default(true)
+  isCylinder Boolean @default(true)
+  agencyId   String
+  agency     Agency  @relation(fields: [agencyId], references: [id])
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // ── Phase 1: GST Quick Win ──────────────────────────────────
+  hsnCode    String?  // HSN code for GST (e.g. "2711" for LPG cylinders)
+  gstRate    Float    @default(5) // GST % applicable (default 5% for LPG)
+
+  stockRecords       StockRecord[]
+  deliveryRecords    DeliveryRecord[]
+  commercialSales    CommercialSale[]
+  officeTransactions OfficeTransaction[]
+  godownInventory    GodownInventory[]
+}
+
+/// Tracks product movements in the godown — received from company or dispatched to agency office
+model GodownInventory {
+  id          String          @id @default(cuid())
+  date        DateTime
+  moveType    GodownMoveType
+  productId   String
+  product     Product         @relation(fields: [productId], references: [id])
+  qty         Int
+  batchNo     String?
+  notes       String?
+  recordedById String
+  recordedBy  User            @relation(fields: [recordedById], references: [id])
+  agencyId    String
+  agency      Agency          @relation(fields: [agencyId], references: [id])
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+}
+
+model Customer {
+  id            String       @id @default(cuid())
+  name          String
+  phone         String
+  address       String?
+  type          CustomerType @default(DOMESTIC)
+  customerCode  String?
+  email         String?
+  gstNumber     String?
+  contactPerson String?
+  businessType  String?
+  isActive      Boolean      @default(true)
+  agencyId      String
+  agency        Agency       @relation(fields: [agencyId], references: [id])
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  deliveries         DeliveryRecord[]
+  creditEntries      CreditLedgerEntry[]
+  commercialSales    CommercialSale[]
+  complaints         CustomerComplaint[]   // Phase 1
+  paymentReceipts    PaymentReceipt[]      // Phase 2
+}
+
+model GodownRecord {
+  id                      String         @id @default(cuid())
+  vehicleNo               String
+  entryDate               DateTime
+  filledCylindersReceived Int
+  emptyCylindersReturned  Int
+  items                   Json?          // Array of objects: { productId: string, productName: string, filledReceived: number, emptyReturned: number }
+  notes                   String?
+  status                  ApprovalStatus @default(PENDING)
+  submittedById           String
+  submittedBy             User           @relation(fields: [submittedById], references: [id])
+  agencyId                String
+  agency                  Agency         @relation(fields: [agencyId], references: [id])
+  approvedAt              DateTime?
+  createdAt               DateTime       @default(now())
+  updatedAt               DateTime       @updatedAt
+}
+
+model StockRecord {
+  id           String   @id @default(cuid())
+  date         DateTime
+  productId    String
+  product      Product  @relation(fields: [productId], references: [id])
+  agencyId     String
+  agency       Agency   @relation(fields: [agencyId], references: [id])
+  openingStock Int      @default(0)
+  loadingIn    Int      @default(0)
+  salesQty     Int      @default(0)
+  returned     Int      @default(0)
+  closingStock Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model DailySummary {
+  id                  String         @id @default(cuid())
+  date                DateTime
+  submittedById       String
+  submittedBy         User           @relation("SubmittedBy", fields: [submittedById], references: [id])
+  summaryData         Json
+  status              ApprovalStatus @default(PENDING)
+  managerNote         String?
+  approvedByManagerId String?
+  approvedByManager   User?          @relation("ApprovedByManager", fields: [approvedByManagerId], references: [id])
+  managerApprovedAt   DateTime?
+  approvedByAdminId   String?
+  approvedByAdmin     User?          @relation("ApprovedByAdmin", fields: [approvedByAdminId], references: [id])
+  adminApprovedAt     DateTime?
+  agencyId            String
+  agency              Agency         @relation(fields: [agencyId], references: [id])
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+}
+
+model SectionSummary {
+  id              String         @id @default(cuid())
+  date            DateTime
+  sectionType     String
+  data            Json
+  status          ApprovalStatus @default(PENDING)
+  adminApprovedAt DateTime?
+  agencyId        String
+  agency          Agency         @relation(fields: [agencyId], references: [id])
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+}
+
+model DeliveryRecord {
+  id            String   @id @default(cuid())
+  date          DateTime
+  customerId    String
+  customer      Customer @relation(fields: [customerId], references: [id])
+  productId     String
+  product       Product  @relation(fields: [productId], references: [id])
+  deliveredQty  Int      @default(0)
+  returnedQty   Int      @default(0)
+  pendingQty    Int      @default(0)
+  cashCollected Float    @default(0)
+  status        String   @default("DELIVERED")
+  notes         String?
+  deliveredById String
+  deliveredBy   User     @relation(fields: [deliveredById], references: [id])
+  agencyId      String
+  agency        Agency   @relation(fields: [agencyId], references: [id])
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model CommercialSale {
+  id            String   @id @default(cuid())
+  date          DateTime
+  customerId    String
+  customer      Customer @relation(fields: [customerId], references: [id])
+  productId     String
+  product       Product  @relation(fields: [productId], references: [id])
+  qty           Int
+  rate          Float
+  amount        Float
+  cashCollected Float    @default(0)
+  udhariNew     Float    @default(0)
+  udhariPrev    Float    @default(0)
+  balance       Float    @default(0)
+  addedById     String
+  addedBy       User     @relation(fields: [addedById], references: [id])
+  agencyId      String
+  agency        Agency   @relation(fields: [agencyId], references: [id])
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model OfficeTransaction {
+  id          String          @id @default(cuid())
+  date        DateTime
+  type        TransactionType
+  inventoryId String?
+  product     Product?        @relation(fields: [inventoryId], references: [id])
+  description String?
+  qty         Int             @default(1)
+  unitRate    Float           @default(0)
+  amount      Float           @default(0)
+  paymentMode PaymentMode     @default(CASH)
+  remarks     String?
+  addedById   String
+  addedBy     User            @relation(fields: [addedById], references: [id])
+  agencyId    String
+  agency      Agency          @relation(fields: [agencyId], references: [id])
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+}
+
+model CreditLedgerEntry {
+  id          String   @id @default(cuid())
+  date        DateTime
+  customerId  String
+  customer    Customer @relation(fields: [customerId], references: [id])
+  type        String
+  amount      Float
+  description String?
+  addedById   String
+  addedBy     User     @relation(fields: [addedById], references: [id])
+  agencyId    String
+  agency      Agency   @relation(fields: [agencyId], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model SalaryDrawing {
+  id         String   @id @default(cuid())
+  date       DateTime
+  employeeId String
+  employee   User     @relation(fields: [employeeId], references: [id])
+  type       String
+  amount     Float
+  month      Int
+  year       Int
+  remarks    String?
+  agencyId   String
+  agency     Agency   @relation(fields: [agencyId], references: [id])
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model Expense {
+  id               String           @id @default(cuid())
+  date             DateTime
+  description      String
+  amount           Float
+  category         String           // Free-text fallback
+  categoryId       String?          // FK to ExpenseCategory (Phase 2)
+  expenseCategory  ExpenseCategory? @relation(fields: [categoryId], references: [id])
+  addedById        String
+  addedBy          User             @relation(fields: [addedById], references: [id])
+  agencyId         String
+  agency           Agency           @relation(fields: [agencyId], references: [id])
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+}
+
+model VehicleAgencyAsset {
+  id               String           @id @default(cuid())
+  assetType        VehicleAssetType
+  name             String
+  registrationDate DateTime
+  lastRenewalDate  DateTime?
+  nextRenewalDate  DateTime?
+  price            Float            @default(0)
+  comment          String?
+  isActive         Boolean          @default(true)
+  agencyId         String
+  agency           Agency           @relation(fields: [agencyId], references: [id])
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  reminders RenewalReminder[]
+}
+
+model RenewalReminder {
+  id          String             @id @default(cuid())
+  assetId     String
+  asset       VehicleAgencyAsset @relation(fields: [assetId], references: [id])
+  type        String
+  dueDate     DateTime
+  isDismissed Boolean            @default(false)
+  createdAt   DateTime           @default(now())
+}
+
+model GstInvoice {
+  id         String   @id @default(cuid())
+  date       DateTime
+  invoiceNo  String   @unique
+  customerId String
+  items      Json
+  subtotal   Float
+  gstAmount  Float
+  total      Float
+  status     String   @default("PENDING")
+  agencyId   String
+  agency     Agency   @relation(fields: [agencyId], references: [id])
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model DailyClosing {
+  id                String         @id @default(cuid())
+  date              DateTime
+  totalDeliveries   Int            @default(0)
+  totalCollection   Float          @default(0)
+  pendingDeliveries Int            @default(0)
+  returnedCylinders Int            @default(0)
+  cashOnHand        Float          @default(0)
+  notes             String?
+  status            ApprovalStatus @default(PENDING)
+  managerApprovedAt DateTime?
+  adminApprovedAt   DateTime?
+  agencyId          String
+  agency            Agency         @relation(fields: [agencyId], references: [id])
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+}
+
+model DemoRequest {
+  id        String   @id @default(cuid())
+  name      String
+  phone     String
+  email     String
+  status    String   @default("NEW")
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// Internal delivery vehicle owned by the agency (not the company supplier vehicle)
+model DeliveryVehicle {
+  id               String          @id @default(cuid())
+  vehicleNo        String
+  vehicleName      String
+  vehicleType      String          @default("Two-Wheeler") // Two-Wheeler, Three-Wheeler, Four-Wheeler
+  status           VehicleStatus   @default(ACTIVE)
+  assignedToId     String?         @unique
+  assignedTo       User?           @relation("AssignedDeliveryBoy", fields: [assignedToId], references: [id])
+  notes            String?
+  agencyId         String
+  agency           Agency          @relation(fields: [agencyId], references: [id])
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  tripLogs         VehicleTripLog[]
+}
+
+/// Daily trip log for internal delivery vehicle — recorded by godown keeper when vehicle goes out/returns
+model VehicleTripLog {
+  id                   String          @id @default(cuid())
+  vehicleId            String
+  vehicle              DeliveryVehicle @relation(fields: [vehicleId], references: [id])
+  date                 DateTime
+  cylindersLoaded      Int             @default(0)
+  cylindersReturned    Int             @default(0)
+  cylindersDelivered   Int             @default(0)
+  items                Json?           // Array of objects: { productId: string, productName: string, loaded: number, unsoldReturned: number, emptyReturned: number }
+  departureTime        DateTime?
+  returnTime           DateTime?
+  tripStatus           TripStatus      @default(LOADED)
+  notes                String?
+  recordedById         String
+  recordedBy           User            @relation(fields: [recordedById], references: [id])
+  agencyId             String
+  agency               Agency          @relation(fields: [agencyId], references: [id])
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
+}
+
+/// Stores the configured monthly salary for each employee (set by admin)
+model EmployeeSalaryProfile {
+  id              String   @id @default(cuid())
+  employeeId      String   @unique
+  employee        User     @relation(fields: [employeeId], references: [id])
+  monthlySalary   Float    @default(0)   // Configured base salary
+  effectiveFrom   DateTime               // When this salary takes effect
+  notes           String?
+  agencyId        String
+  agency          Agency   @relation(fields: [agencyId], references: [id])
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+/// Tracks advance / udhari given to employees — recovered from future salaries
+model SalaryAdvance {
+  id              String        @id @default(cuid())
+  employeeId      String
+  employee        User          @relation(fields: [employeeId], references: [id])
+  advanceDate     DateTime
+  amount          Float                        // Total advance given
+  recoveredAmount Float         @default(0)   // How much has been recovered so far
+  balanceAmount   Float                        // Remaining to recover (amount - recoveredAmount)
+  status          AdvanceStatus @default(PENDING)
+  reason          String?                      // Why advance was given
+  notes           String?
+  agencyId        String
+  agency          Agency        @relation(fields: [agencyId], references: [id])
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+}
+
+/// Bonus payments granted to employees
+model SalaryBonus {
+  id         String   @id @default(cuid())
+  employeeId String
+  employee   User     @relation(fields: [employeeId], references: [id])
+  bonusDate  DateTime
+  amount     Float
+  month      Int                // Which month bonus is for
+  year       Int
+  reason     String?            // Festival bonus, performance, etc.
+  remarks    String?
+  agencyId   String
+  agency     Agency   @relation(fields: [agencyId], references: [id])
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+/// Salary payment requests raised by manager, require admin approval before processing
+model SalaryPaymentRequest {
+  id            String              @id @default(cuid())
+  type          String              // SALARY | DRAWING | ADVANCE | ADVANCE_RECOVERY | BONUS
+  employeeId    String
+  employee      User                @relation("SalaryRequestEmployee", fields: [employeeId], references: [id])
+  amount        Float
+  month         Int?
+  year          Int?
+  requestData   Json                // Full payload; used by admin to create actual records on approval
+  status        SalaryRequestStatus @default(PENDING)
+  remarks       String?
+  requestedById String
+  requestedBy   User                @relation("SalaryRequestedBy", fields: [requestedById], references: [id])
+  reviewedById  String?
+  reviewedBy    User?               @relation("SalaryReviewedBy", fields: [reviewedById], references: [id])
+  reviewNote    String?
+  agencyId      String
+  agency        Agency              @relation(fields: [agencyId], references: [id])
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+}
+
+/// Leave requests submitted by employees — approved or rejected by admin/manager
+model LeaveRequest {
+  id            String      @id @default(cuid())
+  employeeId    String
+  employee      User        @relation("EmployeeLeaves", fields: [employeeId], references: [id])
+  leaveType     LeaveType
+  startDate     DateTime
+  endDate       DateTime
+  totalDays     Float                       // 0.5 for half-day, 1+ for full days
+  reason        String      @db.Text
+  status        LeaveStatus @default(PENDING)
+  reviewNote    String?                     // Reason for rejection or approval note
+  reviewedById  String?
+  reviewedBy    User?       @relation("ReviewedLeaves", fields: [reviewedById], references: [id])
+  reviewedAt    DateTime?
+  agencyId      String
+  agency        Agency      @relation(fields: [agencyId], references: [id])
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+}
+
+// ─── Security: Audit Log ──────────────────────────────────────────────────────
+
+/// Immutable log of every significant action — required for enterprise compliance
+model AuditLog {
+  id         String   @id @default(cuid())
+  agencyId   String?
+  userId     String
+  action     String   // e.g. "CREATE_SALARY_DRAWING", "DELETE_ADVANCE"
+  entityType String   // e.g. "SalaryDrawing", "Customer"
+  entityId   String?
+  details    Json?    // { before: {...}, after: {...} }
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+
+  @@index([agencyId, createdAt])
+  @@index([userId])
+}
+
+// ─── Security: JWT Refresh Token Store ────────────────────────────────────────
+
+/// Stores hashed refresh tokens — enables single-use rotation and revocation
+model RefreshToken {
+  id        String   @id @default(cuid())
+  jti       String   @unique          // JWT ID — unique per token
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String                    // bcrypt hash of the raw refresh token
+  expiresAt DateTime
+  isRevoked Boolean  @default(false)
+  revokedAt DateTime?
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([jti])
+}
+
+/// Blacklist for access tokens — entries auto-expire after the token's natural TTL
+model TokenBlacklist {
+  id        String   @id @default(cuid())
+  jti       String   @unique
+  expiresAt DateTime  // auto-cleanup entries after this date
+  createdAt DateTime @default(now())
+
+  @@index([jti])
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Phase 1 — New Models
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/// In-app notification — created server-side, consumed by the NotificationBell UI component
+model Notification {
+  id        String   @id @default(cuid())
+  agencyId  String
+  agency    Agency   @relation(fields: [agencyId], references: [id])
+  userId    String                    // Recipient user
+  user      User     @relation(fields: [userId], references: [id])
+  type      String                    // LEAVE_REQUEST | SALARY_REQUEST | LOW_STOCK | VEHICLE_RENEWAL | DAILY_SUMMARY
+  title     String
+  body      String
+  isRead    Boolean  @default(false)
+  link      String?                   // Deep link to the relevant page e.g. /admin/leaves
+  createdAt DateTime @default(now())
+
+  @@index([agencyId, userId, isRead])
+  @@index([createdAt])
+}
+
+/// Subscription / billing record per agency — tracks plan, billing cycle, and payment refs
+model AgencySubscription {
+  id           String   @id @default(cuid())
+  agencyId     String   @unique
+  agency       Agency   @relation(fields: [agencyId], references: [id])
+  plan         String                    // basic | professional | enterprise
+  billingCycle String                    // monthly | yearly
+  startDate    DateTime
+  endDate      DateTime
+  isActive     Boolean  @default(true)
+  amount       Float
+  paymentRef   String?                   // Razorpay / PhonePe transaction ID
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([agencyId, isActive])
+}
+
+/// Log of every WhatsApp / SMS / Email message sent by the system
+model MessageLog {
+  id        String   @id @default(cuid())
+  agencyId  String
+  agency    Agency   @relation(fields: [agencyId], references: [id])
+  recipient String                    // Phone number or email address
+  type      String                    // SALARY_SLIP | DELIVERY_REMINDER | LOW_STOCK | LEAVE_APPROVAL
+  channel   String                    // WHATSAPP | SMS | EMAIL
+  status    String                    // SENT | FAILED | DELIVERED | PENDING
+  payload   Json?                     // Request payload sent to provider (for debugging)
+  errorMsg  String?                   // Provider error message on failure
+  sentAt    DateTime @default(now())
+
+  @@index([agencyId, channel, status])
+  @@index([sentAt])
+}
+
+/// Monthly delivery target / quota per delivery boy — tracks target vs achieved
+model DeliveryTarget {
+  id          String   @id @default(cuid())
+  agencyId    String
+  agency      Agency   @relation(fields: [agencyId], references: [id])
+  employeeId  String
+  employee    User     @relation(fields: [employeeId], references: [id])
+  month       Int                       // 1–12
+  year        Int
+  targetQty   Int                       // Target cylinders to deliver
+  achievedQty Int      @default(0)      // Actual deliveries made
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([agencyId, employeeId, month, year])  // One target per employee per month
+  @@index([agencyId, year, month])
+}
+
+/// Customer complaint tracker — raised by customers or staff, resolved by admin/manager
+model CustomerComplaint {
+  id           String    @id @default(cuid())
+  agencyId     String
+  agency       Agency    @relation(fields: [agencyId], references: [id])
+  customerId   String
+  customer     Customer  @relation(fields: [customerId], references: [id])
+  category     String                   // DELIVERY_DELAY | WRONG_CYLINDER | BILLING | CYLINDER_DAMAGE | OTHER
+  description  String    @db.Text
+  status       String    @default("OPEN") // OPEN | IN_PROGRESS | RESOLVED | CLOSED
+  resolvedAt   DateTime?
+  resolvedById String?
+  resolvedBy   User?     @relation("ComplaintResolver", fields: [resolvedById], references: [id])
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([agencyId, status])
+  @@index([customerId])
+}
+
+/// Delivery route plan — defines a named sequence of customer stops assigned to a delivery boy
+model DeliveryRoute {
+  id           String   @id @default(cuid())
+  agencyId     String
+  agency       Agency   @relation(fields: [agencyId], references: [id])
+  name         String
+  assignedToId String?
+  assignedTo   User?    @relation(fields: [assignedToId], references: [id])
+  stops        Json                     // Array of { customerId, customerName, address, order }
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([agencyId, isActive])
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Phase 2 — New Models
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/// Predefined expense category with monthly budget — for structured expense tracking
+model ExpenseCategory {
+  id            String   @id @default(cuid())
+  agencyId      String
+  agency        Agency   @relation(fields: [agencyId], references: [id])
+  name          String                    // e.g. Fuel, Vehicle Maintenance, Office Supplies
+  monthlyBudget Float    @default(0)      // Budget allocated per month
+  color         String?                   // Hex color for chart display e.g. #3B82F6
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  expenses      Expense[]                 // Linked actual expenses
+
+  @@unique([agencyId, name])
+  @@index([agencyId, isActive])
+}
+
+/// Daily employee attendance — punch in/out record per employee per day
+model Attendance {
+  id          String   @id @default(cuid())
+  agencyId    String
+  agency      Agency   @relation(fields: [agencyId], references: [id])
+  employeeId  String
+  employee    User     @relation(fields: [employeeId], references: [id])
+  date        DateTime                    // Normalized to midnight of the day
+  punchIn     DateTime?                   // When employee punched in
+  punchOut    DateTime?                   // When employee punched out
+  status      String   @default("PRESENT") // PRESENT | ABSENT | HALF_DAY | ON_LEAVE | HOLIDAY
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([agencyId, employeeId, date])  // One record per employee per day
+  @@index([agencyId, date])
+  @@index([employeeId])
+}
+
+/// Formal payment receipt for customer cash/UPI/bank collections
+model PaymentReceipt {
+  id            String   @id @default(cuid())
+  agencyId      String
+  agency        Agency   @relation(fields: [agencyId], references: [id])
+  customerId    String
+  customer      Customer @relation(fields: [customerId], references: [id])
+  amount        Float
+  paymentMode   String                    // CASH | UPI | BANK_TRANSFER | CHEQUE
+  utrNo         String?                   // UTR / reference number for UPI / bank
+  receiptNo     String   @unique          // Auto-generated receipt number e.g. RCP-2026-0001
+  collectedById String
+  collectedBy   User     @relation(fields: [collectedById], references: [id])
+  date          DateTime
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([agencyId, date])
+  @@index([customerId])
+}
+
+/// Document storage — KYC, vehicle RC, insurance, FC per employee or vehicle
+model Document {
+  id           String    @id @default(cuid())
+  agencyId     String
+  agency        Agency   @relation(fields: [agencyId], references: [id])
+  entityType   String                    // USER | VEHICLE | AGENCY
+  entityId     String                    // ID of the related user/vehicle/agency
+  docType      String                    // AADHAAR | PAN | RC | INSURANCE | FC | LICENSE | OTHER
+  fileName     String
+  fileBase64   String    @db.Text        // Base64-encoded file content (for local storage without S3)
+  mimeType     String    @default("application/pdf")
+  expiryDate   DateTime?                 // For insurance, FC, license — triggers renewal alerts
+  uploadedById String
+  uploadedBy   User      @relation(fields: [uploadedById], references: [id])
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([agencyId, entityType, entityId])
+  @@index([expiryDate])
+}
+
+// ─── Phase 3: Enterprise Infrastructure ─────────────────────────────────────
+
+/// Branch — a physical distribution point under an Agency (3.2 Multi-Branch)
+model Branch {
+  id        String   @id @default(cuid())
+  agencyId  String
+  agency    Agency   @relation(fields: [agencyId], references: [id])
+  name      String
+  address   String
+  city      String   @default("")
+  phone     String?
+  managerId String?                    // Optional branch manager (User)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([agencyId])
+}
+
+/// API Key — for 3rd-party integrations (3.3 API Gateway)
+model ApiKey {
+  id          String   @id @default(cuid())
+  agencyId    String
+  agency      Agency   @relation(fields: [agencyId], references: [id])
+  name        String                    // Human-readable label
+  keyHash     String   @unique          // bcrypt hash of the raw API key
+  prefix      String                    // First 8 chars shown to user (e.g. "gak_a1b2")
+  scopes      String[]                  // e.g. ["customers:read", "deliveries:write"]
+  lastUsedAt  DateTime?
+  expiresAt   DateTime?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  @@index([agencyId])
+}
+
+/// Webhook — fire HTTP callbacks on key events (3.3 API Gateway)
+model Webhook {
+  id        String   @id @default(cuid())
+  agencyId  String
+  agency    Agency   @relation(fields: [agencyId], references: [id])
+  url       String
+  events    String[]                   // e.g. ["delivery.completed", "payment.received"]
+  secret    String                     // HMAC signing secret
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([agencyId])
+}
+
+/// Background job run log — tracks Inngest job execution (3.4)
+model JobLog {
+  id         String   @id @default(cuid())
+  agencyId   String?
+  jobName    String                    // e.g. "daily-stock-snapshot"
+  status     String                    // QUEUED | RUNNING | SUCCESS | FAILED
+  startedAt  DateTime @default(now())
+  finishedAt DateTime?
+  error      String?
+  meta       Json?
+
+  @@index([agencyId, jobName])
+  @@index([startedAt])
+}
+
+// ─── Phase 4: UX & Feature Polish ───────────────────────────────────────────
+
+model RolePermission {
+  id         String   @id @default(cuid())
+  agencyId   String
+  agency     Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  role       Role
+  resource   String   // e.g. "customers", "salaries", "godown", "billing"
+  action     String   // e.g. "read", "create", "update", "delete"
+  isAllowed  Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([agencyId, role, resource, action])
+  @@index([agencyId])
+}
+
+model LeaveBalance {
+  id         String   @id @default(cuid())
+  agencyId   String
+  agency     Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  employeeId String
+  employee   User     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  year       Int
+  casual     Float    @default(12)
+  sick       Float    @default(10)
+  earned     Float    @default(10)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([agencyId, employeeId, year])
+  @@index([agencyId])
+}
