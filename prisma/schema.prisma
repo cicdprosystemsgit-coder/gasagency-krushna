@@ -112,6 +112,7 @@ enum LeaveStatus {
 model Agency {
   id              String       @id @default(cuid())
   name            String
+  slug            String?      @unique  // subdomain identifier e.g. "sharma" → sharma.localhost:3000
   ownerName       String
   email           String       @unique
   phone           String
@@ -130,6 +131,7 @@ model Agency {
 
   // ── Phase 1: Agency upgrades ────────────────────────────────
   logoBase64       String?   @db.Text          // Base64-encoded agency logo
+  themeColor       String    @default("#2563eb") // Primary brand color
   subscriptionPlan String    @default("basic") // basic | professional | enterprise
   trialEndsAt      DateTime?                   // Trial expiry date (null = no trial)
   maxUsers         Int       @default(10)       // Max concurrent users allowed
@@ -184,8 +186,12 @@ model Agency {
   rolePermissions    RolePermission[]
   leaveBalances      LeaveBalance[]
 
+  // SaaS billing
+  cashfreeTransactions CashfreeTransaction[]
+
   // Feature gating — keys of features enabled for this agency (empty = all features)
   enabledFeatures    String[]          @default([])
+  companyPayments    CompanyPayment[]
 }
 
 model User {
@@ -261,6 +267,7 @@ model User {
 
   // Phase 4 relations
   leaveBalances             LeaveBalance[]
+  companyPayments           CompanyPayment[]
 }
 
 model Product {
@@ -285,6 +292,7 @@ model Product {
   commercialSales    CommercialSale[]
   officeTransactions OfficeTransaction[]
   godownInventory    GodownInventory[]
+  companyPayments    CompanyPayment[]
 }
 
 /// Tracks product movements in the godown — received from company or dispatched to agency office
@@ -449,7 +457,7 @@ model OfficeTransaction {
   qty         Int             @default(1)
   unitRate    Float           @default(0)
   amount      Float           @default(0)
-  paymentMode PaymentMode     @default(CASH)
+  paymentMode String          @default("CASH")
   remarks     String?
   addedById   String
   addedBy     User            @relation(fields: [addedById], references: [id])
@@ -945,13 +953,18 @@ model Document {
   entityId     String                    // ID of the related user/vehicle/agency
   docType      String                    // AADHAAR | PAN | RC | INSURANCE | FC | LICENSE | OTHER
   fileName     String
-  fileBase64   String    @db.Text        // Base64-encoded file content (for local storage without S3)
+  fileBase64   String?   @db.Text        // Base64-encoded file (LOCAL storage only)
   mimeType     String    @default("application/pdf")
   expiryDate   DateTime?                 // For insurance, FC, license — triggers renewal alerts
   uploadedById String
   uploadedBy   User      @relation(fields: [uploadedById], references: [id])
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
+
+  // ── Google Drive Storage ────────────────────────────────────────────────
+  storageType  String    @default("LOCAL")   // LOCAL | GOOGLE_DRIVE
+  driveFileId  String?                       // Google Drive file ID (used for delete)
+  driveViewUrl String?                       // Shareable Drive view link
 
   @@index([agencyId, entityType, entityId])
   @@index([expiryDate])
@@ -1055,4 +1068,52 @@ model LeaveBalance {
 
   @@unique([agencyId, employeeId, year])
   @@index([agencyId])
+}
+
+// ─── SaaS Billing: Cashfree Payment Transactions ─────────────────────────────
+
+/// Tracks every Cashfree payment order created for subscription upgrades
+model CashfreeTransaction {
+  id               String   @id @default(cuid())
+  agencyId         String
+  agency           Agency   @relation(fields: [agencyId], references: [id])
+  orderId          String   @unique    // Cashfree order ID (gak_<agencyId>_<ts>)
+  paymentSessionId String              // Used by Cashfree JS SDK to open checkout
+  amount           Float               // INR amount charged
+  currency         String   @default("INR")
+  plan             String              // basic | professional | enterprise
+  billingCycle     String              // monthly | yearly
+  status           String   @default("ACTIVE") // ACTIVE | PAID | FAILED | EXPIRED
+  cfPaymentId      String?             // Cashfree's internal payment ID (filled on webhook)
+  cfPaymentStatus  String?             // CAPTURED | FAILED | etc (from Cashfree webhook)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([agencyId, status])
+  @@index([orderId])
+}
+
+/// Direct bank transfer payments to the oil company for cylinder stock
+/// This is the PRIMARY cost of goods — the single largest cash outflow
+model CompanyPayment {
+  id            String   @id @default(cuid())
+  date          DateTime                         // Actual bank transfer date
+  amount        Float                            // ₹ transferred
+  paymentMode   String   @default("NEFT")
+  // NEFT | RTGS | IMPS | CHEQUE | UPI | DD | BANK_TRANSFER
+  referenceNo   String?                          // UTR no. / cheque no.
+  invoiceNo     String?                          // Oil company bill / invoice no.
+  productId     String?                          // Which cylinder type paid for
+  product       Product? @relation(fields: [productId], references: [id])
+  qtyCylinders  Int?                             // Approx cylinders covered
+  oilCompany    String?                          // HP | INDANE | BHARATGAS | OTHER
+  description   String?
+  agencyId      String
+  agency        Agency   @relation(fields: [agencyId], references: [id])
+  addedById     String
+  addedBy       User     @relation(fields: [addedById], references: [id])
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([agencyId, date])
 }

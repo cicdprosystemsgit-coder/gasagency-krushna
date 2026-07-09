@@ -5,7 +5,6 @@ import { getSession } from "@/lib/auth";
 import bcrypt from "bcryptjs";
 import { type Role } from "@/generated/prisma";
 import { validatePassword } from "@/lib/passwordPolicy";
-import { encryptField, decryptField } from "@/lib/encryption";
 import { writeAuditLog, AUDIT_ACTIONS } from "@/lib/audit";
 
 // ── Select shape shared between create/update responses ──────────────────────
@@ -14,6 +13,13 @@ const USER_SELECT = {
   isActive: true, createdAt: true,
   bankAccountNo: true, bankName: true, ifscCode: true,
   aadhaarNo: true, panNo: true, photoBase64: true,
+  salaryProfile: {
+    select: {
+      monthlySalary: true,
+      effectiveFrom: true,
+      notes: true,
+    }
+  }
 } as const;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -43,6 +49,11 @@ export async function createStaffUser(formData: FormData) {
   const panNo         = optStr(formData, "panNo");
   const photoBase64   = optStr(formData, "photoBase64");
 
+  // Salary profile
+  const monthlySalaryVal = formData.get("monthlySalary") ? Number(formData.get("monthlySalary")) : null;
+  const effectiveFrom = optStr(formData, "effectiveFrom");
+  const salaryNotes   = optStr(formData, "salaryNotes");
+
   // Validations
   if (!name || !/^[a-zA-Z\s]+$/.test(name))  return { error: "Valid name required (alphabets only)" };
   if (!email || !email.includes("@"))          return { error: "Valid email required" };
@@ -54,6 +65,9 @@ export async function createStaffUser(formData: FormData) {
   if (aadhaarNo && !/^\d{12}$/.test(aadhaarNo))           return { error: "Aadhaar must be exactly 12 digits" };
   if (panNo && !/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(panNo.toUpperCase())) return { error: "Invalid PAN format (e.g. ABCDE1234F)" };
 
+  if (monthlySalaryVal !== null && monthlySalaryVal <= 0) return { error: "Salary must be a positive number" };
+  if (monthlySalaryVal !== null && !effectiveFrom) return { error: "Salary effective date is required when salary is set" };
+
   const exists = await prisma.user.findUnique({ where: { email } });
   if (exists) return { error: "Email already registered" };
 
@@ -62,12 +76,20 @@ export async function createStaffUser(formData: FormData) {
     data: {
       name, email, phone, role, password: hashed,
       agencyId: session.agencyId,
-      bankAccountNo: encryptField(bankAccountNo),
+      bankAccountNo,
       bankName,
       ifscCode: ifscCode ? ifscCode.toUpperCase() : null,
-      aadhaarNo: encryptField(aadhaarNo),
-      panNo: panNo ? encryptField(panNo.toUpperCase()) : null,
+      aadhaarNo,
+      panNo: panNo ? panNo.toUpperCase() : null,
       photoBase64,
+      salaryProfile: monthlySalaryVal !== null && effectiveFrom ? {
+        create: {
+          monthlySalary: monthlySalaryVal,
+          effectiveFrom: new Date(effectiveFrom),
+          notes: salaryNotes,
+          agencyId: session.agencyId,
+        }
+      } : undefined,
     },
     select: USER_SELECT,
   });
@@ -93,6 +115,11 @@ export async function updateStaffUser(formData: FormData) {
   const panNo         = optStr(formData, "panNo");
   const photoBase64   = optStr(formData, "photoBase64");
 
+  // Salary profile
+  const monthlySalaryVal = formData.get("monthlySalary") ? Number(formData.get("monthlySalary")) : null;
+  const effectiveFrom = optStr(formData, "effectiveFrom");
+  const salaryNotes   = optStr(formData, "salaryNotes");
+
   if (!id)                                      return { error: "Employee ID missing" };
   if (!name || !/^[a-zA-Z\s]+$/.test(name))    return { error: "Valid name required (alphabets only)" };
   if (!email || !email.includes("@"))            return { error: "Valid email required" };
@@ -106,6 +133,9 @@ export async function updateStaffUser(formData: FormData) {
   if (aadhaarNo && !/^\d{12}$/.test(aadhaarNo))           return { error: "Aadhaar must be exactly 12 digits" };
   if (panNo && !/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(panNo.toUpperCase())) return { error: "Invalid PAN format" };
 
+  if (monthlySalaryVal !== null && monthlySalaryVal <= 0) return { error: "Salary must be a positive number" };
+  if (monthlySalaryVal !== null && !effectiveFrom) return { error: "Salary effective date is required when salary is set" };
+
   const existing = await prisma.user.findFirst({ where: { id, agencyId: session.agencyId } });
   if (!existing) return { error: "Employee not found" };
 
@@ -114,13 +144,13 @@ export async function updateStaffUser(formData: FormData) {
     if (conflict) return { error: "Email already in use by another account" };
   }
 
-  const data: Record<string, unknown> = {
+  const data: Record<string, any> = {
     name, email, phone, role,
-    bankAccountNo: encryptField(bankAccountNo),
+    bankAccountNo,
     bankName,
     ifscCode: ifscCode ? ifscCode.toUpperCase() : null,
-    aadhaarNo: encryptField(aadhaarNo),
-    panNo: panNo ? encryptField(panNo.toUpperCase()) : null,
+    aadhaarNo,
+    panNo: panNo ? panNo.toUpperCase() : null,
     photoBase64,
   };
   if (newPassword) {
@@ -128,11 +158,40 @@ export async function updateStaffUser(formData: FormData) {
     data.passwordChangedAt = new Date(); // invalidates old sessions
   }
 
+  // Track whether salary should be cleared (cannot use nested deleteMany on one-to-one)
+  const clearSalary = !monthlySalaryVal && formData.get("monthlySalary") === "";
+
+  if (monthlySalaryVal !== null && effectiveFrom) {
+    data.salaryProfile = {
+      upsert: {
+        create: {
+          monthlySalary: monthlySalaryVal,
+          effectiveFrom: new Date(effectiveFrom),
+          notes: salaryNotes,
+          agencyId: session.agencyId,
+        },
+        update: {
+          monthlySalary: monthlySalaryVal,
+          effectiveFrom: new Date(effectiveFrom),
+          notes: salaryNotes,
+        }
+      }
+    };
+  }
+  // Note: we do NOT set salaryProfile: { delete } here — one-to-one nested delete
+  // throws if no record exists. Instead we run a separate deleteMany below.
+
   const user = await prisma.user.update({
     where: { id },
     data,
     select: USER_SELECT,
   });
+
+  // Safely clear salary profile when monthlySalary is blank —
+  // deleteMany on the model itself is always safe (no-op when record doesn't exist)
+  if (clearSalary) {
+    await prisma.employeeSalaryProfile.deleteMany({ where: { employeeId: id } });
+  }
 
   await writeAuditLog({
     userId: session.userId, agencyId: session.agencyId,

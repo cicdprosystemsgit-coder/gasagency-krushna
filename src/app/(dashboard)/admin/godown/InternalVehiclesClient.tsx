@@ -1,16 +1,32 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useCallback } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { CustomSelect } from "@/components/ui/CustomSelect";
 import { formatDateTime } from "@/lib/utils";
-import { Plus, Truck, User, Edit2, Activity, CheckCircle2, RotateCcw, ArrowUpRight } from "lucide-react";
+import { Plus, Minus, X, HelpCircle, Truck, User, Edit2, Activity, CheckCircle2, RotateCcw, ArrowUpRight, AlertCircle } from "lucide-react";
 import {
   createDeliveryVehicle,
   updateDeliveryVehicle,
   createVehicleTripLog,
   updateTripStatus,
 } from "@/app/actions/delivery-vehicles";
+import { addCylinderType } from "@/app/actions/godown";
+
+interface Product {
+  id: string;
+  name: string;
+}
+
+interface CylinderRowItem {
+  id: string;
+  productId: string;
+  productName: string;
+  loaded: number;
+  unsoldReturned: number;
+  emptyReturned: number;
+}
 
 interface DeliveryVehicle {
   id: string; vehicleNo: string; vehicleName: string; vehicleType: string;
@@ -24,6 +40,7 @@ interface TripLog {
   tripStatus: string; notes: string | null;
   vehicle: { vehicleNo: string; vehicleName: string; assignedTo: { name: string } | null };
   recordedBy: { name: string };
+  items?: unknown;
 }
 interface DeliveryBoy { id: string; name: string; }
 
@@ -41,14 +58,31 @@ const STATUS_COLORS: Record<string, string> = {
   ACTIVE: "badge-approved", INACTIVE: "badge-neutral", MAINTENANCE: "badge-pending",
 };
 
+function getTripItems(t: TripLog): CylinderRowItem[] {
+  if (!t.items) return [];
+  if (typeof t.items === "string") {
+    try {
+      const parsed = JSON.parse(t.items);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  if (Array.isArray(t.items)) {
+    return t.items as CylinderRowItem[];
+  }
+  return [];
+}
+
 export function InternalVehiclesClient({
-  initialVehicles, initialTripLogs, deliveryBoys, isAdmin, userId,
+  initialVehicles, initialTripLogs, deliveryBoys, isAdmin, userId, cylinderTypes = [],
 }: {
   initialVehicles: DeliveryVehicle[];
   initialTripLogs: TripLog[];
   deliveryBoys: DeliveryBoy[];
   isAdmin: boolean;
   userId: string;
+  cylinderTypes?: Product[];
 }) {
   const [vehicles, setVehicles] = useState(initialVehicles);
   const [tripLogs, setTripLogs] = useState(initialTripLogs);
@@ -60,11 +94,57 @@ export function InternalVehiclesClient({
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState("");
 
-  const [vForm, setVForm] = useState({ vehicleNo: "", vehicleName: "", vehicleType: "Two-Wheeler", assignedToId: "", notes: "", status: "ACTIVE" });
-  const [tForm, setTForm] = useState({ vehicleId: "", date: new Date().toISOString().slice(0, 10), cylindersLoaded: "", departureTime: new Date().toISOString().slice(0, 16), notes: "" });
-  const [uForm, setUForm] = useState({ tripStatus: "RETURNED", returnTime: new Date().toISOString().slice(0, 16), cylindersReturned: "", cylindersDelivered: "" });
+  const [productsState, setProductsState] = useState<Product[]>(cylinderTypes);
+  const [departureItems, setDepartureItems] = useState<CylinderRowItem[]>([]);
+  const [returnItems, setReturnItems] = useState<CylinderRowItem[]>([]);
 
-  const todayTrips = tripLogs.filter((t) => new Date(t.date).toDateString() === new Date().toDateString());
+  const [addTypeOpen, setAddTypeOpen] = useState(false);
+  const [addTypeCallback, setAddTypeCallback] = useState<((p: Product) => void) | null>(null);
+
+  const openAddType = useCallback((cb: (p: Product) => void) => {
+    setAddTypeCallback(() => cb);
+    setAddTypeOpen(true);
+  }, []);
+
+  function handleTypeAdded(p: Product) {
+    setProductsState((prev) => [...prev, p]);
+    addTypeCallback?.(p);
+    setAddTypeCallback(null);
+  }
+
+  function newDepartureRow(products: Product[]): CylinderRowItem {
+    const p = products[0];
+    return {
+      id: Math.random().toString(36).substring(2, 9),
+      productId: p?.id ?? "",
+      productName: p?.name ?? "",
+      loaded: 10,
+      unsoldReturned: 0,
+      emptyReturned: 0,
+    };
+  }
+
+  const getLocalDateString = (d: Date = new Date()) => {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
+
+  const getLocalDateTimeString = (d: Date = new Date()) => {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    const hours = String(d.getHours()).padStart(2, "0");
+    const minutes = String(d.getMinutes()).padStart(2, "0");
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  };
+
+  const [vForm, setVForm] = useState({ vehicleNo: "", vehicleName: "", vehicleType: "Two-Wheeler", assignedToId: "", notes: "", status: "ACTIVE" });
+  const [tForm, setTForm] = useState({ vehicleId: "", date: getLocalDateString(), departureTime: getLocalDateTimeString(), notes: "" });
+  const [uForm, setUForm] = useState({ tripStatus: "RETURNED", returnTime: getLocalDateTimeString(), notes: "" });
+
+  const todayTrips = tripLogs.filter((t) => getLocalDateString(new Date(t.date)) === getLocalDateString());
   const activeTrips = todayTrips.filter((t) => t.tripStatus === "OUT_FOR_DELIVERY" || t.tripStatus === "LOADED");
 
   function openEditVehicle(v: DeliveryVehicle) {
@@ -99,26 +179,99 @@ export function InternalVehiclesClient({
   function handleTripSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!tForm.vehicleId) { setError("Please select a vehicle"); return; }
+    if (departureItems.length === 0) { setError("Please add at least one cylinder type"); return; }
+    if (departureItems.some(item => !item.productId)) { setError("Please select a cylinder type for all loaded rows"); return; }
+
     const fd = new FormData();
     Object.entries(tForm).forEach(([k, v]) => fd.append(k, v));
+    
+    const totalLoaded = departureItems.reduce((sum, r) => sum + r.loaded, 0);
+    fd.append("cylindersLoaded", String(totalLoaded));
+    fd.append("items", JSON.stringify(departureItems.map(item => ({
+      productId: item.productId,
+      productName: item.productName,
+      loaded: item.loaded,
+      unsoldReturned: 0,
+      emptyReturned: 0
+    }))));
+
     startTransition(async () => {
       const result = await createVehicleTripLog(fd);
       if (result.error) { setError(result.error); return; }
-      if (result.tripLog) { setTripLogs((prev) => [result.tripLog!, ...prev]); setTripModal(false); }
+      if (result.tripLog) {
+        setTripLogs((prev) => [result.tripLog!, ...prev]);
+        setTripModal(false);
+        setDepartureItems([]);
+      }
     });
   }
 
   function openUpdateTrip(t: TripLog) {
     setUpdateModal(t);
-    setUForm({ tripStatus: "RETURNED", returnTime: new Date().toISOString().slice(0, 16), cylindersReturned: String(t.cylindersLoaded), cylindersDelivered: String(t.cylindersLoaded) });
+    let initialReturnItems: CylinderRowItem[] = [];
+    if (t.items) {
+      try {
+        const parsed = typeof t.items === "string" ? JSON.parse(t.items) : t.items;
+        if (Array.isArray(parsed)) {
+          initialReturnItems = parsed.map((item: any) => ({
+            id: Math.random().toString(36).substring(2, 9),
+            productId: item.productId || "",
+            productName: item.productName || "",
+            loaded: Number(item.loaded) || 0,
+            unsoldReturned: Number(item.unsoldReturned) || 0,
+            emptyReturned: Number(item.emptyReturned) || 0,
+          }));
+        }
+      } catch (e) {
+        console.error("Failed to parse trip items:", e);
+      }
+    }
+
+    if (initialReturnItems.length === 0 && t.cylindersLoaded > 0) {
+      const defaultProduct = productsState[0];
+      initialReturnItems = [{
+        id: Math.random().toString(36).substring(2, 9),
+        productId: defaultProduct?.id ?? "",
+        productName: defaultProduct?.name ?? "Cylinder",
+        loaded: t.cylindersLoaded,
+        unsoldReturned: 0,
+        emptyReturned: t.cylindersLoaded,
+      }];
+    }
+
+    setReturnItems(initialReturnItems);
+    setUForm({
+      tripStatus: "RETURNED",
+      returnTime: getLocalDateTimeString(),
+      notes: t.notes ?? "",
+    });
     setError("");
   }
 
   function handleUpdateTrip(e: React.FormEvent) {
     e.preventDefault();
     if (!updateModal) return;
+    if (returnItems.length === 0) { setError("Please add at least one cylinder type"); return; }
+    if (returnItems.some(item => !item.productId)) { setError("Please select a cylinder type for all reconciliation rows"); return; }
+
     const fd = new FormData();
-    Object.entries(uForm).forEach(([k, v]) => fd.append(k, v));
+    fd.append("tripStatus", uForm.tripStatus);
+    fd.append("returnTime", uForm.returnTime);
+    fd.append("notes", uForm.notes);
+    
+    fd.append("items", JSON.stringify(returnItems.map(item => ({
+      productId: item.productId,
+      productName: item.productName,
+      loaded: item.loaded,
+      unsoldReturned: item.unsoldReturned,
+      emptyReturned: item.emptyReturned
+    }))));
+
+    const emptyReturnedTotal = returnItems.reduce((sum, r) => sum + r.emptyReturned, 0);
+    const unsoldReturnedTotal = returnItems.reduce((sum, r) => sum + r.unsoldReturned, 0);
+    fd.append("cylindersReturned", String(unsoldReturnedTotal));
+    fd.append("cylindersDelivered", String(emptyReturnedTotal));
+
     startTransition(async () => {
       const result = await updateTripStatus(updateModal.id, fd);
       if (result.error) { setError(result.error); return; }
@@ -162,7 +315,21 @@ export function InternalVehiclesClient({
         <>
           <div className="flex items-center justify-between mb-3">
             <p className="text-[13px] font-semibold" style={{ color: "#18181B" }}>Internal vehicle trip log</p>
-            <button onClick={() => { setError(""); setTripModal(true); }} className="btn btn-primary">
+            <button onClick={() => {
+              setError("");
+              if (productsState.length > 0) {
+                setDepartureItems([newDepartureRow(productsState)]);
+              } else {
+                setDepartureItems([]);
+              }
+              setTForm({
+                vehicleId: "",
+                date: getLocalDateString(),
+                departureTime: getLocalDateTimeString(),
+                notes: ""
+              });
+              setTripModal(true);
+            }} className="btn btn-primary">
               <Plus className="w-3.5 h-3.5" /> Record Departure
             </button>
           </div>
@@ -187,11 +354,38 @@ export function InternalVehiclesClient({
                         <p className="text-[11px]" style={{ color: "#A1A1AA" }}>{t.vehicle.vehicleName}</p>
                       </td>
                       <td className="text-[13px]" style={{ color: "#52525B" }}>{t.vehicle.assignedTo?.name ?? "—"}</td>
-                      <td className="text-center font-bold" style={{ color: "#2563EB" }}>{t.cylindersLoaded}</td>
+                      <td className="text-center">
+                        <span className="font-bold text-[13px]" style={{ color: "#2563EB" }}>{t.cylindersLoaded}</span>
+                        {getTripItems(t).length > 0 && (
+                          <div className="text-[10px] text-slate-400 font-normal mt-0.5 whitespace-nowrap">
+                            {getTripItems(t).map((it, idx) => (
+                              <div key={idx}>{it.productName}: {it.loaded}</div>
+                            ))}
+                          </div>
+                        )}
+                      </td>
                       <td className="muted text-[12px]">{t.departureTime ? formatDateTime(t.departureTime) : "—"}</td>
                       <td className="muted text-[12px]">{t.returnTime ? formatDateTime(t.returnTime) : "—"}</td>
-                      <td className="text-center font-bold" style={{ color: "#16A34A" }}>{t.cylindersDelivered || "—"}</td>
-                      <td className="text-center font-bold" style={{ color: "#D97706" }}>{t.cylindersReturned || "—"}</td>
+                      <td className="text-center font-bold" style={{ color: "#16A34A" }}>
+                        <span>{t.cylindersDelivered || "—"}</span>
+                        {getTripItems(t).length > 0 && t.cylindersDelivered > 0 && (
+                          <div className="text-[10px] text-slate-400 font-normal mt-0.5 whitespace-nowrap">
+                            {getTripItems(t).filter(it => it.emptyReturned > 0).map((it, idx) => (
+                              <div key={idx}>{it.productName}: {it.emptyReturned}</div>
+                            ))}
+                          </div>
+                        )}
+                      </td>
+                      <td className="text-center font-bold" style={{ color: "#D97706" }}>
+                        <span>{t.cylindersReturned || "—"}</span>
+                        {getTripItems(t).length > 0 && t.cylindersReturned > 0 && (
+                          <div className="text-[10px] text-slate-400 font-normal mt-0.5 whitespace-nowrap">
+                            {getTripItems(t).filter(it => it.unsoldReturned > 0).map((it, idx) => (
+                              <div key={idx}>{it.productName}: {it.unsoldReturned}</div>
+                            ))}
+                          </div>
+                        )}
+                      </td>
                       <td className="text-center">
                         <span className={`badge ${TRIP_STATUS_COLORS[t.tripStatus] ?? "badge-neutral"}`}>
                           {TRIP_STATUS_LABELS[t.tripStatus] ?? t.tripStatus}
@@ -252,7 +446,7 @@ export function InternalVehiclesClient({
                     {v.assignedTo ? v.assignedTo.name.charAt(0) : "?"}
                   </div>
                   <p className="text-[12px]" style={{ color: v.assignedTo ? "#52525B" : "#A1A1AA" }}>
-                    {v.assignedTo ? v.assignedTo.name : "Unassigned"}
+                     {v.assignedTo ? v.assignedTo.name : "Unassigned"}
                   </p>
                 </div>
               </div>
@@ -262,129 +456,640 @@ export function InternalVehiclesClient({
       )}
 
       {/* Add/Edit Vehicle Modal */}
-      <Modal open={vehicleModal} onClose={() => setVehicleModal(false)} title={editVehicle ? "Edit Vehicle" : "Add Internal Vehicle"}>
-        <form onSubmit={handleVehicleSubmit} className="space-y-4">
-          {error && <div className="text-[13px] px-3 py-2.5 rounded-md" style={{ background: "#FEF2F2", border: "1px solid #FCA5A5", color: "#B91C1C" }}>{error}</div>}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-[12px] font-medium mb-1.5" style={{ color: "#52525B" }}>Vehicle No. *</label>
-              <input value={vForm.vehicleNo} onChange={(e) => setVForm({ ...vForm, vehicleNo: e.target.value.toUpperCase() })} placeholder="MH12AB1234" className="input font-mono" style={{ textTransform: "uppercase" }} />
-            </div>
-            <div>
-              <label className="block text-[12px] font-medium mb-1.5" style={{ color: "#52525B" }}>Vehicle Name *</label>
-              <input value={vForm.vehicleName} onChange={(e) => setVForm({ ...vForm, vehicleName: e.target.value })} placeholder="Activa, TVS, Tata Ace..." className="input" />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-[12px] font-medium mb-1.5" style={{ color: "#52525B" }}>Vehicle Type</label>
-              <select value={vForm.vehicleType} onChange={(e) => setVForm({ ...vForm, vehicleType: e.target.value })} className="input select-none">
-                {["Two-Wheeler", "Three-Wheeler", "Four-Wheeler"].map((t) => <option key={t}>{t}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-[12px] font-medium mb-1.5" style={{ color: "#52525B" }}>Assign Delivery Boy</label>
-              <select value={vForm.assignedToId} onChange={(e) => setVForm({ ...vForm, assignedToId: e.target.value })} className="input select-none">
-                <option value="">Unassigned</option>
-                {deliveryBoys.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
-              </select>
-            </div>
-          </div>
-          {editVehicle && (
-            <div>
-              <label className="block text-[12px] font-medium mb-1.5" style={{ color: "#52525B" }}>Status</label>
-              <select value={vForm.status} onChange={(e) => setVForm({ ...vForm, status: e.target.value })} className="input select-none">
-                {["ACTIVE", "INACTIVE", "MAINTENANCE"].map((s) => <option key={s}>{s}</option>)}
-              </select>
+      <Modal
+        open={vehicleModal}
+        onClose={() => setVehicleModal(false)}
+        title={editVehicle ? "Edit Vehicle" : "Add Internal Vehicle"}
+        centerFooter={true}
+        footer={
+          <>
+            <button type="button" onClick={() => setVehicleModal(false)} className="btn btn-secondary">Cancel</button>
+            <button form="vehicle-form" type="submit" disabled={isPending} className="btn btn-primary shadow-sm px-5">
+              {isPending ? "Saving…" : editVehicle ? "Update Vehicle" : "Add Vehicle"}
+            </button>
+          </>
+        }
+      >
+        <form id="vehicle-form" onSubmit={handleVehicleSubmit} className="space-y-4">
+          {error && (
+            <div className="text-[13px] px-3.5 py-2.5 rounded-xl border flex items-center gap-2" style={{ background: "#FEF2F2", borderColor: "#FCA5A5", color: "#B91C1C" }}>
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span className="font-medium">{error}</span>
             </div>
           )}
-          <div>
-            <label className="block text-[12px] font-medium mb-1.5" style={{ color: "#52525B" }}>Notes</label>
-            <textarea value={vForm.notes} onChange={(e) => setVForm({ ...vForm, notes: e.target.value })} rows={2} placeholder="Any remarks…" className="input resize-none" />
+          
+          <div className="rounded-xl border border-slate-200 overflow-hidden">
+            <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-200">
+              <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">General Information</p>
+            </div>
+            <div className="p-4 grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1.5">Vehicle No. *</label>
+                <input value={vForm.vehicleNo} onChange={(e) => setVForm({ ...vForm, vehicleNo: e.target.value.toUpperCase() })} placeholder="MH12AB1234" className="input font-mono text-[13px] font-bold tracking-widest" style={{ textTransform: "uppercase" }} />
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1.5">Vehicle Name *</label>
+                <input value={vForm.vehicleName} onChange={(e) => setVForm({ ...vForm, vehicleName: e.target.value })} placeholder="Activa, TVS, Tata Ace..." className="input text-[13px]" />
+              </div>
+            </div>
           </div>
-          <div className="flex justify-end gap-2 pt-1">
-            <button type="button" onClick={() => setVehicleModal(false)} className="btn btn-secondary">Cancel</button>
-            <button type="submit" disabled={isPending} className="btn btn-primary">{isPending ? "Saving…" : editVehicle ? "Update Vehicle" : "Add Vehicle"}</button>
+
+          <div className="rounded-xl border border-slate-200 overflow-visible">
+            <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-200 rounded-t-xl">
+              <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Assignment &amp; Status</p>
+            </div>
+            <div className="p-4 grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1.5">Vehicle Type</label>
+                <CustomSelect
+                  value={vForm.vehicleType}
+                  onChange={(val) => setVForm({ ...vForm, vehicleType: val })}
+                  options={["Two-Wheeler", "Three-Wheeler", "Four-Wheeler"].map((t) => ({ value: t, label: t }))}
+                  placeholder="Select Vehicle Type"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1.5">Assign Delivery Boy</label>
+                <CustomSelect
+                  value={vForm.assignedToId}
+                  onChange={(val) => setVForm({ ...vForm, assignedToId: val })}
+                  options={[
+                    { value: "", label: "Unassigned" },
+                    ...deliveryBoys.map((b) => ({ value: b.id, label: b.name }))
+                  ]}
+                  placeholder="Unassigned"
+                />
+              </div>
+            </div>
+          </div>
+
+          {editVehicle && (
+            <div className="rounded-xl border border-slate-200 overflow-visible">
+              <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-200 rounded-t-xl">
+                <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Operational Status</p>
+              </div>
+              <div className="p-4">
+                <CustomSelect
+                  value={vForm.status}
+                  onChange={(val) => setVForm({ ...vForm, status: val })}
+                  options={["ACTIVE", "INACTIVE", "MAINTENANCE"].map((s) => ({ value: s, label: s }))}
+                  placeholder="Select Status"
+                />
+              </div>
+            </div>
+          )}
+
+          <div className="rounded-xl border border-slate-200 overflow-hidden">
+            <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-200">
+              <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Remarks / Notes</p>
+            </div>
+            <div className="p-4">
+              <textarea value={vForm.notes} onChange={(e) => setVForm({ ...vForm, notes: e.target.value })} rows={2} placeholder="Any remarks…" className="input text-[13px] resize-none" />
+            </div>
           </div>
         </form>
       </Modal>
 
       {/* Record Trip Modal */}
-      <Modal open={tripModal} onClose={() => setTripModal(false)} title="Record Vehicle Departure">
-        <form onSubmit={handleTripSubmit} className="space-y-4">
-          {error && <div className="text-[13px] px-3 py-2.5 rounded-md" style={{ background: "#FEF2F2", border: "1px solid #FCA5A5", color: "#B91C1C" }}>{error}</div>}
-          <div>
-            <label className="block text-[12px] font-medium mb-1.5" style={{ color: "#52525B" }}>Select Vehicle *</label>
-            <select value={tForm.vehicleId} onChange={(e) => setTForm({ ...tForm, vehicleId: e.target.value })} className="input select-none">
-              <option value="">Choose vehicle…</option>
-              {vehicles.filter((v) => v.status === "ACTIVE").map((v) => (
-                <option key={v.id} value={v.id}>{v.vehicleNo} — {v.vehicleName} {v.assignedTo ? `(${v.assignedTo.name})` : ""}</option>
-              ))}
-            </select>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-[12px] font-medium mb-1.5" style={{ color: "#52525B" }}>Date</label>
-              <input type="date" value={tForm.date} onChange={(e) => setTForm({ ...tForm, date: e.target.value })} className="input" />
-            </div>
-            <div>
-              <label className="block text-[12px] font-medium mb-1.5" style={{ color: "#52525B" }}>Departure Time</label>
-              <input type="datetime-local" value={tForm.departureTime} onChange={(e) => setTForm({ ...tForm, departureTime: e.target.value })} className="input" />
-            </div>
-          </div>
-          <div>
-            <label className="block text-[12px] font-medium mb-1.5" style={{ color: "#52525B" }}>Cylinders Loaded *</label>
-            <input type="number" min="0" value={tForm.cylindersLoaded} onChange={(e) => setTForm({ ...tForm, cylindersLoaded: e.target.value })} placeholder="0" className="input" />
-          </div>
-          <div>
-            <label className="block text-[12px] font-medium mb-1.5" style={{ color: "#52525B" }}>Notes</label>
-            <textarea value={tForm.notes} onChange={(e) => setTForm({ ...tForm, notes: e.target.value })} rows={2} placeholder="Any remarks…" className="input resize-none" />
-          </div>
-          <div className="flex justify-end gap-2 pt-1">
+      <Modal
+        open={tripModal}
+        onClose={() => setTripModal(false)}
+        title="Record Vehicle Departure"
+        centerFooter={true}
+        footer={
+          <>
             <button type="button" onClick={() => setTripModal(false)} className="btn btn-secondary">Cancel</button>
-            <button type="submit" disabled={isPending} className="btn btn-primary">{isPending ? "Recording…" : "Record Departure"}</button>
+            <button form="trip-form" type="submit" disabled={isPending} className="btn btn-primary shadow-sm px-5">
+              {isPending ? "Recording…" : "Record Departure"}
+            </button>
+          </>
+        }
+      >
+        <form id="trip-form" onSubmit={handleTripSubmit} className="space-y-4">
+          {error && (
+            <div className="text-[13px] px-3.5 py-2.5 rounded-xl border flex items-center gap-2" style={{ background: "#FEF2F2", borderColor: "#FCA5A5", color: "#B91C1C" }}>
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span className="font-medium">{error}</span>
+            </div>
+          )}
+          
+          <div className="rounded-xl border border-slate-200 overflow-visible">
+            <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-200 rounded-t-xl">
+              <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Select Vehicle</p>
+            </div>
+            <div className="p-4">
+              <CustomSelect
+                value={tForm.vehicleId}
+                onChange={(val) => setTForm({ ...tForm, vehicleId: val })}
+                options={vehicles.filter((v) => v.status === "ACTIVE").map((v) => ({
+                  value: v.id,
+                  label: `${v.vehicleNo} — ${v.vehicleName} ${v.assignedTo ? `(${v.assignedTo.name})` : ""}`
+                }))}
+                placeholder="Choose vehicle…"
+              />
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-slate-200 overflow-hidden">
+            <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-200">
+              <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Schedule</p>
+            </div>
+            <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1.5">Date</label>
+                <input type="date" value={tForm.date} onChange={(e) => setTForm({ ...tForm, date: e.target.value })} className="input text-[13px]" />
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1.5">Departure Time</label>
+                <input type="datetime-local" value={tForm.departureTime} onChange={(e) => setTForm({ ...tForm, departureTime: e.target.value })} className="input text-[13px]" />
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-slate-200 overflow-visible">
+            <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-200 rounded-t-xl flex items-center justify-between">
+              <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Cylinders Loaded</p>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (productsState.length > 0) {
+                      setDepartureItems(prev => [...prev, newDepartureRow(productsState)]);
+                    }
+                  }}
+                  className="flex items-center gap-1 text-[11px] font-bold px-2 py-1 rounded-lg border bg-blue-50 text-blue-600 border-blue-200 shadow-sm hover:bg-blue-100 transition-all cursor-pointer"
+                >
+                  <Plus className="w-3 h-3" /> Add Cylinder Type
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openAddType(() => {})}
+                  className="flex items-center gap-1 text-[11px] font-bold px-2 py-1 rounded-lg border bg-emerald-50 text-emerald-600 border-emerald-200 shadow-sm hover:bg-emerald-100 transition-all cursor-pointer"
+                >
+                  <Plus className="w-3 h-3" /> Add New Type
+                </button>
+              </div>
+            </div>
+            
+            <div className="p-4 space-y-3">
+              {departureItems.length === 0 ? (
+                <div className="flex flex-col items-center justify-center p-6 border border-dashed rounded-xl text-center bg-slate-50/50" style={{ borderColor: "#E2E8F0" }}>
+                  <AlertCircle className="w-5 h-5 mb-1.5 text-slate-400" />
+                  <p className="text-[12px] font-medium text-slate-500">No cylinder types loaded</p>
+                  <p className="text-[10px] text-slate-400 mt-0.5">Click "Add Cylinder Type" to add cylinders to this trip.</p>
+                </div>
+              ) : (
+                <div className="border rounded-xl overflow-visible bg-white shadow-xs">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-slate-200">
+                        <th className="py-2 px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400">Type</th>
+                        <th className="py-2 px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400 text-center w-28">Quantity</th>
+                        <th className="py-2 px-3 w-10 text-center"></th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {departureItems.map((row) => (
+                        <tr key={row.id} className="hover:bg-slate-50/30 transition-colors">
+                          <td className="p-2">
+                            <CustomSelect
+                              value={row.productId}
+                              onChange={(val) => {
+                                const selectedProduct = productsState.find(p => p.id === val);
+                                setDepartureItems(prev =>
+                                  prev.map(r => r.id === row.id ? { ...r, productId: val, productName: selectedProduct?.name ?? "" } : r)
+                                );
+                              }}
+                              options={productsState.map((p) => ({ value: p.id, label: p.name }))}
+                              placeholder="Select Type..."
+                              onAddClick={() => {
+                                openAddType((p) => {
+                                  setDepartureItems(prev =>
+                                    prev.map(r => r.id === row.id ? { ...r, productId: p.id, productName: p.name } : r)
+                                  );
+                                });
+                              }}
+                              addLabel="+ Add New Type..."
+                            />
+                          </td>
+                          <td className="p-2">
+                            <div className="flex items-center gap-1 justify-center">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setDepartureItems(prev =>
+                                    prev.map(r => r.id === row.id ? { ...r, loaded: Math.max(0, r.loaded - 1) } : r)
+                                  );
+                                }}
+                                className="w-6 h-6 flex items-center justify-center rounded border border-slate-200 hover:bg-slate-100 bg-white"
+                              >
+                                <Minus className="w-3 h-3 text-slate-600" />
+                              </button>
+                              <input
+                                type="number"
+                                min="0"
+                                value={row.loaded}
+                                onChange={(e) => {
+                                  const val = Math.max(0, parseInt(e.target.value) || 0);
+                                  setDepartureItems(prev =>
+                                    prev.map(r => r.id === row.id ? { ...r, loaded: val } : r)
+                                  );
+                                }}
+                                className="input text-center font-bold text-slate-800 text-[12px] w-12 p-1"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setDepartureItems(prev =>
+                                    prev.map(r => r.id === row.id ? { ...r, loaded: r.loaded + 1 } : r)
+                                  );
+                                }}
+                                className="w-6 h-6 flex items-center justify-center rounded border border-slate-200 hover:bg-slate-100 bg-white"
+                              >
+                                <Plus className="w-3 h-3 text-slate-600" />
+                              </button>
+                            </div>
+                          </td>
+                          <td className="p-2 text-center">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setDepartureItems(prev => prev.filter(r => r.id !== row.id));
+                              }}
+                              className="text-rose-500 hover:text-rose-700 p-1 hover:bg-rose-50 rounded"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {departureItems.length > 0 && (
+                    <div className="flex items-center justify-between px-3 py-2 bg-slate-50 border-t border-slate-200">
+                      <span className="text-[10px] font-bold text-slate-500 uppercase">Total Loaded</span>
+                      <span className="text-[13px] font-extrabold text-slate-800">
+                        {departureItems.reduce((sum, r) => sum + r.loaded, 0)} <span className="text-[10px] font-normal text-slate-500">pcs</span>
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-slate-200 overflow-hidden">
+            <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-200">
+              <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Notes (Optional)</p>
+            </div>
+            <div className="p-4">
+              <textarea value={tForm.notes} onChange={(e) => setTForm({ ...tForm, notes: e.target.value })} rows={2} placeholder="Any remarks…" className="input text-[13px] resize-none" />
+            </div>
           </div>
         </form>
       </Modal>
 
       {/* Update Trip Status Modal */}
-      <Modal open={!!updateModal} onClose={() => setUpdateModal(null)} title="Update Vehicle Return">
-        <form onSubmit={handleUpdateTrip} className="space-y-4">
-          {error && <div className="text-[13px] px-3 py-2.5 rounded-md" style={{ background: "#FEF2F2", border: "1px solid #FCA5A5", color: "#B91C1C" }}>{error}</div>}
-          {updateModal && (
-            <div className="px-3 py-2.5 rounded-md" style={{ background: "#EFF6FF", border: "1px solid #BFDBFE" }}>
-              <p className="text-[12px] font-semibold" style={{ color: "#1D4ED8" }}>{updateModal.vehicle.vehicleNo} — {updateModal.vehicle.vehicleName}</p>
-              <p className="text-[11px]" style={{ color: "#3B82F6" }}>Loaded: {updateModal.cylindersLoaded} cylinders</p>
+      <Modal
+        open={!!updateModal}
+        onClose={() => setUpdateModal(null)}
+        title="Update Vehicle Return"
+        centerFooter={true}
+        footer={
+          <>
+            <button type="button" onClick={() => setUpdateModal(null)} className="btn btn-secondary">Cancel</button>
+            <button form="update-trip-form" type="submit" disabled={isPending} className="btn btn-primary shadow-sm px-5">
+              {isPending ? "Updating…" : "Update Status"}
+            </button>
+          </>
+        }
+      >
+        <form id="update-trip-form" onSubmit={handleUpdateTrip} className="space-y-4">
+          {error && (
+            <div className="text-[13px] px-3.5 py-2.5 rounded-xl border flex items-center gap-2" style={{ background: "#FEF2F2", borderColor: "#FCA5A5", color: "#B91C1C" }}>
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span className="font-medium">{error}</span>
             </div>
           )}
-          <div>
-            <label className="block text-[12px] font-medium mb-1.5" style={{ color: "#52525B" }}>Trip Status</label>
-            <select value={uForm.tripStatus} onChange={(e) => setUForm({ ...uForm, tripStatus: e.target.value })} className="input select-none">
-              <option value="OUT_FOR_DELIVERY">Out for Delivery</option>
-              <option value="RETURNED">Fully Returned</option>
-              <option value="PARTIAL_RETURN">Partial Return</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-[12px] font-medium mb-1.5" style={{ color: "#52525B" }}>Return Time</label>
-            <input type="datetime-local" value={uForm.returnTime} onChange={(e) => setUForm({ ...uForm, returnTime: e.target.value })} className="input" />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-[12px] font-medium mb-1.5" style={{ color: "#52525B" }}>Cylinders Delivered</label>
-              <input type="number" min="0" value={uForm.cylindersDelivered} onChange={(e) => setUForm({ ...uForm, cylindersDelivered: e.target.value })} className="input" />
+          
+          {updateModal && (
+            <div className="px-4 py-3 rounded-xl border flex items-center justify-between" style={{ background: "#EFF6FF", borderColor: "#BFDBFE" }}>
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
+                  <Truck className="w-4 h-4 text-blue-600" />
+                </div>
+                <div>
+                  <p className="text-[13px] font-bold font-mono text-blue-800">{updateModal.vehicle.vehicleNo}</p>
+                  <p className="text-[11px] text-blue-600">{updateModal.vehicle.vehicleName}</p>
+                </div>
+              </div>
+              <div className="text-right">
+                <p className="text-[10px] font-bold text-blue-600 uppercase tracking-wider">Loaded Cylinders</p>
+                <p className="text-[16px] font-extrabold text-blue-800">{updateModal.cylindersLoaded} <span className="text-[11px] font-normal">pcs</span></p>
+              </div>
             </div>
-            <div>
-              <label className="block text-[12px] font-medium mb-1.5" style={{ color: "#52525B" }}>Cylinders Returned</label>
-              <input type="number" min="0" value={uForm.cylindersReturned} onChange={(e) => setUForm({ ...uForm, cylindersReturned: e.target.value })} className="input" />
+          )}
+
+          <div className="rounded-xl border border-slate-200 overflow-visible">
+            <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-200 rounded-t-xl flex items-center justify-between">
+              <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Reconciliation</p>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (productsState.length > 0) {
+                      setReturnItems(prev => [...prev, newDepartureRow(productsState)]);
+                    }
+                  }}
+                  className="flex items-center gap-1 text-[11px] font-bold px-2 py-1 rounded-lg border bg-blue-50 text-blue-600 border-blue-200 shadow-sm hover:bg-blue-100 transition-all cursor-pointer"
+                >
+                  <Plus className="w-3 h-3" /> Add Cylinder Type
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openAddType(() => {})}
+                  className="flex items-center gap-1 text-[11px] font-bold px-2 py-1 rounded-lg border bg-emerald-50 text-emerald-600 border-emerald-200 shadow-sm hover:bg-emerald-100 transition-all cursor-pointer"
+                >
+                  <Plus className="w-3 h-3" /> Add New Type
+                </button>
+              </div>
+            </div>
+            
+            <div className="p-4 space-y-3">
+              {returnItems.length === 0 ? (
+                <div className="flex flex-col items-center justify-center p-6 border border-dashed rounded-xl text-center bg-slate-50/50" style={{ borderColor: "#E2E8F0" }}>
+                  <AlertCircle className="w-5 h-5 mb-1.5 text-slate-400" />
+                  <p className="text-[12px] font-medium text-slate-500">No cylinder types to reconcile</p>
+                  <p className="text-[10px] text-slate-400 mt-0.5">Click "Add Cylinder Type" to start reconciliation.</p>
+                </div>
+              ) : (
+                <div className="border rounded-xl overflow-visible bg-white shadow-xs">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-slate-200">
+                        <th className="py-2 px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400">Type</th>
+                        <th className="py-2 px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400 text-center w-16">Loaded</th>
+                        <th className="py-2 px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400 text-center w-36">Empty Ret.</th>
+                        <th className="py-2 px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400 text-center w-36">Filled Ret.</th>
+                        <th className="py-2 px-3 w-10 text-center"></th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {returnItems.map((row) => (
+                        <tr key={row.id} className="hover:bg-slate-50/30 transition-colors">
+                          <td className="p-2">
+                            <CustomSelect
+                              value={row.productId}
+                              onChange={(val) => {
+                                const selectedProduct = productsState.find(p => p.id === val);
+                                setReturnItems(prev =>
+                                  prev.map(r => r.id === row.id ? { ...r, productId: val, productName: selectedProduct?.name ?? "" } : r)
+                                );
+                              }}
+                              options={productsState.map((p) => ({ value: p.id, label: p.name }))}
+                              placeholder="Select Type..."
+                              onAddClick={() => {
+                                openAddType((p) => {
+                                  setReturnItems(prev =>
+                                    prev.map(r => r.id === row.id ? { ...r, productId: p.id, productName: p.name } : r)
+                                  );
+                                });
+                              }}
+                              addLabel="+ Add New Type..."
+                            />
+                          </td>
+                          <td className="p-2 text-center text-[12px] font-semibold text-slate-600">
+                            {row.loaded}
+                          </td>
+                          <td className="p-2">
+                            <div className="flex items-center gap-1 justify-center">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setReturnItems(prev =>
+                                    prev.map(r => r.id === row.id ? { ...r, emptyReturned: Math.max(0, r.emptyReturned - 1) } : r)
+                                  );
+                                }}
+                                className="w-7 h-7 flex items-center justify-center rounded border border-slate-200 hover:bg-slate-100 bg-white flex-shrink-0"
+                              >
+                                <Minus className="w-3 h-3 text-slate-600" />
+                              </button>
+                              <input
+                                type="number"
+                                min="0"
+                                value={row.emptyReturned}
+                                onChange={(e) => {
+                                  const val = Math.max(0, parseInt(e.target.value) || 0);
+                                  setReturnItems(prev =>
+                                    prev.map(r => r.id === row.id ? { ...r, emptyReturned: val } : r)
+                                  );
+                                }}
+                                className="input text-center font-bold text-slate-800 text-[13px] w-14 px-1 py-0 h-7"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setReturnItems(prev =>
+                                    prev.map(r => r.id === row.id ? { ...r, emptyReturned: r.emptyReturned + 1 } : r)
+                                  );
+                                }}
+                                className="w-7 h-7 flex items-center justify-center rounded border border-slate-200 hover:bg-slate-100 bg-white flex-shrink-0"
+                              >
+                                <Plus className="w-3 h-3 text-slate-600" />
+                              </button>
+                            </div>
+                          </td>
+                          <td className="p-2">
+                            <div className="flex items-center gap-1 justify-center">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setReturnItems(prev =>
+                                    prev.map(r => r.id === row.id ? { ...r, unsoldReturned: Math.max(0, r.unsoldReturned - 1) } : r)
+                                  );
+                                }}
+                                className="w-7 h-7 flex items-center justify-center rounded border border-slate-200 hover:bg-slate-100 bg-white flex-shrink-0"
+                              >
+                                <Minus className="w-3 h-3 text-slate-600" />
+                              </button>
+                              <input
+                                type="number"
+                                min="0"
+                                value={row.unsoldReturned}
+                                onChange={(e) => {
+                                  const val = Math.max(0, parseInt(e.target.value) || 0);
+                                  setReturnItems(prev =>
+                                    prev.map(r => r.id === row.id ? { ...r, unsoldReturned: val } : r)
+                                  );
+                                }}
+                                className="input text-center font-bold text-slate-800 text-[13px] w-14 px-1 py-0 h-7"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setReturnItems(prev =>
+                                    prev.map(r => r.id === row.id ? { ...r, unsoldReturned: r.unsoldReturned + 1 } : r)
+                                  );
+                                }}
+                                className="w-7 h-7 flex items-center justify-center rounded border border-slate-200 hover:bg-slate-100 bg-white flex-shrink-0"
+                              >
+                                <Plus className="w-3 h-3 text-slate-600" />
+                              </button>
+                            </div>
+                          </td>
+                          <td className="p-2 text-center">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setReturnItems(prev => prev.filter(r => r.id !== row.id));
+                              }}
+                              className="text-rose-500 hover:text-rose-700 p-1 hover:bg-rose-50 rounded"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {returnItems.length > 0 && (
+                    <div className="flex items-center justify-between px-3 py-2 bg-slate-50 border-t border-slate-200 text-[10px] font-bold text-slate-500 uppercase">
+                      <div>
+                        Delivered (Empty Ret): <span className="text-slate-800 text-[12px] font-extrabold">{returnItems.reduce((sum, r) => sum + r.emptyReturned, 0)} pcs</span>
+                      </div>
+                      <div>
+                        Returned (Filled Ret): <span className="text-slate-800 text-[12px] font-extrabold">{returnItems.reduce((sum, r) => sum + r.unsoldReturned, 0)} pcs</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
-          <div className="flex justify-end gap-2 pt-1">
-            <button type="button" onClick={() => setUpdateModal(null)} className="btn btn-secondary">Cancel</button>
-            <button type="submit" disabled={isPending} className="btn btn-primary">{isPending ? "Updating…" : "Update Status"}</button>
+
+          <div className="rounded-xl border border-slate-200 overflow-visible">
+            <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-200 rounded-t-xl">
+              <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Return Details</p>
+            </div>
+            <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1.5">Return Date &amp; Time</label>
+                <input type="datetime-local" value={uForm.returnTime} onChange={(e) => setUForm({ ...uForm, returnTime: e.target.value })} className="input text-[13px]" />
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1.5">Trip Status</label>
+                <CustomSelect
+                  value={uForm.tripStatus}
+                  onChange={(val) => setUForm({ ...uForm, tripStatus: val })}
+                  options={[
+                    { value: "OUT_FOR_DELIVERY", label: "Out for Delivery" },
+                    { value: "RETURNED", label: "Fully Returned" },
+                    { value: "PARTIAL_RETURN", label: "Partial Return" }
+                  ]}
+                  placeholder="Select Trip Status"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-slate-200 overflow-hidden">
+            <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-200">
+              <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Notes (Optional)</p>
+            </div>
+            <div className="p-4">
+              <textarea value={uForm.notes} onChange={(e) => setUForm({ ...uForm, notes: e.target.value })} rows={2} placeholder="Any remarks…" className="input text-[13px] resize-none" />
+            </div>
           </div>
         </form>
       </Modal>
+
+      <AddTypeModal
+        open={addTypeOpen}
+        onClose={() => setAddTypeOpen(false)}
+        onAdded={handleTypeAdded}
+      />
     </>
+  );
+}
+
+function AddTypeModal({
+  open,
+  onClose,
+  onAdded,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onAdded: (p: Product) => void;
+}) {
+  const [name, setName] = useState("");
+  const [err, setErr] = useState("");
+  const [pending, startT] = useTransition();
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!name.trim()) {
+      setErr("Cylinder type name is required");
+      return;
+    }
+    startT(async () => {
+      const res = await addCylinderType(name.trim());
+      if (res.error) {
+        setErr(res.error);
+        return;
+      }
+      if (res.product) {
+        onAdded(res.product);
+        setName("");
+        setErr("");
+        onClose();
+      }
+    });
+  }
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="Add Cylinder Type"
+      size="sm"
+      centerFooter={true}
+      footer={
+        <>
+          <button type="button" onClick={onClose} className="btn btn-secondary">
+            Cancel
+          </button>
+          <button form="add-type-form" type="submit" disabled={pending} className="btn btn-primary shadow-sm px-5">
+            {pending ? "Saving..." : "Add Cylinder"}
+          </button>
+        </>
+      }
+    >
+      <form id="add-type-form" onSubmit={handleSubmit} className="space-y-4">
+        {err && (
+          <div
+            className="text-[13px] px-3.5 py-2.5 rounded-xl border flex items-center gap-2"
+            style={{ background: "#FEF2F2", color: "#B91C1C", borderColor: "#FCA5A5" }}
+          >
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span className="font-medium">{err}</span>
+          </div>
+        )}
+        <div className="rounded-xl border border-slate-200 overflow-hidden">
+          <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-200">
+            <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Cylinder Product Details</p>
+          </div>
+          <div className="p-4">
+            <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1.5">Type Name *</label>
+            <input
+              autoFocus
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g. 19kg Commercial, 14.2kg Domestic"
+              className="input text-[13px] focus:ring-2 focus:ring-blue-100"
+            />
+          </div>
+        </div>
+      </form>
+    </Modal>
   );
 }

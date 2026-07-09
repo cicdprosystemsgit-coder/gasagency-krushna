@@ -20,6 +20,7 @@ export const ALL_FEATURES: FeatureDef[] = [
   // Finance
   { key: "salaries",            label: "Salaries & Drawings",      description: "Process employee salaries, advances, and owner drawings",  category: "Finance"       },
   { key: "expenses",            label: "Expenses & Vehicles",      description: "Track operational expenses and vehicle/agency assets",      category: "Finance"       },
+  { key: "assets_management",   label: "Assets & Finance",         description: "Track agency assets, P&L, inventory valuation, and cash flow", category: "Finance"    },
   { key: "expense_categories",  label: "Expense Categories",       description: "Organise expenses by category with monthly budgets",       category: "Finance"       },
   { key: "daily_closing",       label: "Daily Closing",            description: "End-of-day cash and cylinder count closing",               category: "Finance"       },
   // People

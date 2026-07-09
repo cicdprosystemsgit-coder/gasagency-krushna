@@ -25,7 +25,11 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   reactCompiler: true,
+  transpilePackages: ["lucide-react"],
   async headers() {
+    if (process.env.NODE_ENV !== "production") {
+      return [];
+    }
     return [{ source: "/(.*)", headers: securityHeaders }];
   },
 };

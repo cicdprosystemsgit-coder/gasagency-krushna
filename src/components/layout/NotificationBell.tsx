@@ -59,8 +59,6 @@ export function NotificationBell() {
 
   useEffect(() => {
     load();
-    const interval = setInterval(load, 30000); // poll every 30s
-    return () => clearInterval(interval);
   }, []);
 
   const handleMarkRead = async (id: string) => {
@@ -77,11 +75,19 @@ export function NotificationBell() {
     setUnreadCount(0);
   };
 
+  const handleToggle = () => {
+    const nextState = !open;
+    setOpen(nextState);
+    if (nextState) {
+      load();
+    }
+  };
+
   return (
     <div className="relative">
       <button
         id="notification-bell-btn"
-        onClick={() => setOpen(!open)}
+        onClick={handleToggle}
         className="relative flex items-center justify-center w-8 h-8 rounded-md transition-colors hover:bg-zinc-100"
         style={{ color: "#71717A" }}
         aria-label="Notifications"

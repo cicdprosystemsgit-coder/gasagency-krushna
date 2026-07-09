@@ -13,6 +13,7 @@ export interface GstInvoicePDFData {
   customerName: string;
   customerPhone: string;
   customerAddress: string;
+  customerCode?: string;
   items: Array<{
     productName: string;
     qty: number;
@@ -132,12 +133,18 @@ export async function generateGstInvoicePDF(data: GstInvoicePDFData): Promise<vo
   fill(ML, y, 3, 28, "#1D4ED8");
 
   t("BILL TO", ML + 6, y + 6, { style: "bold", size: 7.5, hex: "#6B7280" });
-  t(data.customerName, ML + 6, y + 12.5, { style: "bold", size: 11, hex: "#111827" });
+  t(data.customerName, ML + 6, y + 12.5, { style: "bold", size: 10.5, hex: "#111827" });
 
-  const billLine2Parts = [];
-  if (data.customerAddress) billLine2Parts.push(data.customerAddress);
-  if (billLine2Parts.length) t(billLine2Parts.join(", "), ML + 6, y + 18.5, { size: 8, hex: "#52525B" });
-  if (data.customerPhone) t(`Phone: ${data.customerPhone}`, ML + 6, y + 24, { size: 8, hex: "#52525B" });
+  let textY = y + 18.5;
+  if (data.customerCode) {
+    t(`Consumer No: ${data.customerCode}`, ML + 6, y + 17, { style: "bold", size: 8, hex: "#1D4ED8" });
+    textY = y + 21.5;
+    if (data.customerAddress) t(data.customerAddress, ML + 6, textY, { size: 8, hex: "#52525B" });
+    if (data.customerPhone) t(`Phone: ${data.customerPhone}`, ML + 6, textY + 4.5, { size: 8, hex: "#52525B" });
+  } else {
+    if (data.customerAddress) t(data.customerAddress, ML + 6, textY, { size: 8, hex: "#52525B" });
+    if (data.customerPhone) t(`Phone: ${data.customerPhone}`, ML + 6, textY + 5.5, { size: 8, hex: "#52525B" });
+  }
 
   y += 34;
 

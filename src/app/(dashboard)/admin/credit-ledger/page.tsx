@@ -5,16 +5,29 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { CreditCard } from "lucide-react";
 import { CreditLedgerClient } from "./CreditLedgerClient";
 
+// Always fetch fresh data — delivery actions create credit entries dynamically
+export const dynamic = "force-dynamic";
+
 export default async function CreditLedgerPage() {
   const session = await getSession();
   if (!session || !["ADMIN", "MANAGER", "STAFF", "DELIVERY_BOY"].includes(session.role)) redirect("/login");
 
   const [customers, entries] = await Promise.all([
-    prisma.customer.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
+    prisma.customer.findMany({
+      where: { isActive: true, agencyId: session.agencyId! },
+      orderBy: { name: "asc" },
+    }),
     prisma.creditLedgerEntry.findMany({
+      where: { agencyId: session.agencyId! },
       orderBy: { date: "desc" },
-      take: 200,
-      include: {
+      take: 1000,
+      select: {
+        id: true,
+        date: true,
+        type: true,
+        amount: true,
+        description: true,
+        customerId: true,
         customer: { select: { name: true, phone: true } },
         addedBy: { select: { name: true } },
       },

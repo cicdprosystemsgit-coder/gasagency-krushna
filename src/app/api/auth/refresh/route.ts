@@ -33,7 +33,10 @@ export async function POST(req: NextRequest) {
   // Load fresh user data
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { id: true, email: true, name: true, role: true, agencyId: true, isActive: true },
+    select: {
+      id: true, email: true, name: true, role: true, agencyId: true, isActive: true,
+      agency: { select: { slug: true } },
+    },
   });
   if (!user || !user.isActive) {
     return NextResponse.json({ error: "Account inactive" }, { status: 401 });
@@ -44,11 +47,12 @@ export async function POST(req: NextRequest) {
   const userAgent = req.headers.get("user-agent") ?? "unknown";
 
   const { accessToken, rawRefreshToken, refreshJti } = await createTokenPair({
-    id: user.id,
-    email: user.email,
-    name: user.name,
-    role: user.role,
-    agencyId: user.agencyId ?? null,
+    id:         user.id,
+    email:      user.email,
+    name:       user.name,
+    role:       user.role,
+    agencyId:   user.agencyId ?? null,
+    agencySlug: user.agency?.slug ?? null,
   });
 
   await storeRefreshToken({

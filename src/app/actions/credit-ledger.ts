@@ -35,6 +35,7 @@ export async function addCustomer(formData: FormData) {
 
   const name = (formData.get("name") as string)?.trim();
   const phone = (formData.get("phone") as string)?.trim();
+  const customerCode = (formData.get("customerCode") as string)?.trim() || null;
 
   if (!name) return { error: "Name is required" };
   if (!/^[a-zA-Z\s]+$/.test(name)) return { error: "Name: only alphabetic characters allowed" };
@@ -47,6 +48,7 @@ export async function addCustomer(formData: FormData) {
       phone,
       address: (formData.get("address") as string) || null,
       type: (formData.get("type") as "COMMERCIAL" | "DOMESTIC") || "COMMERCIAL",
+      customerCode: customerCode ? customerCode.toUpperCase() : null,
       agencyId: session.agencyId,
     },
   });

@@ -12,6 +12,7 @@ export interface EdgeSessionPayload {
   name: string;
   role: Role;
   agencyId?: string | null;
+  agencySlug?: string | null;
 }
 
 const ISSUER   = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
@@ -45,11 +46,12 @@ export async function verifyAccessTokenEdge(token: string): Promise<EdgeSessionP
     if (data.type !== "access") return null;
 
     return {
-      userId:   data.sub as string,
-      email:    data.email as string,
-      name:     data.name as string,
-      role:     data.role as Role,
-      agencyId: (data.agencyId as string) ?? null,
+      userId:     data.sub as string,
+      email:      data.email as string,
+      name:       data.name as string,
+      role:       data.role as Role,
+      agencyId:   (data.agencyId as string) ?? null,
+      agencySlug: (data.agencySlug as string) ?? null,
     };
   } catch {
     return null;

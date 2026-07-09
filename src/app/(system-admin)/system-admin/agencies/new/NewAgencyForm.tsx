@@ -51,6 +51,7 @@ export function NewAgencyForm() {
     address: "", city: "", state: "Maharashtra",
     gstin: "", distributorCode: "", oilCompany: "HP GAS",
     licenseNo: "", plan: "basic", notes: "",
+    slug: "",
   });
 
   const [adminForm, setAdminForm] = useState({
@@ -85,6 +86,8 @@ export function NewAgencyForm() {
 
   function validateStep1() {
     if (!agencyForm.name.trim())      { setError("Agency name is required"); return false; }
+    if (!agencyForm.slug.trim())      { setError("Subdomain slug is required"); return false; }
+    if (!/^[a-z0-9-]+$/.test(agencyForm.slug)) { setError("Subdomain slug can only contain lowercase letters, numbers, and hyphens"); return false; }
     if (!agencyForm.ownerName.trim()) { setError("Owner name is required"); return false; }
     if (!agencyForm.email.trim())     { setError("Agency email is required"); return false; }
     if (!/\S+@\S+\.\S+/.test(agencyForm.email)) { setError("Invalid email address"); return false; }
@@ -167,6 +170,28 @@ export function NewAgencyForm() {
                 <label style={labelStyle}>Agency Name *</label>
                 <input value={agencyForm.name} onChange={(e) => setA("name", e.target.value)} placeholder="e.g. Sharma Gas Agency" style={inputStyle} />
               </div>
+              <div>
+                <label style={labelStyle}>Subdomain / Tenant Slug *</label>
+                <div style={{ display: "flex", alignItems: "center" }}>
+                  <input
+                    value={agencyForm.slug}
+                    onChange={(e) => setA("slug", e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
+                    placeholder="e.g. sharma"
+                    style={{ ...inputStyle, borderTopRightRadius: 0, borderBottomRightRadius: 0, flex: 1 }}
+                  />
+                  <span style={{
+                    padding: "8px 12px", fontSize: 13, color: "#64748B",
+                    background: "#F1F5F9", border: "1px solid #CBD5E1",
+                    borderLeft: "none", borderTopRightRadius: 7, borderBottomRightRadius: 7,
+                    userSelect: "none",
+                  }}>
+                    .localhost:3000
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 16, marginBottom: 16 }}>
               <div>
                 <label style={labelStyle}>Owner Name *</label>
                 <input value={agencyForm.ownerName} onChange={(e) => setA("ownerName", e.target.value)} placeholder="e.g. Ramesh Sharma" style={inputStyle} />

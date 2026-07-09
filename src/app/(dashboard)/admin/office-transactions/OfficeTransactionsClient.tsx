@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { Modal } from "@/components/ui/Modal";
+import { SelectWithAdd, type SelectOption } from "@/components/ui/SelectWithAdd";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { Plus, Receipt, Trash2 } from "lucide-react";
 import { createOfficeTransaction, deleteOfficeTransaction } from "@/app/actions/office-transactions";
@@ -21,7 +22,12 @@ interface Transaction {
   product: { name: string } | null;
   addedBy: { name: string };
 }
-
+const getPaymentModeDisplay = (mode: string) => {
+  if (mode === "CASH") return "Cash";
+  if (mode === "ONLINE") return "Online";
+  if (mode === "CREDIT") return "Credit";
+  return mode;
+};
 const TABS = ["Inventory", "Cylinder / Gas New Connection"] as const;
 
 interface OfficeTransactionsClientProps {
@@ -31,6 +37,17 @@ interface OfficeTransactionsClientProps {
   canEdit: boolean;
 }
 
+const INVENTORY_TYPE_OPTIONS: SelectOption[] = [
+  { value: "OTHER",     label: "Other Inventory" },
+  { value: "REGULATOR", label: "Regulator" },
+  { value: "PIPE",      label: "Pipe Fitting" },
+];
+
+const CYLINDER_TYPE_OPTIONS: SelectOption[] = [
+  { value: "NEW_CONNECTION",  label: "New Connection (NC)" },
+  { value: "CYLINDER_REFILL", label: "Cylinder Refill" },
+];
+
 export function OfficeTransactionsClient({ initialTransactions, products, userId, canEdit }: OfficeTransactionsClientProps) {
   const [transactions, setTransactions] = useState(initialTransactions);
   const [activeTab, setActiveTab] = useState<typeof TABS[number]>("Inventory");
@@ -38,6 +55,9 @@ export function OfficeTransactionsClient({ initialTransactions, products, userId
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState("");
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10));
+  const [otherPaymentApp, setOtherPaymentApp] = useState("");
+  const [inventoryTypeOptions, setInventoryTypeOptions] = useState<SelectOption[]>(INVENTORY_TYPE_OPTIONS);
+  const [cylinderTypeOptions, setCylinderTypeOptions] = useState<SelectOption[]>(CYLINDER_TYPE_OPTIONS);
   const [form, setForm] = useState({
     type: activeTab === "Inventory" ? "OTHER" : "NEW_CONNECTION",
     inventoryId: "",
@@ -48,13 +68,10 @@ export function OfficeTransactionsClient({ initialTransactions, products, userId
     remarks: "",
   });
 
-  const typeMap: Record<string, string> = {
-    NEW_CONNECTION: "New Connection",
-    REGULATOR: "Regulator",
-    PIPE: "Pipe",
-    CYLINDER_REFILL: "Cylinder Refill",
-    OTHER: "Other",
-  };
+  // Build a unified type map from both option lists for display in the table
+  const typeMap: Record<string, string> = Object.fromEntries(
+    [...inventoryTypeOptions, ...cylinderTypeOptions].map((o) => [o.value, o.label])
+  );
 
   const filteredTxns = transactions.filter((t) => {
     const dateMatch = new Date(t.date).toDateString() === new Date(selectedDate).toDateString();
@@ -67,6 +84,11 @@ export function OfficeTransactionsClient({ initialTransactions, products, userId
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!form.unitRate || Number(form.unitRate) <= 0) { setError("Rate is required"); return; }
+    const finalPaymentMode = form.paymentMode === "Others" ? otherPaymentApp.trim() : form.paymentMode;
+    if (form.paymentMode === "Others" && !otherPaymentApp.trim()) {
+      setError("Please specify the payment app name");
+      return;
+    }
     const qty = Number(form.qty) || 1;
     const rate = Number(form.unitRate);
     const fd = new FormData();
@@ -76,7 +98,7 @@ export function OfficeTransactionsClient({ initialTransactions, products, userId
     fd.append("qty", String(qty));
     fd.append("unitRate", String(rate));
     fd.append("amount", String(qty * rate));
-    fd.append("paymentMode", form.paymentMode);
+    fd.append("paymentMode", finalPaymentMode);
     fd.append("remarks", form.remarks);
     fd.append("date", selectedDate);
     fd.append("addedById", userId);
@@ -87,6 +109,7 @@ export function OfficeTransactionsClient({ initialTransactions, products, userId
         setTransactions((prev) => [result.transaction!, ...prev]);
         setModalOpen(false);
         setForm({ type: form.type, inventoryId: "", description: "", qty: "1", unitRate: "", paymentMode: "CASH", remarks: "" });
+        setOtherPaymentApp("");
       }
     });
   }
@@ -168,7 +191,7 @@ export function OfficeTransactionsClient({ initialTransactions, products, userId
                   <td className="px-4 py-3 text-center font-bold text-slate-800">{t.qty}</td>
                   <td className="px-4 py-3 text-right text-slate-600">{formatCurrency(t.unitRate)}</td>
                   <td className="px-4 py-3 text-right font-bold text-slate-800">{formatCurrency(t.amount)}</td>
-                  <td className="px-4 py-3"><span className="text-xs text-slate-500">{t.paymentMode}</span></td>
+                  <td className="px-4 py-3"><span className="text-xs text-slate-500">{getPaymentModeDisplay(t.paymentMode)}</span></td>
                   <td className="px-4 py-3 text-slate-500 text-xs">{t.remarks ?? "—"}</td>
                   {canEdit && <td className="px-4 py-3 text-center">
                     <button onClick={() => handleDelete(t.id)} className="p-1.5 rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600 transition"><Trash2 className="w-4 h-4" /></button>
@@ -191,13 +214,27 @@ export function OfficeTransactionsClient({ initialTransactions, products, userId
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-1.5">Type *</label>
-              <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })} className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                {activeTab === "Cylinder / Gas New Connection" ? (
-                  <><option value="NEW_CONNECTION">New Connection (NC)</option><option value="CYLINDER_REFILL">Cylinder Refill</option></>
-                ) : (
-                  <><option value="OTHER">Other Inventory</option><option value="REGULATOR">Regulator</option><option value="PIPE">Pipe Fitting</option></>
-                )}
-              </select>
+              {activeTab === "Cylinder / Gas New Connection" ? (
+                <SelectWithAdd
+                  value={form.type}
+                  onChange={(val) => setForm({ ...form, type: val })}
+                  options={cylinderTypeOptions}
+                  addLabel="Type"
+                  onAdd={(label, value) =>
+                    setCylinderTypeOptions((prev) => [...prev, { value, label }])
+                  }
+                />
+              ) : (
+                <SelectWithAdd
+                  value={form.type}
+                  onChange={(val) => setForm({ ...form, type: val })}
+                  options={inventoryTypeOptions}
+                  addLabel="Type"
+                  onAdd={(label, value) =>
+                    setInventoryTypeOptions((prev) => [...prev, { value, label }])
+                  }
+                />
+              )}
             </div>
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-1.5">Inventory / Product</label>
@@ -224,11 +261,26 @@ export function OfficeTransactionsClient({ initialTransactions, products, userId
               <label className="block text-sm font-semibold text-slate-700 mb-1.5">Payment Mode</label>
               <select value={form.paymentMode} onChange={(e) => setForm({ ...form, paymentMode: e.target.value })} className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                 <option value="CASH">Cash</option>
-                <option value="ONLINE">Online</option>
+                <option value="PhonePe">PhonePe</option>
+                <option value="GPay">GPay</option>
+                <option value="Paytm">Paytm</option>
                 <option value="CREDIT">Credit</option>
+                <option value="Others">Others</option>
               </select>
             </div>
           </div>
+          {form.paymentMode === "Others" && (
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-1.5">Specify Payment App *</label>
+              <input
+                required
+                value={otherPaymentApp}
+                onChange={(e) => setOtherPaymentApp(e.target.value)}
+                placeholder="Enter payment app name..."
+                className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          )}
           {form.qty && form.unitRate && <div className="bg-slate-50 rounded-xl px-4 py-2 text-sm flex justify-between">
             <span className="text-slate-500">Total Amount:</span>
             <span className="font-bold text-slate-800">{formatCurrency(Number(form.qty) * Number(form.unitRate))}</span>

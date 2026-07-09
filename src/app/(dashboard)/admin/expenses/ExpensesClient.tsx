@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { Modal } from "@/components/ui/Modal";
+import { SelectWithAdd, type SelectOption } from "@/components/ui/SelectWithAdd";
 import { formatCurrency, formatDate, getDaysUntilRenewal, getRenewalStatus } from "@/lib/utils";
 import { Plus, AlertTriangle, Car, Building2, Wallet, Trash2 } from "lucide-react";
 import { createExpense, createAsset, deleteAsset } from "@/app/actions/expenses";
@@ -26,6 +27,14 @@ interface ExpensesClientProps {
 
 const TABS = ["Expenses", "Vehicle & Agency"] as const;
 
+const EXPENSE_CATEGORY_OPTIONS: SelectOption[] = [
+  { value: "GENERAL",     label: "General" },
+  { value: "FUEL",        label: "Fuel" },
+  { value: "MAINTENANCE", label: "Maintenance" },
+  { value: "OFFICE",      label: "Office" },
+  { value: "OTHER",       label: "Other" },
+];
+
 export function ExpensesClient({ initialExpenses, initialAssets, canEdit, userId }: ExpensesClientProps) {
   const [activeTab, setActiveTab] = useState<typeof TABS[number]>("Expenses");
   const [expenses, setExpenses] = useState(initialExpenses);
@@ -34,6 +43,7 @@ export function ExpensesClient({ initialExpenses, initialAssets, canEdit, userId
   const [assetModal, setAssetModal] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState("");
+  const [categoryOptions, setCategoryOptions] = useState<SelectOption[]>(EXPENSE_CATEGORY_OPTIONS);
   const [expenseForm, setExpenseForm] = useState({ description: "", amount: "", category: "GENERAL" });
   const [assetForm, setAssetForm] = useState({
     assetType: "VEHICLE",
@@ -239,13 +249,15 @@ export function ExpensesClient({ initialExpenses, initialAssets, canEdit, userId
             </div>
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-1.5">Category</label>
-              <select value={expenseForm.category} onChange={(e) => setExpenseForm({ ...expenseForm, category: e.target.value })} className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                <option value="GENERAL">General</option>
-                <option value="FUEL">Fuel</option>
-                <option value="MAINTENANCE">Maintenance</option>
-                <option value="OFFICE">Office</option>
-                <option value="OTHER">Other</option>
-              </select>
+              <SelectWithAdd
+                value={expenseForm.category}
+                onChange={(val) => setExpenseForm({ ...expenseForm, category: val })}
+                options={categoryOptions}
+                addLabel="Category"
+                onAdd={(label, value) =>
+                  setCategoryOptions((prev) => [...prev, { value, label }])
+                }
+              />
             </div>
           </div>
           <div className="flex justify-end gap-3 pt-1">

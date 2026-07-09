@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Plus, ToggleLeft, ToggleRight, Check, LayoutGrid } from "lucide-react";
-import { addAgencyUser, toggleAgencyUser, updateAgencyFeatures } from "@/app/actions/system-admin";
+import { Plus, ToggleLeft, ToggleRight, Check, LayoutGrid, Eye } from "lucide-react";
+import { addAgencyUser, toggleAgencyUser, updateAgencyFeatures, impersonateAgency } from "@/app/actions/system-admin";
 import { ALL_FEATURES, FEATURE_CATEGORIES } from "@/lib/features";
 
 interface AgencyUser {
@@ -51,7 +51,22 @@ export function AgencyDetailClient({
   const [showForm, setShowForm] = useState(false);
   const [error, setError] = useState("");
   const [isPending, startTransition] = useTransition();
+  const [isImpersonating, startImpersonateTransition] = useTransition();
   const [form, setForm] = useState({ name: "", email: "", phone: "", role: "STAFF", password: "" });
+
+  function handleImpersonate() {
+    setError("");
+    startImpersonateTransition(async () => {
+      const result = await impersonateAgency(agencyId);
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+      if (result.redirectUrl) {
+        window.location.href = result.redirectUrl;
+      }
+    });
+  }
 
   // Feature management state
   const [enabledFeatures, setEnabledFeatures] = useState<Set<string>>(
@@ -123,17 +138,32 @@ export function AgencyDetailClient({
       <div style={{ background: "#fff", border: "1px solid #E2E8F0", borderRadius: 10, overflow: "hidden" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 20px", borderBottom: "1px solid #F1F5F9" }}>
           <p style={{ fontSize: 13, fontWeight: 600, color: "#0F172A" }}>Users ({users.length})</p>
-          <button
-            onClick={() => { setShowForm(!showForm); setError(""); }}
-            style={{
-              display: "inline-flex", alignItems: "center", gap: 6,
-              padding: "6px 12px", borderRadius: 7, fontSize: 12, fontWeight: 500,
-              background: "#6366F1", color: "#fff", border: "none", cursor: "pointer",
-            }}
-          >
-            <Plus style={{ width: 13, height: 13 }} />
-            Add User
-          </button>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              onClick={handleImpersonate}
+              disabled={isImpersonating}
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 6,
+                padding: "6px 12px", borderRadius: 7, fontSize: 12, fontWeight: 500,
+                background: "#0EA5E9", color: "#fff", border: "none", cursor: "pointer",
+                boxShadow: "0 1px 2px rgba(14,165,233,0.2)",
+              }}
+            >
+              <Eye style={{ width: 13, height: 13 }} />
+              {isImpersonating ? "Connecting..." : "Impersonate Owner"}
+            </button>
+            <button
+              onClick={() => { setShowForm(!showForm); setError(""); }}
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 6,
+                padding: "6px 12px", borderRadius: 7, fontSize: 12, fontWeight: 500,
+                background: "#6366F1", color: "#fff", border: "none", cursor: "pointer",
+              }}
+            >
+              <Plus style={{ width: 13, height: 13 }} />
+              Add User
+            </button>
+          </div>
         </div>
 
         {showForm && (

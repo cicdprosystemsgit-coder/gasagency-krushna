@@ -5,19 +5,19 @@ import { StatusBadge } from "@/components/ui/StatusBadge";
 import { formatDateTime } from "@/lib/utils";
 import {
   Truck, Package, ArrowRight, Warehouse, Activity, CheckCircle2,
-  Clock, ShieldAlert, Navigation, Layers, PlusCircle, History,
+  Clock, ShieldAlert, Navigation, Layers, History,
   Boxes, BadgeAlert, AlertCircle, RefreshCw
 } from "lucide-react";
 import Link from "next/link";
+
+import { getAgencyTodayRange } from "@/lib/utils";
 
 export default async function GodownKeeperDashboard() {
   const session = await getSession();
   if (!session || session.role !== "GODOWN_KEEPER" || !session.agencyId) redirect("/login");
   const agencyId = session.agencyId;
 
-  const today = new Date();
-  const todayStart = new Date(today.setHours(0, 0, 0, 0));
-  const todayEnd = new Date(today.setHours(23, 59, 59, 999));
+  const { todayStart, todayEnd } = getAgencyTodayRange();
 
   const [
     todayCount,

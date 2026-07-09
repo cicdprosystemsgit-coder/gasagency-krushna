@@ -3,7 +3,18 @@ const CACHE_NAME = "gas-agency-v1";
 const STATIC_ASSETS = [
   "/",
   "/manifest.json",
+  "/offline",
 ];
+
+/**
+ * Only http: and https: URLs are supported by the Cache API.
+ * chrome-extension://, moz-extension://, etc. will throw a TypeError
+ * if passed to cache.put(), so we guard every write with this check.
+ */
+function isCacheable(request) {
+  const url = new URL(request.url);
+  return url.protocol === "http:" || url.protocol === "https:";
+}
 
 // Install — cache static assets
 self.addEventListener("install", (event) => {
@@ -28,8 +39,8 @@ self.addEventListener("fetch", (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
-  // Skip non-GET and API routes (always fresh)
-  if (request.method !== "GET" || url.pathname.startsWith("/api/")) {
+  // Skip non-GET, API routes, and non-cacheable schemes (e.g. chrome-extension://)
+  if (request.method !== "GET" || url.pathname.startsWith("/api/") || !isCacheable(request)) {
     return;
   }
 
@@ -37,8 +48,10 @@ self.addEventListener("fetch", (event) => {
   if (url.pathname.startsWith("/_next/static/") || url.pathname.startsWith("/icons/")) {
     event.respondWith(
       caches.match(request).then((cached) => cached || fetch(request).then((response) => {
-        const clone = response.clone();
-        caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+        if (isCacheable(request)) {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+        }
         return response;
       }))
     );
@@ -49,12 +62,12 @@ self.addEventListener("fetch", (event) => {
   event.respondWith(
     fetch(request)
       .then((response) => {
-        if (response.ok) {
+        if (response.ok && isCacheable(request)) {
           const clone = response.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
         }
         return response;
       })
-      .catch(() => caches.match(request))
+      .catch(() => caches.match(request).then((matched) => matched || caches.match("/offline")))
   );
 });

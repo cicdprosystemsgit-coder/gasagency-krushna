@@ -17,6 +17,13 @@ export default async function StaffManagementPage() {
       isActive: true, createdAt: true,
       bankAccountNo: true, bankName: true, ifscCode: true,
       aadhaarNo: true, panNo: true, photoBase64: true,
+      salaryProfile: {
+        select: {
+          monthlySalary: true,
+          effectiveFrom: true,
+          notes: true,
+        }
+      }
     },
   });
 

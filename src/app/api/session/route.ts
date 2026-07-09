@@ -7,12 +7,26 @@ export async function GET() {
   if (!session) return NextResponse.json({ error: "No session" }, { status: 401 });
 
   let enabledFeatures: string[] = [];
+  let themeColor = "#2563eb";
+  let logoBase64: string | null = null;
+  let agencyName: string | null = null;
+
   if (session.agencyId) {
     const agency = await prisma.agency.findUnique({
       where: { id: session.agencyId },
-      select: { enabledFeatures: true },
+      select: {
+        enabledFeatures: true,
+        themeColor: true,
+        logoBase64: true,
+        name: true,
+      },
     });
-    enabledFeatures = agency?.enabledFeatures ?? [];
+    if (agency) {
+      enabledFeatures = agency.enabledFeatures;
+      themeColor = agency.themeColor;
+      logoBase64 = agency.logoBase64;
+      agencyName = agency.name;
+    }
   }
 
   return NextResponse.json({
@@ -20,5 +34,8 @@ export async function GET() {
     role: session.role,
     email: session.email,
     enabledFeatures,
+    themeColor,
+    logoBase64,
+    agencyName,
   });
 }

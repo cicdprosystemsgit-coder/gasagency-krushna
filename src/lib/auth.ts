@@ -39,6 +39,7 @@ export interface AccessTokenPayload {
   name: string;
   role: Role;
   agencyId: string | null;
+  agencySlug: string | null;
   type: "access";
   jti: string;          // unique token ID (for blacklisting)
   iat?: number;
@@ -58,6 +59,7 @@ export interface SessionPayload {
   name: string;
   role: Role;
   agencyId?: string | null;
+  agencySlug?: string | null;
   exp?: number;
 }
 
@@ -74,18 +76,20 @@ export async function createTokenPair(user: {
   name: string;
   role: Role;
   agencyId: string | null;
+  agencySlug: string | null;
 }) {
   const { privateKey } = await getKeys();
   const accessJti  = randomUUID();
   const refreshJti = randomUUID();
 
   const accessToken = await new SignJWT({
-    email:    user.email,
-    name:     user.name,
-    role:     user.role,
-    agencyId: user.agencyId,
-    type:     "access" as const,
-    jti:      accessJti,
+    email:      user.email,
+    name:       user.name,
+    role:       user.role,
+    agencyId:   user.agencyId,
+    agencySlug: user.agencySlug,
+    type:       "access" as const,
+    jti:        accessJti,
   })
     .setProtectedHeader({ alg: "RS256", kid: KEY_ID })
     .setSubject(user.id)
@@ -156,6 +160,8 @@ export async function verifyRefreshToken(token: string): Promise<RefreshTokenPay
 // ─── Cookie Management ────────────────────────────────────────────────────────
 
 const IS_PROD = process.env.NODE_ENV === "production";
+const ROOT_DOMAIN = process.env.ROOT_DOMAIN ?? "localhost";
+const COOKIE_DOMAIN = ROOT_DOMAIN === "localhost" ? ".localhost" : `.${ROOT_DOMAIN}`;
 
 export async function setAuthCookies(accessToken: string, refreshToken: string) {
   const cookieStore = await cookies();
@@ -163,24 +169,26 @@ export async function setAuthCookies(accessToken: string, refreshToken: string) 
   cookieStore.set("at", accessToken, {
     httpOnly: true,
     secure:   IS_PROD,
-    sameSite: "strict",
-    maxAge:   15 * 60,       // 15 minutes
+    sameSite: "lax",
+    maxAge:   6 * 60 * 60,   // 6 hours — proxy slides this on every request
     path:     "/",
+    domain:   COOKIE_DOMAIN,
   });
 
   cookieStore.set("rt", refreshToken, {
     httpOnly: true,
     secure:   IS_PROD,
-    sameSite: "strict",
-    maxAge:   7 * 24 * 60 * 60, // 7 days
-    path:     "/api/auth/refresh",  // only sent to refresh endpoint
+    sameSite: "lax",
+    maxAge:   7 * 24 * 60 * 60, // 7 days — unchanged
+    path:     "/",              // was /api/auth/refresh — proxy needs to read it on all routes
+    domain:   COOKIE_DOMAIN,
   });
 }
 
 export async function clearAuthCookies() {
   const cookieStore = await cookies();
-  cookieStore.delete("at");
-  cookieStore.delete("rt");
+  cookieStore.set("at", "", { path: "/", domain: COOKIE_DOMAIN, maxAge: 0 });
+  cookieStore.set("rt", "", { path: "/", domain: COOKIE_DOMAIN, maxAge: 0 }); // path updated to match setAuthCookies
 }
 
 // ─── Session Helpers (backward-compatible with existing actions) ──────────────
@@ -196,12 +204,13 @@ export async function getSession(): Promise<SessionPayload | null> {
 
   // Map to backward-compatible SessionPayload
   return {
-    userId:   payload.sub,
-    email:    payload.email,
-    name:     payload.name,
-    role:     payload.role,
-    agencyId: payload.agencyId,
-    exp:      payload.exp,
+    userId:     payload.sub,
+    email:      payload.email,
+    name:       payload.name,
+    role:       payload.role,
+    agencyId:   payload.agencyId,
+    agencySlug: payload.agencySlug,
+    exp:        payload.exp,
   };
 }
 
@@ -210,12 +219,13 @@ export async function verifySession(token: string): Promise<SessionPayload | nul
   const payload = await verifyAccessToken(token);
   if (!payload) return null;
   return {
-    userId:   payload.sub,
-    email:    payload.email,
-    name:     payload.name,
-    role:     payload.role,
-    agencyId: payload.agencyId,
-    exp:      payload.exp,
+    userId:     payload.sub,
+    email:      payload.email,
+    name:       payload.name,
+    role:       payload.role,
+    agencyId:   payload.agencyId,
+    agencySlug: payload.agencySlug,
+    exp:        payload.exp,
   };
 }
 

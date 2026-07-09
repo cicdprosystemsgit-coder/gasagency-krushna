@@ -52,3 +52,35 @@ export const STATUS_COLORS: Record<string, string> = {
   REJECTED: "bg-red-100 text-red-800",
   CORRECTION_NEEDED: "bg-orange-100 text-orange-800",
 };
+
+/**
+ * Calculates start and end of the current local day in the agency's timezone as UTC Date objects.
+ */
+export function getAgencyTodayRange(timezone: string = "Asia/Kolkata") {
+  // Get current time formatted in agency's timezone
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+  });
+  
+  const parts = formatter.formatToParts(new Date());
+  const year = parseInt(parts.find(p => p.type === "year")!.value, 10);
+  const month = parseInt(parts.find(p => p.type === "month")!.value, 10) - 1;
+  const day = parseInt(parts.find(p => p.type === "day")!.value, 10);
+  
+  // Create dates in local timezone
+  // We can construct tzDate which represents local time in that timezone
+  const tzDate = new Date(new Date().toLocaleString("en-US", { timeZone: timezone }));
+  const diff = tzDate.getTime() - new Date().getTime();
+  
+  const todayStart = new Date(tzDate.getFullYear(), tzDate.getMonth(), tzDate.getDate(), 0, 0, 0, 0);
+  const todayEnd = new Date(tzDate.getFullYear(), tzDate.getMonth(), tzDate.getDate(), 23, 59, 59, 999);
+  
+  return {
+    todayStart: new Date(todayStart.getTime() - diff),
+    todayEnd: new Date(todayEnd.getTime() - diff),
+  };
+}
+

@@ -6,15 +6,15 @@ import { Warehouse } from "lucide-react";
 import { GodownClient } from "./GodownClient";
 import { InternalVehiclesClient } from "./InternalVehiclesClient";
 
+import { getAgencyTodayRange } from "@/lib/utils";
+
 export default async function GodownPage() {
   const session = await getSession();
   if (!session || !["ADMIN", "MANAGER"].includes(session.role)) redirect("/login");
 
-  const today = new Date();
-  const todayStart = new Date(today.setHours(0, 0, 0, 0));
-  const todayEnd = new Date(today.setHours(23, 59, 59, 999));
+  const { todayStart, todayEnd } = getAgencyTodayRange();
 
-  const [records, totals, deliveryVehicles, deliveryBoys, todayTripLogs] = await Promise.all([
+  const [records, totals, deliveryVehicles, deliveryBoys, todayTripLogs, cylinderTypes] = await Promise.all([
     prisma.godownRecord.findMany({
       where: { agencyId: session.agencyId! },
       orderBy: { entryDate: "desc" },
@@ -43,6 +43,11 @@ export default async function GodownPage() {
         recordedBy: { select: { name: true } },
       },
     }),
+    prisma.product.findMany({
+      where: { agencyId: session.agencyId!, isCylinder: true, isActive: true },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
   ]);
 
   return (
@@ -65,6 +70,7 @@ export default async function GodownPage() {
           totalEmpty={totals._sum.emptyCylindersReturned ?? 0}
           isAdmin={session.role === "ADMIN"}
           userId={session.userId}
+          cylinderTypes={cylinderTypes}
         />
       </div>
 
@@ -83,6 +89,7 @@ export default async function GodownPage() {
           deliveryBoys={deliveryBoys}
           isAdmin={session.role === "ADMIN"}
           userId={session.userId}
+          cylinderTypes={cylinderTypes}
         />
       </div>
     </div>

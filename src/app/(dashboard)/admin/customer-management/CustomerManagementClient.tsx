@@ -630,20 +630,22 @@ function DomesticForm({ defaults }: { defaults?: Partial<Customer> }) {
         </div>
       </div>
       <div>
-        <label className={labelClass} style={labelStyle}>Address</label>
-        <textarea name="address" defaultValue={defaults?.address ?? ""} rows={2}
+        <label className={labelClass} style={labelStyle}>
+          Address <span style={{ color: "#DC2626" }}>*</span>
+        </label>
+        <textarea name="address" defaultValue={defaults?.address ?? ""} rows={2} required
           className={inputClass} style={inputStyle} placeholder="Full address (area, street, landmark)" />
       </div>
       <div>
         <label className={labelClass} style={labelStyle}>
-          Gas Connection Number
+          Gas Connection Number <span style={{ color: "#DC2626" }}>*</span>
           <span className="ml-1 text-[11px] font-normal" style={{ color: "#A1A1AA" }}>
             (Number provided by gas company on registration paper)
           </span>
         </label>
         <div className="relative">
           <Hash className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5" style={{ color: "#A1A1AA" }} />
-          <input name="customerCode" defaultValue={defaults?.customerCode ?? ""}
+          <input name="customerCode" defaultValue={defaults?.customerCode ?? ""} required
             className={inputClass} style={{ ...inputStyle, paddingLeft: "2rem" }}
             placeholder="e.g. 1234567890" />
         </div>
@@ -668,8 +670,10 @@ function CommercialForm({ defaults }: { defaults?: Partial<Customer> }) {
             className={inputClass} style={inputStyle} placeholder="Hotel / Restaurant / School name" />
         </div>
         <div>
-          <label className={labelClass} style={labelStyle}>Business Type</label>
-          <select name="businessType" defaultValue={defaults?.businessType ?? ""}
+          <label className={labelClass} style={labelStyle}>
+            Business Type <span style={{ color: "#DC2626" }}>*</span>
+          </label>
+          <select name="businessType" defaultValue={defaults?.businessType ?? ""} required
             className={inputClass} style={inputStyle}>
             <option value="">Select type</option>
             {BUSINESS_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
@@ -713,20 +717,22 @@ function CommercialForm({ defaults }: { defaults?: Partial<Customer> }) {
         </div>
       </div>
       <div>
-        <label className={labelClass} style={labelStyle}>Address</label>
-        <textarea name="address" defaultValue={defaults?.address ?? ""} rows={2}
+        <label className={labelClass} style={labelStyle}>
+          Address <span style={{ color: "#DC2626" }}>*</span>
+        </label>
+        <textarea name="address" defaultValue={defaults?.address ?? ""} rows={2} required
           className={inputClass} style={inputStyle} placeholder="Full business address" />
       </div>
       <div>
         <label className={labelClass} style={labelStyle}>
-          Commercial Registration Number
+          Consumer Number <span style={{ color: "#DC2626" }}>*</span>
           <span className="ml-1 text-[11px] font-normal" style={{ color: "#A1A1AA" }}>
             (Number on agency paper provided by gas company)
           </span>
         </label>
         <div className="relative">
           <Hash className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5" style={{ color: "#A1A1AA" }} />
-          <input name="customerCode" defaultValue={defaults?.customerCode ?? ""}
+          <input name="customerCode" defaultValue={defaults?.customerCode ?? ""} required
             className={inputClass} style={{ ...inputStyle, paddingLeft: "2rem" }}
             placeholder="Commercial account / registration number" />
         </div>

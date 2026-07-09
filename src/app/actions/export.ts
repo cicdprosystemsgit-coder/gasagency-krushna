@@ -333,7 +333,7 @@ export async function exportToPDF(
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { jsPDF } = require("jspdf");
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  require("jspdf-autotable");
+  const autoTable = require("jspdf-autotable").default || require("jspdf-autotable");
 
   const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
 
@@ -371,7 +371,7 @@ export async function exportToPDF(
 
     const totalCash = rows.reduce((s, d) => s + d.cashCollected, 0);
 
-    (doc as any).autoTable({
+    autoTable(doc, {
       startY: 33,
       head: [["Date", "Customer", "Phone", "Product", "Delivered", "Pending", "Cash (₹)", "Delivery Boy"]],
       body,
@@ -397,7 +397,7 @@ export async function exportToPDF(
 
     const total = rows.reduce((s, e) => s + e.amount, 0);
 
-    (doc as any).autoTable({
+    autoTable(doc, {
       startY: 33,
       head: [["Date", "Description", "Category", "Amount (₹)", "Added By"]],
       body,

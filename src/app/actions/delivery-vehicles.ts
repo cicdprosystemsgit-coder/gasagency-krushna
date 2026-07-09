@@ -188,6 +188,7 @@ export async function updateTripStatus(id: string, formData: FormData) {
     const tripStatus = formData.get("tripStatus") as string;
     const returnTimeStr = formData.get("returnTime") as string;
     const itemsStr = formData.get("items") as string;
+    const notesStr = formData.get("notes") as string;
 
     let cylindersReturned = Number(formData.get("cylindersReturned")) || 0;
     let cylindersDelivered = Number(formData.get("cylindersDelivered")) || 0;
@@ -213,6 +214,7 @@ export async function updateTripStatus(id: string, formData: FormData) {
         cylindersReturned,
         cylindersDelivered,
         items: items || undefined,
+        notes: notesStr !== null ? notesStr : undefined,
       },
       include: {
         vehicle: { select: { vehicleNo: true, vehicleName: true, assignedTo: { select: { name: true } } } },

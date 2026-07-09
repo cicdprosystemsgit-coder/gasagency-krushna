@@ -37,6 +37,16 @@ export async function createCustomer(formData: FormData) {
     if (!name) return { error: "Name is required" };
     if (!phone) return { error: "Phone number is required" };
 
+    if (type === "COMMERCIAL") {
+      if (!businessType) return { error: "Business Type is required for commercial customers." };
+      if (!address) return { error: "Address is required for commercial customers." };
+      if (!customerCode) return { error: "Consumer Number is required." };
+    } else {
+      // DOMESTIC
+      if (!address) return { error: "Address is required." };
+      if (!customerCode) return { error: "Consumer Number is required." };
+    }
+
     const customer = await prisma.customer.create({
       data: {
         name,
@@ -83,6 +93,22 @@ export async function updateCustomer(id: string, formData: FormData) {
 
     if (!name) return { error: "Name is required" };
     if (!phone) return { error: "Phone number is required" };
+
+    const existing = await prisma.customer.findUnique({
+      where: { id },
+      select: { type: true },
+    });
+    if (!existing) return { error: "Customer not found." };
+
+    if (existing.type === "COMMERCIAL") {
+      if (!businessType) return { error: "Business Type is required for commercial customers." };
+      if (!address) return { error: "Address is required for commercial customers." };
+      if (!customerCode) return { error: "Commercial Registration Number is required." };
+    } else {
+      // DOMESTIC
+      if (!address) return { error: "Address is required." };
+      if (!customerCode) return { error: "Gas Connection Number is required." };
+    }
 
     const customer = await prisma.customer.update({
       where: { id },

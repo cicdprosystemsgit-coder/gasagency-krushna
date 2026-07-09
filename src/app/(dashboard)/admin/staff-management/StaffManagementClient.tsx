@@ -1,18 +1,31 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { formatDate } from "@/lib/utils";
-import { Plus, Users, ToggleLeft, ToggleRight, Pencil, Trash2, AlertTriangle, Eye } from "lucide-react";
+import { Plus, Users, ToggleLeft, ToggleRight, Pencil, Trash2, AlertTriangle, Eye, FileText, ExternalLink, FolderOpen } from "lucide-react";
 import { createStaffUser, updateStaffUser, deleteStaffUser, toggleStaffStatus } from "@/app/actions/staff";
-import { StaffForm, EMPTY_FORM, type FormState } from "./StaffForm";
+import { getEmployeeDocuments, uploadDocument, getDocumentForDownload } from "@/app/actions/documents";
+import { StaffForm, EMPTY_FORM, type FormState, type PendingDoc } from "./StaffForm";
 
 interface Staff {
   id: string; name: string; email: string; phone: string | null; role: string;
   isActive: boolean; createdAt: Date | string;
   bankAccountNo: string | null; bankName: string | null; ifscCode: string | null;
   aadhaarNo: string | null; panNo: string | null; photoBase64: string | null;
+  salaryProfile?: {
+    monthlySalary: number;
+    effectiveFrom: Date | string;
+    notes: string | null;
+  } | null;
 }
+
+type EmployeeDoc = {
+  id: string; docType: string; fileName: string;
+  storageType: string; driveViewUrl?: string | null;
+  expiryDate?: string | Date | null; createdAt: string | Date;
+  uploadedBy: { name: string };
+};
 
 const ROLE_COLORS: Record<string, { bg: string; color: string }> = {
   ADMIN:         { bg: "#DBEAFE", color: "#1D4ED8" },
@@ -32,10 +45,6 @@ function avColor(name: string) {
   return AV_COLORS[Math.abs(h) % AV_COLORS.length];
 }
 
-function mask(s: string | null, show = 4): string {
-  if (!s) return "—";
-  return "*".repeat(Math.max(0, s.length - show)) + s.slice(-show);
-}
 
 function Avatar({ s }: { s: Staff }) {
   if (s.photoBase64) return (
@@ -58,15 +67,31 @@ export function StaffManagementClient({ initialStaff }: { initialStaff: Staff[] 
   const [addOpen,  setAddOpen]  = useState(false);
   const [addForm,  setAddForm]  = useState<FormState>(EMPTY_FORM);
   const [addError, setAddError] = useState("");
+  const [addPendingDocs, setAddPendingDocs] = useState<PendingDoc[]>([]);
 
   const [editOpen,   setEditOpen]   = useState(false);
   const [editTarget, setEditTarget] = useState<Staff | null>(null);
   const [editForm,   setEditForm]   = useState<FormState>(EMPTY_FORM);
   const [editError,  setEditError]  = useState("");
+  const [editStep,   setEditStep]   = useState(1); // track current step to gate submission
+
+  const [addStep, setAddStep] = useState(1); // track current step for add modal
 
   const [viewTarget, setViewTarget] = useState<Staff | null>(null);
+  const [viewDocs,   setViewDocs]   = useState<EmployeeDoc[]>([]);
+  const [viewDocsLoading, setViewDocsLoading] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Staff | null>(null);
   const [deleteError,  setDeleteError]  = useState("");
+
+  // Load documents when viewing an employee profile
+  useEffect(() => {
+    if (!viewTarget) { setViewDocs([]); return; }
+    setViewDocsLoading(true);
+    getEmployeeDocuments(viewTarget.id)
+      .then(({ docs }) => setViewDocs(docs as EmployeeDoc[]))
+      .catch(() => setViewDocs([]))
+      .finally(() => setViewDocsLoading(false));
+  }, [viewTarget]);
 
   // ── form helpers ───────────────────────────────────────────────────────────
   function toFormState(s: Staff): FormState {
@@ -76,6 +101,9 @@ export function StaffManagementClient({ initialStaff }: { initialStaff: Staff[] 
       bankAccountNo: s.bankAccountNo ?? "", bankName: s.bankName ?? "",
       ifscCode: s.ifscCode ?? "", aadhaarNo: s.aadhaarNo ?? "",
       panNo: s.panNo ?? "", photoBase64: s.photoBase64 ?? "",
+      monthlySalary: s.salaryProfile?.monthlySalary ? String(s.salaryProfile.monthlySalary) : "",
+      effectiveFrom: s.salaryProfile?.effectiveFrom ? new Date(s.salaryProfile.effectiveFrom).toISOString().slice(0, 10) : "",
+      salaryNotes: s.salaryProfile?.notes ?? "",
     };
   }
 
@@ -86,22 +114,47 @@ export function StaffManagementClient({ initialStaff }: { initialStaff: Staff[] 
   // ── handlers ───────────────────────────────────────────────────────────────
   function handleAdd(e: React.FormEvent) {
     e.preventDefault();
+    // Only process submission when user is on the final step (Step 5)
+    if (addStep !== 5) return;
     const fd = new FormData(); appendForm(fd, addForm);
     startTransition(async () => {
       const res = await createStaffUser(fd);
       if (res.error) { setAddError(res.error); return; }
-      if (res.user)  { setStaff((p) => [res.user!, ...p]); setAddOpen(false); setAddForm(EMPTY_FORM); }
+      if (res.user) {
+        setStaff((p) => [res.user!, ...p]);
+        // Upload any queued documents now that we have the employee ID
+        if (addPendingDocs.length > 0) {
+          for (const doc of addPendingDocs) {
+            await uploadDocument({
+              entityType:   "USER",
+              entityId:     res.user.id,
+              docType:      doc.docType,
+              fileName:     doc.fileName,
+              fileBase64:   doc.base64,
+              mimeType:     doc.mimeType,
+              expiryDate:   doc.expiryDate,
+              employeeName: res.user.name,
+            });
+          }
+        }
+        setAddOpen(false);
+        setAddForm(EMPTY_FORM);
+        setAddPendingDocs([]);
+        setAddStep(1);
+      }
     });
   }
 
   function handleEdit(e: React.FormEvent) {
     e.preventDefault();
+    // Only process submission when user is on the final step (Step 5)
+    if (editStep !== 5) return;
     if (!editTarget) return;
     const fd = new FormData(); fd.append("id", editTarget.id); appendForm(fd, editForm);
     startTransition(async () => {
       const res = await updateStaffUser(fd);
       if (res.error) { setEditError(res.error); return; }
-      if (res.user)  { setStaff((p) => p.map((s) => s.id === res.user!.id ? res.user! : s)); setEditOpen(false); }
+      if (res.user)  { setStaff((p) => p.map((s) => s.id === res.user!.id ? res.user! : s)); setEditOpen(false); setEditStep(1); }
     });
   }
 
@@ -120,6 +173,38 @@ export function StaffManagementClient({ initialStaff }: { initialStaff: Staff[] 
       const res = await toggleStaffStatus(id, !current);
       if (res.success) setStaff((p) => p.map((s) => s.id === id ? { ...s, isActive: !current } : s));
     });
+  }
+
+  async function handlePreview(docId: string, storageType: string, driveViewUrl?: string | null) {
+    if (storageType === "GOOGLE_DRIVE" && driveViewUrl) {
+      window.open(driveViewUrl, "_blank");
+      return;
+    }
+    try {
+      const res = await getDocumentForDownload(docId);
+      if (res.error || !res.doc) {
+        alert(res.error ?? "Failed to fetch document");
+        return;
+      }
+      if (res.doc.fileBase64) {
+        const base64 = res.doc.fileBase64;
+        const mimeType = res.doc.mimeType || "application/pdf";
+        const raw = window.atob(base64);
+        const rawLength = raw.length;
+        const uInt8Array = new Uint8Array(new ArrayBuffer(rawLength));
+        for (let i = 0; i < rawLength; i++) {
+          uInt8Array[i] = raw.charCodeAt(i);
+        }
+        const blob = new Blob([uInt8Array], { type: mimeType });
+        const fileURL = URL.createObjectURL(blob);
+        window.open(fileURL, "_blank");
+      } else {
+        alert("Document content is empty");
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Failed to load document preview");
+    }
   }
 
   // ── render ─────────────────────────────────────────────────────────────────
@@ -182,7 +267,7 @@ export function StaffManagementClient({ initialStaff }: { initialStaff: Staff[] 
                     {/* Bank */}
                     <td className="text-[12px]" style={{ color:"#52525B" }}>
                       {s.bankName
-                        ? <><p className="font-medium">{s.bankName}</p><p style={{ color:"#A1A1AA" }}>{mask(s.bankAccountNo)}</p></>
+                        ? <><p className="font-medium">{s.bankName}</p><p style={{ color:"#A1A1AA" }}>{s.bankAccountNo}</p></>
                         : "—"}
                     </td>
                     {/* Joined */}
@@ -221,7 +306,7 @@ export function StaffManagementClient({ initialStaff }: { initialStaff: Staff[] 
                         </button>
                         {/* Edit */}
                         <button
-                          onClick={() => { setEditError(""); setEditTarget(s); setEditForm(toFormState(s)); setEditOpen(true); }}
+                          onClick={() => { setEditError(""); setEditStep(1); setEditTarget(s); setEditForm(toFormState(s)); setEditOpen(true); }}
                           title="Edit"
                           className="btn-action btn-action-primary"
                         >
@@ -248,18 +333,21 @@ export function StaffManagementClient({ initialStaff }: { initialStaff: Staff[] 
       </div>
 
       {/* ── ADD MODAL ───────────────────────────────────────────────────────── */}
-      <Modal open={addOpen} onClose={() => setAddOpen(false)} title="Add Staff Member" size="md">
-        <form onSubmit={handleAdd}>
-          <StaffForm form={addForm} setForm={setAddForm} error={addError} isPending={isPending}
-            onCancel={() => setAddOpen(false)} submitLabel="Create Account" />
+      <Modal open={addOpen} onClose={() => { setAddOpen(false); setAddPendingDocs([]); setAddStep(1); }} title="Add Staff Member" size="md">
+        <form onSubmit={handleAdd} onKeyDown={(e) => { if (e.key === "Enter") e.preventDefault(); }}>
+          <StaffForm key={addOpen ? "add-active" : "add-inactive"} form={addForm} setForm={setAddForm} error={addError} isPending={isPending}
+            onCancel={() => { setAddOpen(false); setAddPendingDocs([]); setAddStep(1); }} submitLabel="Create Account"
+            pendingDocs={addPendingDocs} onPendingDocsChange={setAddPendingDocs}
+            onStepChange={setAddStep} />
         </form>
       </Modal>
 
       {/* ── EDIT MODAL ──────────────────────────────────────────────────────── */}
-      <Modal open={editOpen} onClose={() => setEditOpen(false)} title={`Edit — ${editTarget?.name ?? ""}`} size="md">
-        <form onSubmit={handleEdit}>
-          <StaffForm form={editForm} setForm={setEditForm} error={editError} isPending={isPending}
-            onCancel={() => setEditOpen(false)} submitLabel="Save Changes" isEdit />
+      <Modal open={editOpen} onClose={() => { setEditOpen(false); setEditStep(1); }} title={`Edit — ${editTarget?.name ?? ""}`} size="md">
+        <form onSubmit={handleEdit} onKeyDown={(e) => { if (e.key === "Enter") e.preventDefault(); }}>
+          <StaffForm key={editOpen ? `edit-${editTarget?.id}` : "edit-inactive"} form={editForm} setForm={setEditForm} error={editError} isPending={isPending}
+            onCancel={() => { setEditOpen(false); setEditStep(1); }} submitLabel="Save Changes" isEdit
+            employeeId={editTarget?.id} onStepChange={setEditStep} />
         </form>
       </Modal>
 
@@ -276,15 +364,17 @@ export function StaffManagementClient({ initialStaff }: { initialStaff: Staff[] 
                 {ROLE_LABEL[viewTarget.role]}
               </span>
             </div>
+
             {/* Details grid */}
             {([
               ["Email",        viewTarget.email],
               ["Mobile",       viewTarget.phone ?? "—"],
+              ["Salary Setup", viewTarget.salaryProfile?.monthlySalary ? `₹${viewTarget.salaryProfile.monthlySalary.toLocaleString()} (eff. ${formatDate(viewTarget.salaryProfile.effectiveFrom)})` : "Not Configured"],
               ["Bank Name",    viewTarget.bankName ?? "—"],
-              ["Account No.",  mask(viewTarget.bankAccountNo)],
+              ["Account No.",  viewTarget.bankAccountNo ?? "—"],
               ["IFSC",         viewTarget.ifscCode ?? "—"],
-              ["Aadhaar",      mask(viewTarget.aadhaarNo, 4)],
-              ["PAN",          mask(viewTarget.panNo, 4)],
+              ["Aadhaar No.",  viewTarget.aadhaarNo ?? "—"],
+              ["PAN No.",      viewTarget.panNo ?? "—"],
               ["Joined",       formatDate(viewTarget.createdAt)],
               ["Status",       viewTarget.isActive ? "Active" : "Inactive"],
             ] as [string,string][]).map(([label, val]) => (
@@ -294,6 +384,40 @@ export function StaffManagementClient({ initialStaff }: { initialStaff: Staff[] 
                 <span className="font-medium" style={{ color:"#18181B" }}>{val}</span>
               </div>
             ))}
+
+            {/* Documents section */}
+            <div>
+              <div className="flex items-center gap-1.5 mb-2">
+                <FolderOpen className="w-3.5 h-3.5" style={{ color:"#2563EB" }} />
+                <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color:"#71717A" }}>Documents</p>
+              </div>
+              {viewDocsLoading ? (
+                <p className="text-[12px]" style={{ color:"#A1A1AA" }}>Loading…</p>
+              ) : viewDocs.length === 0 ? (
+                <p className="text-[12px]" style={{ color:"#A1A1AA" }}>No documents uploaded yet.</p>
+              ) : (
+                <div className="space-y-1.5">
+                  {viewDocs.map((d) => (
+                    <div key={d.id} className="flex items-center justify-between px-2.5 py-1.5 rounded-lg"
+                      style={{ background:"#F8FAFC", border:"1px solid #E2E8F0" }}>
+                      <div className="flex items-center gap-2">
+                        <FileText className="w-3.5 h-3.5 flex-shrink-0" style={{ color:"#64748B" }} />
+                        <div>
+                          <p className="text-[12px] font-medium" style={{ color:"#18181B" }}>{d.docType}</p>
+                          <p className="text-[10px] truncate max-w-[140px]" style={{ color:"#94A3B8" }}>{d.fileName}</p>
+                        </div>
+                      </div>
+                      <button onClick={() => handlePreview(d.id, d.storageType, d.driveViewUrl)}
+                        className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium transition-colors hover:bg-blue-50"
+                        style={{ color:"#2563EB", border:"1px solid #BFDBFE" }}
+                        title="Preview Document">
+                        <Eye className="w-2.5 h-2.5" /> Preview
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         )}
       </Modal>

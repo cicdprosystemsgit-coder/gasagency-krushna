@@ -442,6 +442,7 @@ interface DeliveryForm {
   paymentMode: string;
   notes: string;
   date: string;
+  otherPaymentApp?: string;
 }
 
 function Step2DeliveryDetails({
@@ -556,9 +557,22 @@ function Step2DeliveryDetails({
           <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "#71717A" }}>
             Payment
           </p>
+
+          {/* CREDIT mode banner */}
+          {form.paymentMode === "CREDIT" && (
+            <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg" style={{ background: "#FEF3C7", border: "1px solid #FDE68A" }}>
+              <span className="text-[13px] flex-shrink-0">⚠️</span>
+              <p className="text-[11px] font-medium" style={{ color: "#92400E" }}>
+                <strong>Credit (Udhari)</strong> selected — the amount below will be automatically added to this customer&apos;s Credit Ledger as money owed. Enter the total cylinder value.
+              </p>
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className={labelCls} style={labelSty}>Cash Collected (₹)</label>
+              <label className={labelCls} style={labelSty}>
+                {form.paymentMode === "CREDIT" ? "Credit Amount (₹) *" : "Cash Collected (₹)"}
+              </label>
               <div className="relative">
                 <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5" style={{ color: "#A1A1AA" }} />
                 <input
@@ -567,14 +581,19 @@ function Step2DeliveryDetails({
                   step="0.01"
                   value={form.cashCollected}
                   onChange={(e) => onChange({ cashCollected: e.target.value })}
-                  placeholder="0.00"
+                  placeholder={form.paymentMode === "CREDIT" ? "Enter total value of cylinders" : "0.00"}
                   className={inputCls}
-                  style={{ ...inputSty, paddingLeft: "2.25rem" }}
+                  style={{
+                    ...inputSty,
+                    paddingLeft: "2.25rem",
+                    ...(form.paymentMode === "CREDIT" ? { borderColor: "#F59E0B", background: "#FFFBEB" } : {}),
+                  }}
                 />
               </div>
               {selectedProduct && selectedProduct.saleRate > 0 && (
-                <p className="text-[11px] mt-1" style={{ color: "#A1A1AA" }}>
-                  Rate: ₹{selectedProduct.saleRate} × {form.deliveredQty || 0} = ₹{(selectedProduct.saleRate * (Number(form.deliveredQty) || 0)).toFixed(0)}
+                <p className="text-[11px] mt-1" style={{ color: form.paymentMode === "CREDIT" ? "#92400E" : "#A1A1AA" }}>
+                  {form.paymentMode === "CREDIT" ? "📋 " : ""}Rate: ₹{selectedProduct.saleRate} × {form.deliveredQty || 0} = ₹{(selectedProduct.saleRate * (Number(form.deliveredQty) || 0)).toFixed(0)}
+                  {form.paymentMode === "CREDIT" ? " (auto-used if left blank)" : ""}
                 </p>
               )}
             </div>
@@ -583,8 +602,11 @@ function Step2DeliveryDetails({
               <div className="flex flex-col gap-2 pt-1">
                 {[
                   { val: "CASH", label: "Cash" },
-                  { val: "ONLINE", label: "Online / UPI" },
+                  { val: "PhonePe", label: "PhonePe" },
+                  { val: "GPay", label: "GPay" },
+                  { val: "Paytm", label: "Paytm" },
                   { val: "CREDIT", label: "Credit (Pending)" },
+                  { val: "Others", label: "Others" },
                 ].map(({ val, label }) => (
                   <label key={val} className="flex items-center gap-2 cursor-pointer">
                     <div
@@ -600,6 +622,20 @@ function Step2DeliveryDetails({
                   </label>
                 ))}
               </div>
+              {form.paymentMode === "Others" && (
+                <div className="mt-3">
+                  <label className="block text-[11px] font-medium mb-1" style={{ color: "#71717A" }}>Specify Payment App *</label>
+                  <input
+                    type="text"
+                    required
+                    value={form.otherPaymentApp || ""}
+                    onChange={(e) => onChange({ otherPaymentApp: e.target.value })}
+                    placeholder="Enter payment app name..."
+                    className="w-full px-3 py-2 rounded-lg text-[13px] border outline-none transition-colors focus:border-blue-500"
+                    style={{ borderColor: "#D4D4D8", background: "#FFFFFF", color: "#18181B" }}
+                  />
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -651,7 +687,16 @@ function Step3Review({
     Number(form.returnedQty) > 0 ? { label: "Empty Returned", value: `${form.returnedQty} empty cylinder${Number(form.returnedQty) !== 1 ? "s" : ""}` } : null,
     Number(form.pendingQty) > 0 ? { label: "Pending", value: `${form.pendingQty} not delivered`, warn: true } : null,
     { label: "Cash Collected", value: `₹${Number(form.cashCollected || 0).toFixed(2)}`, highlight: true },
-    { label: "Payment Mode", value: form.paymentMode === "CASH" ? "Cash" : form.paymentMode === "ONLINE" ? "Online / UPI" : "Credit (Pending)" },
+    {
+      label: "Payment Mode",
+      value: form.paymentMode === "CASH"
+        ? "Cash"
+        : form.paymentMode === "CREDIT"
+          ? "Credit (Pending)"
+          : form.paymentMode === "Others"
+            ? (form.otherPaymentApp || "Others")
+            : form.paymentMode
+    },
     form.notes ? { label: "Notes", value: form.notes } : null,
   ].filter(Boolean);
 
@@ -718,6 +763,7 @@ export function MyDeliveriesClient({
     paymentMode: "CASH",
     notes: "",
     date: todayStr(),
+    otherPaymentApp: "",
   });
   const [formError, setFormError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -735,7 +781,7 @@ export function MyDeliveriesClient({
   function openWizard() {
     setStep(1);
     setSelectedCustomer(null);
-    setForm({ productId: "", deliveredQty: "1", returnedQty: "0", pendingQty: "0", cashCollected: "", paymentMode: "CASH", notes: "", date: todayStr() });
+    setForm({ productId: "", deliveredQty: "1", returnedQty: "0", pendingQty: "0", cashCollected: "", paymentMode: "CASH", notes: "", date: todayStr(), otherPaymentApp: "" });
     setFormError("");
     setWizardOpen(true);
   }
@@ -750,6 +796,10 @@ export function MyDeliveriesClient({
     if (!form.productId) { setFormError("Please select a product."); return; }
     if (!form.deliveredQty || Number(form.deliveredQty) < 0) { setFormError("Delivered quantity cannot be negative."); return; }
     if (Number(form.deliveredQty) === 0 && Number(form.pendingQty) === 0) { setFormError("Enter cylinders delivered or mark as pending."); return; }
+    if (form.paymentMode === "Others" && !(form.otherPaymentApp || "").trim()) {
+      setFormError("Please specify the payment app name.");
+      return;
+    }
     setFormError("");
     setStep(3);
   }
@@ -764,7 +814,9 @@ export function MyDeliveriesClient({
     fd.append("returnedQty", form.returnedQty);
     fd.append("pendingQty", form.pendingQty);
     fd.append("cashCollected", form.cashCollected || "0");
-    fd.append("notes", form.notes);
+    fd.append("paymentMode", form.paymentMode === "Others" ? (form.otherPaymentApp || "Others").trim() : form.paymentMode);
+    fd.append("notes", form.notes || "");
+    
     fd.append("date", form.date);
     fd.append("deliveredById", userId);
     startTransition(async () => {

@@ -8,7 +8,7 @@ import {
   Receipt, Wallet, Users, ClipboardCheck, FileText, Truck,
   BarChart3, PanelLeftClose, PanelLeft, Flame, Boxes, CreditCard,
   Banknote, CalendarDays, Car, TrendingUp, Clock, FolderOpen, MessageSquarePlus,
-  ShieldCheck, Building2, KeyRound, FileDown,
+  ShieldCheck, Building2, KeyRound, FileDown, Palette, BadgeDollarSign, PieChart,
 } from "lucide-react";
 
 interface SidebarProps {
@@ -17,6 +17,8 @@ interface SidebarProps {
   collapsed: boolean;
   onToggle: () => void;
   enabledFeatures?: string[];
+  agencyName?: string | null;
+  logoBase64?: string | null;
 }
 
 interface NavItem {
@@ -62,6 +64,8 @@ function getNavSections(role: string, base: string): NavSection[] {
           { label: "Salaries & Drawings", href: `${base}/salaries`,           icon: <Wallet className="w-4 h-4" />,      featureKey: "salaries"           },
           { label: "My Salary",           href: `${base}/my-salary`,          icon: <Banknote className="w-4 h-4" /> },
           { label: "Expenses & Vehicles", href: `${base}/expenses`,           icon: <BarChart3 className="w-4 h-4" />,   featureKey: "expenses"           },
+          { label: "Company Payments",    href: `${base}/company-payments`,   icon: <Building2 className="w-4 h-4" />,   featureKey: "company_payments"   },
+          { label: "Assets Management",   href: `${base}/assets`,             icon: <PieChart className="w-4 h-4" />  },
           { label: "Expense Categories",  href: `${base}/expense-categories`, icon: <TrendingUp className="w-4 h-4" />,  featureKey: "expense_categories" },
           { label: "Daily Closing",       href: `${base}/daily-closing`,      icon: <ClipboardCheck className="w-4 h-4" />, featureKey: "daily_closing"  },
         ],
@@ -90,8 +94,10 @@ function getNavSections(role: string, base: string): NavSection[] {
         items: [
           { label: "Branches", href: `${base}/branches`, icon: <Building2 className="w-4 h-4" />, featureKey: "branches" },
           ...(role === "ADMIN" ? [
+            { label: "Billing",        href: `${base}/billing`,  icon: <BadgeDollarSign className="w-4 h-4" /> },
             { label: "API Gateway",   href: `${base}/api-keys`, icon: <KeyRound className="w-4 h-4" />,   featureKey: "api_gateway" },
             { label: "Security / 2FA",href: `${base}/security`, icon: <ShieldCheck className="w-4 h-4" />,featureKey: "security"    },
+            { label: "Branding Config",href: `${base}/settings`, icon: <Palette className="w-4 h-4" /> },
           ] : []),
         ],
       },
@@ -193,7 +199,15 @@ const ROLE_LABELS: Record<string, string> = {
   GODOWN_KEEPER: "Godown Keeper", STAFF: "Staff", DELIVERY_BOY: "Delivery Boy",
 };
 
-export function Sidebar({ role, userName, collapsed, onToggle, enabledFeatures = [] }: SidebarProps) {
+export function Sidebar({
+  role,
+  userName,
+  collapsed,
+  onToggle,
+  enabledFeatures = [],
+  agencyName,
+  logoBase64,
+}: SidebarProps) {
   const pathname = usePathname();
   const base = getBase(role);
   const sections = filterSections(getNavSections(role, base), enabledFeatures);
@@ -212,11 +226,24 @@ export function Sidebar({ role, userName, collapsed, onToggle, enabledFeatures =
         className="flex items-center h-[52px] flex-shrink-0"
         style={{ padding: collapsed ? "0 14px" : "0 16px", borderBottom: "1px solid var(--color-sidebar-border)" }}
       >
-        <div className="w-7 h-7 rounded-md bg-blue-600 flex items-center justify-center flex-shrink-0">
-          <Flame className="w-4 h-4 text-white" />
-        </div>
+        {logoBase64 ? (
+          <img
+            src={logoBase64}
+            alt={agencyName ?? "GasAgency"}
+            className="w-7 h-7 object-contain flex-shrink-0"
+          />
+        ) : (
+          <div
+            className="w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0"
+            style={{ backgroundColor: "var(--color-primary)" }}
+          >
+            <Flame className="w-4 h-4 text-white" />
+          </div>
+        )}
         {!collapsed && (
-          <span className="ml-2.5 text-[14px] font-semibold text-zinc-900 tracking-tight">GasAgency</span>
+          <span className="ml-2.5 text-[14px] font-semibold text-zinc-900 tracking-tight truncate">
+            {agencyName ?? "GasAgency"}
+          </span>
         )}
       </div>
 
@@ -260,7 +287,7 @@ export function Sidebar({ role, userName, collapsed, onToggle, enabledFeatures =
           <div className="flex items-center gap-2.5 px-2 py-2 rounded-md mb-1" style={{ background: "var(--color-sidebar-hover)" }}>
             <div
               className="w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold text-white flex-shrink-0"
-              style={{ background: "#2563EB" }}
+              style={{ backgroundColor: "var(--color-primary)" }}
             >
               {userName.charAt(0).toUpperCase()}
             </div>

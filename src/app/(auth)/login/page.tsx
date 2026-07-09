@@ -1,197 +1,67 @@
-"use client";
-
-import { useActionState } from "react";
-import { loginAction, verify2FALogin } from "@/app/actions/auth";
-import { Flame, Eye, EyeOff, Loader2, ShieldCheck } from "lucide-react";
+import { headers } from "next/headers";
+import { prisma } from "@/lib/prisma";
+import { LoginForm } from "./LoginForm";
 import Link from "next/link";
-import { useState } from "react";
+import { AlertCircle } from "lucide-react";
 
-export default function LoginPage() {
-  const [loginState, loginActionFn, loginPending] = useActionState(loginAction, {});
-  const [twoFAState, twoFAActionFn, twoFAPending] = useActionState(verify2FALogin, {});
-  const [showPwd, setShowPwd] = useState(false);
-  const [useBackup, setUseBackup] = useState(false);
+export default async function LoginPage() {
+  const headersList = await headers();
+  const tenantSlug = headersList.get("x-tenant-slug");
 
-  const requires2FA = loginState.requires2FA;
+  let agencyName: string | null = null;
+  let logoBase64: string | null = null;
+  let themeColor: string = "#2563eb"; // default blue
+  let isValidTenant = true;
+
+  if (tenantSlug && tenantSlug !== "admin") {
+    const agency = await prisma.agency.findUnique({
+      where: { slug: tenantSlug },
+      select: {
+        name: true,
+        logoBase64: true,
+        themeColor: true,
+        status: true,
+      },
+    });
+
+    if (agency && agency.status === "ACTIVE") {
+      agencyName = agency.name;
+      logoBase64 = agency.logoBase64;
+      themeColor = agency.themeColor;
+    } else {
+      isValidTenant = false;
+    }
+  }
+
+  if (!isValidTenant) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-zinc-50 p-6">
+        <div className="max-w-md w-full bg-white rounded-2xl p-8 border border-zinc-200 shadow-xl text-center">
+          <div className="mx-auto w-12 h-12 bg-red-50 rounded-full flex items-center justify-center mb-4 text-red-600">
+            <AlertCircle className="w-6 h-6" />
+          </div>
+          <h1 className="text-xl font-bold text-zinc-900 mb-2">Portal Not Found</h1>
+          <p className="text-zinc-600 text-sm mb-6">
+            The distributor portal you are looking for at <code className="bg-zinc-100 px-1.5 py-0.5 rounded text-red-600 font-mono text-xs">{tenantSlug}.localhost</code> does not exist or is currently inactive.
+          </p>
+          <div className="flex flex-col gap-2">
+            <Link
+              href="http://localhost:3000"
+              className="w-full btn btn-primary justify-center py-2 text-sm font-medium rounded-lg"
+            >
+              Go to SaaS Homepage
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen flex" style={{ background: "#FFFFFF" }}>
-      {/* ── Left Panel ─────────────────────────────────── */}
-      <div
-        className="hidden lg:flex flex-col justify-between w-[420px] flex-shrink-0 p-10"
-        style={{ background: "#F8FAFC", borderRight: "1px solid #E2E8F0" }}
-      >
-        <div>
-          <Link href="/" className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center shadow-sm">
-              <Flame className="w-4.5 h-4.5 text-white" />
-            </div>
-            <span className="text-[15px] font-semibold text-zinc-900">GasAgency</span>
-          </Link>
-        </div>
-        <div>
-          <h2 className="text-[22px] font-bold text-zinc-900 leading-snug mb-4">
-            Manage deliveries, stock,<br />and approvals — all in one place.
-          </h2>
-          <ul className="space-y-3">
-            {[
-              "Real-time cylinder stock tracking",
-              "4-level daily approval workflow",
-              "Role-based access for all staff",
-              "PUC & licence renewal reminders",
-            ].map((item) => (
-              <li key={item} className="flex items-center gap-2.5">
-                <div className="w-4 h-4 rounded-full bg-blue-600 flex items-center justify-center flex-shrink-0">
-                  <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                  </svg>
-                </div>
-                <span className="text-[13px] text-zinc-600">{item}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-        <p className="text-[12px] text-zinc-400">© 2026 GasAgency</p>
-      </div>
-
-      {/* ── Right Panel ────────────────────────────────── */}
-      <div className="flex-1 flex items-center justify-center p-6 bg-white">
-        <div className="w-full max-w-sm">
-          {/* Mobile logo */}
-          <Link href="/" className="flex lg:hidden items-center gap-2 mb-8">
-            <div className="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center">
-              <Flame className="w-4 h-4 text-white" />
-            </div>
-            <span className="text-[15px] font-semibold text-zinc-900">GasAgency</span>
-          </Link>
-
-          <div
-            className="rounded-xl p-8"
-            style={{
-              background: "#FFFFFF",
-              border: "1px solid #E2E8F0",
-              boxShadow: "0 4px 6px -1px rgba(15,23,42,0.05), 0 2px 4px -2px rgba(15,23,42,0.04)",
-            }}
-          >
-            {/* ── Step 1: Email + Password ── */}
-            {!requires2FA && (
-              <>
-                <div className="mb-7">
-                  <h1 className="text-[20px] font-bold tracking-tight text-zinc-900">Sign in</h1>
-                  <p className="text-[13px] text-zinc-500 mt-1">Enter your credentials to access your dashboard</p>
-                </div>
-
-                {loginState.error && (
-                  <div className="flex items-start gap-2.5 px-3.5 py-3 rounded-lg mb-5 text-[13px]"
-                    style={{ background: "#FEF2F2", border: "1px solid #FCA5A5", color: "#B91C1C" }}>
-                    <svg className="w-4 h-4 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    {loginState.error}
-                  </div>
-                )}
-
-                <form action={loginActionFn} className="space-y-4">
-                  <div>
-                    <label htmlFor="email" className="block text-[12px] font-medium text-zinc-700 mb-1.5">
-                      Email address
-                    </label>
-                    <input id="email" name="email" type="email" required autoComplete="email"
-                      placeholder="you@agency.com" className="input" style={{ fontSize: "14px", height: "38px" }} />
-                  </div>
-                  <div>
-                    <label htmlFor="password" className="block text-[12px] font-medium text-zinc-700 mb-1.5">
-                      Password
-                    </label>
-                    <div className="relative">
-                      <input id="password" name="password" type={showPwd ? "text" : "password"} required
-                        autoComplete="current-password" placeholder="••••••••" className="input pr-10"
-                        style={{ fontSize: "14px", height: "38px" }} />
-                      <button type="button" onClick={() => setShowPwd(!showPwd)} tabIndex={-1}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 transition-colors">
-                        {showPwd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
-                    </div>
-                  </div>
-                  <button type="submit" disabled={loginPending} className="btn btn-primary w-full justify-center mt-2"
-                    style={{ height: "38px", fontSize: "14px" }}>
-                    {loginPending ? <><Loader2 className="w-4 h-4 animate-spin" />Signing in…</> : "Sign in"}
-                  </button>
-                </form>
-              </>
-            )}
-
-            {/* ── Step 2: TOTP / Backup Code ── */}
-            {requires2FA && (
-              <>
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: "#EFF6FF" }}>
-                    <ShieldCheck className="w-5 h-5" style={{ color: "#2563EB" }} />
-                  </div>
-                  <div>
-                    <h1 className="text-[18px] font-bold tracking-tight text-zinc-900">Two-Factor Verification</h1>
-                    <p className="text-[13px] text-zinc-500 mt-0.5">
-                      {useBackup ? "Enter a backup code" : "Enter the code from your authenticator app"}
-                    </p>
-                  </div>
-                </div>
-
-                {twoFAState.error && (
-                  <div className="flex items-start gap-2.5 px-3.5 py-3 rounded-lg mb-5 text-[13px]"
-                    style={{ background: "#FEF2F2", border: "1px solid #FCA5A5", color: "#B91C1C" }}>
-                    <svg className="w-4 h-4 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    {twoFAState.error}
-                  </div>
-                )}
-
-                <form action={twoFAActionFn} className="space-y-4">
-                  <input type="hidden" name="useBackup" value={useBackup ? "true" : "false"} />
-                  <div>
-                    <label htmlFor="token" className="block text-[12px] font-medium text-zinc-700 mb-1.5">
-                      {useBackup ? "Backup code (XXXX-XXXX)" : "6-digit code"}
-                    </label>
-                    <input id="token" name="token" type="text" required autoFocus autoComplete="one-time-code"
-                      placeholder={useBackup ? "XXXX-XXXX" : "000000"}
-                      maxLength={useBackup ? 9 : 6}
-                      className="input text-center tracking-widest"
-                      style={{ fontSize: "20px", height: "48px", letterSpacing: "0.15em" }} />
-                  </div>
-                  <button type="submit" disabled={twoFAPending} className="btn btn-primary w-full justify-center"
-                    style={{ height: "38px", fontSize: "14px" }}>
-                    {twoFAPending ? <><Loader2 className="w-4 h-4 animate-spin" />Verifying…</> : "Verify"}
-                  </button>
-                </form>
-
-                <div className="mt-4 text-center">
-                  <button onClick={() => setUseBackup(!useBackup)}
-                    className="text-[12px] text-zinc-500 hover:text-zinc-800 transition-colors underline-offset-2 hover:underline">
-                    {useBackup ? "Use authenticator app instead" : "Use a backup code instead"}
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-
-          {/* Role hint — only show on step 1 */}
-          {!requires2FA && (
-            <div className="mt-5 rounded-lg p-4" style={{ background: "#F8FAFC", border: "1px solid #E2E8F0" }}>
-              <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-2.5">Available roles</p>
-              <div className="flex flex-wrap gap-1.5">
-                {["Admin", "Manager", "Godown Keeper", "Staff", "Delivery Boy"].map((role) => (
-                  <span key={role} className="text-[11px] font-medium px-2.5 py-1 rounded-md"
-                    style={{ background: "#E2E8F0", color: "#475569" }}>{role}</span>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <p className="text-center mt-5 text-[12px] text-zinc-400">
-            <Link href="/" className="hover:text-zinc-700 transition-colors">← Back to home</Link>
-          </p>
-        </div>
-      </div>
-    </div>
+    <LoginForm
+      agencyName={agencyName}
+      logoBase64={logoBase64}
+      themeColor={themeColor}
+    />
   );
 }

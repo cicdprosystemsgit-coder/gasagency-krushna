@@ -1,12 +1,14 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useRef, useEffect } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import { Plus, FileText, Eye, Trash2, Download, Building2, Phone, MapPin, Receipt } from "lucide-react";
+import { Plus, FileText, Eye, Trash2, Download, Building2, Phone, MapPin, Receipt, CheckCircle, AlertCircle } from "lucide-react";
 import { createGstInvoice } from "@/app/actions/gst-invoicing";
 import { generateGstInvoicePDF } from "@/lib/generateGstInvoicePDF";
 import type { Customer, Product } from "@/generated/prisma";
+import { createCustomer } from "@/app/actions/customers";
+import { createProduct } from "@/app/actions/products";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -67,16 +69,108 @@ export function GstInvoicingClient({
   const [isDownloading, setIsDownloading] = useState(false);
   const [error, setError] = useState("");
   const [form, setForm] = useState({ customerId: "", date: new Date().toISOString().slice(0, 10) });
+  const [customerSearch, setCustomerSearch] = useState("");
+  const [isSearchDropdownOpen, setIsSearchDropdownOpen] = useState(false);
   const [items, setItems] = useState<InvoiceItem[]>([
     { productId: "", productName: "", qty: 1, rate: 0, amount: 0 },
   ]);
+
+  const [localCustomers, setLocalCustomers] = useState(customers);
+  const [localProducts, setLocalProducts] = useState(products);
+
+  const [quickCustomerModal, setQuickCustomerModal] = useState(false);
+  const [quickProductModal, setQuickProductModal] = useState(false);
+  const [quickCustomerForm, setQuickCustomerForm] = useState({ name: "", phone: "", address: "", type: "DOMESTIC", email: "", customerCode: "" });
+  const [quickProductForm, setQuickProductForm] = useState({ name: "", unitCost: "", saleRate: "", margin: "", isCylinder: "false" });
+  const [quickError, setQuickError] = useState("");
+  const [pendingItemIndex, setPendingItemIndex] = useState<number | null>(null);
+
+  const searchWrapperRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (searchWrapperRef.current && !searchWrapperRef.current.contains(event.target as Node)) {
+        setIsSearchDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
+
+  function handleQuickCustomerSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setQuickError("");
+    if (!quickCustomerForm.name.trim()) { setQuickError("Name is required"); return; }
+    if (!quickCustomerForm.phone.trim()) { setQuickError("Phone is required"); return; }
+
+    const fd = new FormData();
+    fd.append("name", quickCustomerForm.name);
+    fd.append("phone", quickCustomerForm.phone);
+    if (quickCustomerForm.address) fd.append("address", quickCustomerForm.address);
+    fd.append("type", quickCustomerForm.type);
+    if (quickCustomerForm.email) fd.append("email", quickCustomerForm.email);
+    if (quickCustomerForm.customerCode) fd.append("customerCode", quickCustomerForm.customerCode);
+
+    startTransition(async () => {
+      const res = await createCustomer(fd);
+      if (res.error) { setQuickError(res.error); return; }
+      if (res.customer) {
+        const newCust = res.customer as any;
+        setLocalCustomers(prev => [...prev, newCust]);
+        setForm(prev => ({ ...prev, customerId: newCust.id }));
+        setQuickCustomerModal(false);
+        setQuickCustomerForm({ name: "", phone: "", address: "", type: "DOMESTIC", email: "", customerCode: "" });
+      }
+    });
+  }
+
+  function handleQuickProductSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setQuickError("");
+    if (!quickProductForm.name.trim()) { setQuickError("Product name is required"); return; }
+
+    const fd = new FormData();
+    fd.append("name", quickProductForm.name);
+    fd.append("unitCost", quickProductForm.unitCost || "0");
+    fd.append("saleRate", quickProductForm.saleRate || "0");
+    fd.append("margin", quickProductForm.margin || "0");
+    fd.append("isCylinder", quickProductForm.isCylinder);
+
+    startTransition(async () => {
+      const res = await createProduct(fd);
+      if (res.error) { setQuickError(res.error); return; }
+      if (res.product) {
+        const newProd = res.product as any;
+        setLocalProducts(prev => [...prev, newProd]);
+        if (pendingItemIndex !== null) {
+          setItems((prev) => {
+            const updated = [...prev];
+            updated[pendingItemIndex] = {
+              ...updated[pendingItemIndex],
+              productId: newProd.id,
+              productName: newProd.name,
+              rate: newProd.saleRate,
+              amount: updated[pendingItemIndex].qty * newProd.saleRate,
+            };
+            return updated;
+          });
+        }
+        setQuickProductModal(false);
+        setQuickProductForm({ name: "", unitCost: "", saleRate: "", margin: "", isCylinder: "false" });
+        setPendingItemIndex(null);
+      }
+    });
+  }
 
   function updateItem(index: number, field: keyof InvoiceItem, value: string | number) {
     setItems((prev) => {
       const updated = [...prev];
       updated[index] = { ...updated[index], [field]: value };
       if (field === "productId") {
-        const p = products.find((p) => p.id === value);
+        const p = localProducts.find((p) => p.id === value);
         if (p) {
           updated[index].productName = p.name;
           updated[index].rate = p.saleRate;
@@ -149,6 +243,7 @@ export function GstInvoicingClient({
         customerName:    customer?.name ?? "—",
         customerPhone:   customer?.phone ?? "",
         customerAddress: customer?.address ?? "",
+        customerCode:    customer?.customerCode ?? "",
         items:           invItems.map((it) => ({
           productName: it.productName,
           qty:         it.qty,
@@ -260,14 +355,166 @@ export function GstInvoicingClient({
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-1.5">Customer *</label>
-                <select
-                  value={form.customerId}
-                  onChange={(e) => setForm({ ...form, customerId: e.target.value })}
-                  className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">Select customer...</option>
-                  {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
+                <div ref={searchWrapperRef} className="relative">
+                  {form.customerId && localCustomers.find((c) => c.id === form.customerId) ? (
+                    (() => {
+                      const cust = localCustomers.find((c) => c.id === form.customerId)!;
+                      return (
+                        <div className="bg-emerald-50 border-2 border-emerald-500 rounded-xl p-3.5 flex justify-between items-start transition-all shadow-sm">
+                          <div className="space-y-1">
+                            <p className="font-bold text-emerald-950 text-sm flex items-center gap-2">
+                              <CheckCircle className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                              <span>{cust.name}</span>
+                              <span className="text-[10px] font-extrabold px-2 py-0.5 rounded bg-emerald-200 text-emerald-800 uppercase tracking-wider">
+                                {cust.type}
+                              </span>
+                            </p>
+                            <div className="text-[11px] text-emerald-800 space-y-0.5 font-medium">
+                              <p className="flex items-center gap-1.5"><Phone className="w-3.5 h-3.5 text-emerald-600" /> {cust.phone}</p>
+                              {cust.customerCode && <p className="flex items-center gap-1.5"><strong>Consumer No:</strong> {cust.customerCode}</p>}
+                              {cust.address && <p className="flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5 text-emerald-600" /> {cust.address}</p>}
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setForm({ ...form, customerId: "" });
+                              setCustomerSearch("");
+                            }}
+                            className="text-xs text-emerald-700 hover:text-emerald-950 font-bold bg-emerald-100 hover:bg-emerald-200 px-3 py-1.5 rounded-lg transition-colors border border-emerald-200"
+                          >
+                            Change Customer
+                          </button>
+                        </div>
+                      );
+                    })()
+                  ) : (
+                    <div>
+                      <div className="flex gap-2">
+                        <div className="relative flex-1">
+                          <input
+                            type="text"
+                            value={customerSearch}
+                            onChange={(e) => {
+                              setCustomerSearch(e.target.value);
+                              setIsSearchDropdownOpen(true);
+                              
+                              const query = e.target.value.toLowerCase().trim();
+                              if (query) {
+                                const exactMatches = localCustomers.filter(
+                                  (c) =>
+                                    c.name.toLowerCase() === query ||
+                                    c.phone === query ||
+                                    (c.customerCode && c.customerCode.toLowerCase() === query)
+                                );
+                                if (exactMatches.length === 1) {
+                                  setForm((prev) => ({ ...prev, customerId: exactMatches[0].id }));
+                                  setCustomerSearch(exactMatches[0].name);
+                                }
+                              }
+                            }}
+                            onFocus={() => setIsSearchDropdownOpen(true)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                const q = customerSearch.toLowerCase().trim();
+                                if (q) {
+                                  const matches = localCustomers.filter((c) =>
+                                    c.name.toLowerCase().includes(q) ||
+                                    c.phone.includes(q) ||
+                                    (c.customerCode ?? "").toLowerCase().includes(q)
+                                  );
+                                  if (matches.length > 0) {
+                                    setForm((prev) => ({ ...prev, customerId: matches[0].id }));
+                                    setCustomerSearch(matches[0].name);
+                                    setIsSearchDropdownOpen(false);
+                                  }
+                                }
+                              }
+                            }}
+                            placeholder="Search by Name, Mobile, or Consumer Number..."
+                            className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                          {customerSearch && (
+                            <button
+                              type="button"
+                              onClick={() => setCustomerSearch("")}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-slate-600 font-semibold"
+                            >
+                              Clear
+                            </button>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setQuickError("");
+                            setQuickCustomerModal(true);
+                          }}
+                          className="px-4 bg-blue-50 text-blue-600 border border-blue-200 hover:bg-blue-100 rounded-xl flex items-center justify-center transition-colors font-bold text-sm"
+                          title="Add new customer"
+                        >
+                          + Add New
+                        </button>
+                      </div>
+
+                      {customerSearch && localCustomers.filter((c) => {
+                        const q = customerSearch.toLowerCase().trim();
+                        return (
+                          c.name.toLowerCase().includes(q) ||
+                          c.phone.includes(q) ||
+                          (c.customerCode ?? "").toLowerCase().includes(q)
+                        );
+                      }).length === 0 && (
+                        <div className="mt-2 text-xs text-red-600 flex items-center gap-1.5 bg-red-50 border border-red-100 p-2.5 rounded-lg">
+                          <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
+                          <span>No customer matches this search query. Please check Consumer Number, Name, or Mobile.</span>
+                        </div>
+                      )}
+
+                      {isSearchDropdownOpen && (
+                        <div className="absolute left-0 right-0 mt-1.5 max-h-60 overflow-y-auto bg-white border border-slate-200 rounded-xl shadow-xl z-20 divide-y divide-slate-100">
+                          {localCustomers
+                            .filter((c) => {
+                              const q = customerSearch.toLowerCase().trim();
+                              if (!q) return true;
+                              return (
+                                c.name.toLowerCase().includes(q) ||
+                                c.phone.includes(q) ||
+                                (c.customerCode ?? "").toLowerCase().includes(q)
+                              );
+                            })
+                            .slice(0, 10)
+                            .map((c) => (
+                              <button
+                                key={c.id}
+                                type="button"
+                                onMouseDown={(e) => {
+                                  // Prevent blur or click-outside from closing before select is registered
+                                  e.preventDefault();
+                                  setForm({ ...form, customerId: c.id });
+                                  setCustomerSearch(c.name);
+                                  setIsSearchDropdownOpen(false);
+                                }}
+                                className="w-full px-4 py-2.5 text-left hover:bg-slate-50 flex items-center justify-between transition-colors"
+                              >
+                                <div>
+                                  <p className="font-semibold text-slate-800 text-sm">{c.name}</p>
+                                  <p className="text-[11px] text-slate-500 flex items-center gap-3">
+                                    <span>{c.phone}</span>
+                                    {c.customerCode && <span>Consumer No: {c.customerCode}</span>}
+                                  </p>
+                                </div>
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-600 uppercase">
+                                  {c.type}
+                                </span>
+                              </button>
+                            ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-1.5">Invoice Date *</label>
@@ -279,6 +526,7 @@ export function GstInvoicingClient({
                 />
               </div>
             </div>
+
 
             {/* Items */}
             <div>
@@ -303,14 +551,29 @@ export function GstInvoicingClient({
                     {items.map((item, i) => (
                       <tr key={i} className="border-t border-slate-100">
                         <td className="px-3 py-2">
-                          <select
-                            value={item.productId}
-                            onChange={(e) => updateItem(i, "productId", e.target.value)}
-                            className="w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
-                          >
-                            <option value="">Select...</option>
-                            {products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-                          </select>
+                          <div className="flex gap-1">
+                            <select
+                              value={item.productId}
+                              onChange={(e) => updateItem(i, "productId", e.target.value)}
+                              className="flex-1 px-2 py-1.5 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            >
+                              <option value="">Select...</option>
+                              {localProducts.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                            </select>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setQuickError("");
+                                setPendingItemIndex(i);
+                                setQuickProductForm({ name: "", unitCost: "", saleRate: "", margin: "", isCylinder: "false" });
+                                setQuickProductModal(true);
+                              }}
+                              className="px-2 bg-slate-50 border border-slate-200 hover:bg-slate-100 rounded-lg flex items-center justify-center transition-colors font-bold text-xs text-slate-500"
+                              title="Add new product"
+                            >
+                              +
+                            </button>
+                          </div>
                         </td>
                         <td className="px-3 py-2">
                           <input
@@ -426,6 +689,11 @@ export function GstInvoicingClient({
                     <div>
                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Bill To</p>
                       <p className="font-bold text-slate-800 text-[13px]">{customer?.name ?? "—"}</p>
+                      {customer?.customerCode && (
+                        <p className="text-blue-700 font-bold text-[11px] mt-0.5">
+                          Consumer No: {customer.customerCode}
+                        </p>
+                      )}
                       {customer?.address && <p className="text-slate-500 text-[11px] mt-0.5">{customer.address}</p>}
                       {customer?.phone && <p className="text-slate-500 text-[11px]">Ph: {customer.phone}</p>}
                     </div>
@@ -508,6 +776,166 @@ export function GstInvoicingClient({
             </div>
           );
         })()}
+      </Modal>
+
+      {/* Quick Add Customer Modal */}
+      <Modal open={quickCustomerModal} onClose={() => setQuickCustomerModal(false)} title="Quick Add Customer" size="sm">
+        <form onSubmit={handleQuickCustomerSubmit} className="space-y-4">
+          {quickError && <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-lg text-sm">{quickError}</div>}
+          <div>
+            <label className="block text-sm font-semibold text-slate-700 mb-1.5">Name *</label>
+            <input
+              type="text"
+              required
+              value={quickCustomerForm.name}
+              onChange={(e) => setQuickCustomerForm({ ...quickCustomerForm, name: e.target.value })}
+              placeholder="e.g. John Doe"
+              className="w-full px-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-slate-700 mb-1.5">Phone Number *</label>
+            <input
+              type="tel"
+              required
+              value={quickCustomerForm.phone}
+              onChange={(e) => setQuickCustomerForm({ ...quickCustomerForm, phone: e.target.value })}
+              placeholder="e.g. 9876543210"
+              className="w-full px-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-1.5">Customer Type</label>
+              <select
+                value={quickCustomerForm.type}
+                onChange={(e) => setQuickCustomerForm({ ...quickCustomerForm, type: e.target.value })}
+                className="w-full px-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="DOMESTIC">Domestic</option>
+                <option value="COMMERCIAL">Commercial</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-1.5">Customer Code</label>
+              <input
+                type="text"
+                value={quickCustomerForm.customerCode}
+                onChange={(e) => setQuickCustomerForm({ ...quickCustomerForm, customerCode: e.target.value })}
+                placeholder="Optional"
+                className="w-full px-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-slate-700 mb-1.5">Address</label>
+            <textarea
+              value={quickCustomerForm.address}
+              onChange={(e) => setQuickCustomerForm({ ...quickCustomerForm, address: e.target.value })}
+              placeholder="Optional address details"
+              rows={2}
+              className="w-full px-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+            />
+          </div>
+          <div className="flex justify-end gap-3 pt-2">
+            <button
+              type="button"
+              onClick={() => setQuickCustomerModal(false)}
+              className="px-4 py-2 rounded-xl text-sm font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 transition"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isPending}
+              className="px-4 py-2 rounded-xl text-sm font-semibold text-white bg-blue-700 hover:bg-blue-800 disabled:opacity-60 transition"
+            >
+              {isPending ? "Adding..." : "Add Customer"}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Quick Add Product Modal */}
+      <Modal open={quickProductModal} onClose={() => setQuickProductModal(false)} title="Quick Add Product" size="sm">
+        <form onSubmit={handleQuickProductSubmit} className="space-y-4">
+          {quickError && <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-lg text-sm">{quickError}</div>}
+          <div>
+            <label className="block text-sm font-semibold text-slate-700 mb-1.5">Product Name *</label>
+            <input
+              type="text"
+              required
+              value={quickProductForm.name}
+              onChange={(e) => setQuickProductForm({ ...quickProductForm, name: e.target.value })}
+              placeholder="e.g. 14.2kg Cylinder"
+              className="w-full px-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-1.5">Unit Cost (₹)</label>
+              <input
+                type="number"
+                min="0"
+                value={quickProductForm.unitCost}
+                onChange={(e) => setQuickProductForm({ ...quickProductForm, unitCost: e.target.value })}
+                placeholder="0.00"
+                className="w-full px-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-1.5">Sale Rate (₹)</label>
+              <input
+                type="number"
+                min="0"
+                value={quickProductForm.saleRate}
+                onChange={(e) => setQuickProductForm({ ...quickProductForm, saleRate: e.target.value })}
+                placeholder="0.00"
+                className="w-full px-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-1.5">Margin (₹)</label>
+              <input
+                type="number"
+                min="0"
+                value={quickProductForm.margin}
+                onChange={(e) => setQuickProductForm({ ...quickProductForm, margin: e.target.value })}
+                placeholder="0.00"
+                className="w-full px-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-1.5">Is Cylinder?</label>
+              <select
+                value={quickProductForm.isCylinder}
+                onChange={(e) => setQuickProductForm({ ...quickProductForm, isCylinder: e.target.value })}
+                className="w-full px-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="false">No</option>
+                <option value="true">Yes</option>
+              </select>
+            </div>
+          </div>
+          <div className="flex justify-end gap-3 pt-2">
+            <button
+              type="button"
+              onClick={() => setQuickProductModal(false)}
+              className="px-4 py-2 rounded-xl text-sm font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 transition"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isPending}
+              className="px-4 py-2 rounded-xl text-sm font-semibold text-white bg-blue-700 hover:bg-blue-800 disabled:opacity-60 transition"
+            >
+              {isPending ? "Adding..." : "Add Product"}
+            </button>
+          </div>
+        </form>
       </Modal>
     </>
   );

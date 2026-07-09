@@ -36,7 +36,7 @@ export type LoginState = {
 
 // ── Shared helper: issue tokens + set cookies ─────────────────────────────────
 async function issueSession(params: {
-  user: { id: string; email: string; name: string; role: Role; agencyId: string | null };
+  user: { id: string; email: string; name: string; role: Role; agencyId: string | null; agencySlug: string | null };
   ip: string;
   userAgent: string;
 }) {
@@ -48,11 +48,12 @@ async function issueSession(params: {
   });
 
   const { accessToken, rawRefreshToken, refreshJti } = await createTokenPair({
-    id:       user.id,
-    email:    user.email,
-    name:     user.name,
-    role:     user.role,
-    agencyId: user.agencyId,
+    id:         user.id,
+    email:      user.email,
+    name:       user.name,
+    role:       user.role,
+    agencyId:   user.agencyId,
+    agencySlug: user.agencySlug,
   });
 
   await storeRefreshToken({
@@ -101,10 +102,15 @@ export async function loginAction(
       id: true, email: true, name: true, role: true,
       agencyId: true, isActive: true, password: true,
       twoFactorEnabled: true,
+      agency: { select: { slug: true, status: true } },
     },
   });
 
   if (!user || !user.isActive) return { error: "Invalid email or password" };
+
+  if (user.agency && user.agency.status !== "ACTIVE") {
+    redirect("/maintenance");
+  }
 
   const valid = await bcrypt.compare(parsed.data.password, user.password);
   if (!valid) return { error: "Invalid email or password" };
@@ -123,7 +129,11 @@ export async function loginAction(
     return { requires2FA: true };
   }
 
-  await issueSession({ user, ip, userAgent });
+  await issueSession({
+    user: { ...user, agencyId: user.agencyId ?? null, agencySlug: user.agency?.slug ?? null },
+    ip,
+    userAgent,
+  });
   redirect(getRoleDashboard(user.role));
 }
 
@@ -149,11 +159,17 @@ export async function verify2FALogin(
       id: true, email: true, name: true, role: true, agencyId: true,
       isActive: true, twoFactorSecret: true, twoFactorEnabled: true,
       twoFactorBackupCodes: true,
+      agency: { select: { slug: true, status: true } },
     },
   });
 
   if (!user || !user.isActive || !user.twoFactorEnabled) {
     return { error: "Invalid session. Please sign in again." };
+  }
+
+  if (user.agency && user.agency.status !== "ACTIVE") {
+    cookieStore.delete("pending_2fa");
+    redirect("/maintenance");
   }
 
   if (useBackup) {
@@ -171,7 +187,11 @@ export async function verify2FALogin(
   }
 
   cookieStore.delete("pending_2fa");
-  await issueSession({ user, ip, userAgent });
+  await issueSession({
+    user: { ...user, agencyId: user.agencyId ?? null, agencySlug: user.agency?.slug ?? null },
+    ip,
+    userAgent,
+  });
   redirect(getRoleDashboard(user.role));
 }
 
@@ -200,5 +220,5 @@ export async function logoutAction() {
   }
 
   await clearAuthCookies();
-  redirect("/login");
+  redirect("/session-expired?reason=logout");
 }
