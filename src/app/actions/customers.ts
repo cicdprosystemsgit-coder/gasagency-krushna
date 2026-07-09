@@ -107,7 +107,7 @@ export async function updateCustomer(id: string, formData: FormData) {
     } else {
       // DOMESTIC
       if (!address) return { error: "Address is required." };
-      if (!customerCode) return { error: "Gas Connection Number is required." };
+      if (!customerCode) return { error: "Consumer Number  is required." };
     }
 
     const customer = await prisma.customer.update({

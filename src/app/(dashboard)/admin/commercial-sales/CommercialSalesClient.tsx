@@ -6,6 +6,7 @@ import { formatCurrency, formatDate } from "@/lib/utils";
 import { Plus, ShoppingCart, Trash2, Pencil } from "lucide-react";
 import { createCommercialSale, deleteCommercialSale } from "@/app/actions/commercial-sales";
 import type { Customer, Product } from "@/generated/prisma";
+import { CalendarPicker } from "@/components/ui/CalendarPicker";
 
 interface Sale {
   id: string;
@@ -109,14 +110,9 @@ export function CommercialSalesClient({ initialSales, customers, products, canEd
       {/* Date + Totals bar */}
       <div className="flex items-center justify-between bg-white rounded-2xl border border-slate-100 shadow-sm px-5 py-4 mb-4">
         <div className="flex items-center gap-4">
-          <div>
-            <label className="block text-xs font-semibold text-slate-500 mb-1">DATE</label>
-            <input
-              type="date"
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-              className="border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
+          <div className="flex flex-col gap-1">
+            <label className="block text-xs font-semibold text-slate-500">DATE</label>
+            <CalendarPicker value={selectedDate} onChange={setSelectedDate} />
           </div>
           <div className="pl-4 border-l border-slate-100">
             <p className="text-xs text-slate-500">Total Customers</p>

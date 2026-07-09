@@ -314,7 +314,7 @@ export function GodownInventoryClient({ initialMovements, products, userId }: {
                 style={{ color: modalType === "dispatch" ? "#7C3AED" : "#2563EB" }} />
             </div>
             <div>
-              <label className="block text-[12px] font-medium mb-1.5" style={{ color: "#52525B" }}>Batch / Ref No.</label>
+              <label className="block text-[12px] font-medium mb-1.5" style={{ color: "#52525B" }}>Batch / Ref No/HSN No.</label>
               <input value={form.batchNo} onChange={e => setForm({ ...form, batchNo: e.target.value })} placeholder="e.g., LOT-001" className="input" />
             </div>
           </div>

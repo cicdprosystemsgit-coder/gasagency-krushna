@@ -24,8 +24,9 @@ import {
   MapPin,
   TrendingDown,
   TrendingUp,
+  Pencil,
 } from "lucide-react";
-import { createCreditEntry, addCustomer } from "@/app/actions/credit-ledger";
+import { createCreditEntry, addCustomer, updateCreditEntry } from "@/app/actions/credit-ledger";
 import type { Customer } from "@/generated/prisma";
 
 interface Entry {
@@ -62,6 +63,7 @@ export function CreditLedgerClient({ customers, initialEntries, canEdit, userId 
   const [txFilter, setTxFilter] = useState<TxFilter>("ALL");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [editingEntry, setEditingEntry] = useState<Entry | null>(null);
 
   const [form, setForm] = useState({
     customerId: "",
@@ -305,14 +307,24 @@ export function CreditLedgerClient({ customers, initialEntries, canEdit, userId 
     fd.append("addedById", userId);
 
     startTransition(async () => {
-      const result = await createCreditEntry(fd);
+      const result = editingEntry
+        ? await updateCreditEntry(editingEntry.id, fd)
+        : await createCreditEntry(fd);
+
       if (result.error) {
         setError(result.error);
         return;
       }
       if (result.entry) {
-        setEntries((prev) => [result.entry!, ...prev]);
+        if (editingEntry) {
+          setEntries((prev) =>
+            prev.map((item) => (item.id === editingEntry.id ? result.entry! : item))
+          );
+        } else {
+          setEntries((prev) => [result.entry!, ...prev]);
+        }
         setModalOpen(false);
+        setEditingEntry(null);
         setForm({
           customerId: "",
           type: "CREDIT",
@@ -744,9 +756,31 @@ export function CreditLedgerClient({ customers, initialEntries, canEdit, userId 
                               <p className="text-slate-700 text-sm font-semibold mt-1">
                                 {entry.description || (isCredit ? "Credit given" : "Payment received")}
                               </p>
-                              <span className="inline-block text-[10px] text-slate-400 mt-1 bg-slate-100 px-1.5 py-0.5 rounded">
-                                Recorded by {entry.addedBy.name}
-                              </span>
+                              <div className="flex items-center gap-2 mt-1">
+                                <span className="inline-block text-[10px] text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">
+                                  Recorded by {entry.addedBy.name}
+                                </span>
+                                {canEdit && (
+                                  <button
+                                    onClick={() => {
+                                      setEditingEntry(entry);
+                                      setForm({
+                                        customerId: entry.customerId,
+                                        type: entry.type,
+                                        amount: String(entry.amount),
+                                        description: entry.description || "",
+                                        date: new Date(entry.date).toISOString().split("T")[0],
+                                      });
+                                      setError("");
+                                      setModalOpen(true);
+                                    }}
+                                    className="text-[10px] text-blue-600 hover:text-blue-800 font-bold transition flex items-center gap-1 cursor-pointer"
+                                  >
+                                    <Pencil className="w-3 h-3" />
+                                    Edit
+                                  </button>
+                                )}
+                              </div>
                             </div>
                           </div>
 
@@ -780,7 +814,15 @@ export function CreditLedgerClient({ customers, initialEntries, canEdit, userId 
       </div>
 
       {/* Log Credit/Payment Modal */}
-      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="New Credit / Payment Entry" size="sm">
+      <Modal
+        open={modalOpen}
+        onClose={() => {
+          setModalOpen(false);
+          setEditingEntry(null);
+        }}
+        title={editingEntry ? "Edit Credit / Payment Entry" : "New Credit / Payment Entry"}
+        size="sm"
+      >
         <form onSubmit={handleEntry} className="space-y-4">
           {error && (
             <div className="bg-rose-50 border border-rose-200 text-rose-700 px-3.5 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2">
@@ -867,7 +909,10 @@ export function CreditLedgerClient({ customers, initialEntries, canEdit, userId 
           <div className="flex justify-end gap-3 pt-2">
             <button
               type="button"
-              onClick={() => setModalOpen(false)}
+              onClick={() => {
+                setModalOpen(false);
+                setEditingEntry(null);
+              }}
               className="px-5 py-2.5 rounded-xl text-sm font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 transition active:scale-95"
             >
               Cancel

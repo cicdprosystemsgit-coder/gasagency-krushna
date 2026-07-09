@@ -8,6 +8,7 @@ import { Plus, AlertTriangle, Car, Building2, Wallet, Trash2 } from "lucide-reac
 import { createExpense, createAsset, deleteAsset } from "@/app/actions/expenses";
 import type { VehicleAgencyAsset } from "@/generated/prisma";
 import { cn } from "@/lib/utils";
+import { DateRangePicker } from "@/components/ui/DateRangePicker";
 
 interface Expense {
   id: string;
@@ -44,6 +45,17 @@ export function ExpensesClient({ initialExpenses, initialAssets, canEdit, userId
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState("");
   const [categoryOptions, setCategoryOptions] = useState<SelectOption[]>(EXPENSE_CATEGORY_OPTIONS);
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  
+  const filteredExpenses = expenses.filter((e) => {
+    const eDate = new Date(e.date);
+    eDate.setHours(0, 0, 0, 0);
+    if (dateFrom && eDate < new Date(dateFrom)) return false;
+    if (dateTo && eDate > new Date(dateTo)) return false;
+    return true;
+  });
+
   const [expenseForm, setExpenseForm] = useState({ description: "", amount: "", category: "GENERAL" });
   const [assetForm, setAssetForm] = useState({
     assetType: "VEHICLE",
@@ -124,12 +136,13 @@ export function ExpensesClient({ initialExpenses, initialAssets, canEdit, userId
 
       {activeTab === "Expenses" && (
         <>
-          <div className="flex justify-between items-center mb-4">
-            <div>
-              <span className="text-sm text-slate-500">{expenses.length} expense records</span>
-              <span className="ml-4 font-bold text-slate-800">
-                Total: {formatCurrency(expenses.reduce((a, e) => a + e.amount, 0))}
+          <div className="flex justify-between items-center mb-4 flex-wrap gap-4">
+            <div className="flex items-center gap-4 flex-wrap">
+              <span className="text-sm text-slate-500">{filteredExpenses.length} expense records</span>
+              <span className="font-bold text-slate-800">
+                Total: {formatCurrency(filteredExpenses.reduce((a, e) => a + e.amount, 0))}
               </span>
+              <DateRangePicker dateFrom={dateFrom} dateTo={dateTo} onChange={(from, to) => { setDateFrom(from); setDateTo(to); }} />
             </div>
             {canEdit && (
               <button
@@ -153,9 +166,9 @@ export function ExpensesClient({ initialExpenses, initialAssets, canEdit, userId
                   </tr>
                 </thead>
                 <tbody>
-                  {expenses.length === 0 ? (
-                    <tr><td colSpan={5} className="px-4 py-14 text-center text-slate-400">No expense records</td></tr>
-                  ) : expenses.map((e) => (
+                  {filteredExpenses.length === 0 ? (
+                    <tr><td colSpan={5} className="px-4 py-14 text-center text-slate-400">No expense records found for this range</td></tr>
+                  ) : filteredExpenses.map((e) => (
                     <tr key={e.id} className="table-row border-b border-slate-50 last:border-0">
                       <td className="px-4 py-3 text-slate-500">{formatDate(e.date)}</td>
                       <td className="px-4 py-3 font-medium text-slate-800">{e.description}</td>

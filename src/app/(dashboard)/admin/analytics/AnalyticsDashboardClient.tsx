@@ -1,12 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import {
   LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from "recharts";
 import { TrendingUp, Users, Package, DollarSign, BarChart2, RefreshCw, Download } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
+import { DateRangePicker } from "@/components/ui/DateRangePicker";
 
 type Props = {
   revenue: Array<{ month: string; label: string; domestic: number; commercial: number; total: number }>;
@@ -20,6 +22,8 @@ type Props = {
     domesticRevenue: number; commercialRevenue: number;
   } | null;
   inventory: Array<{ month: string; label: string; inflow: number; outflow: number }>;
+  initialDateFrom?: string;
+  initialDateTo?: string;
 };
 
 const COLORS = ["#2563EB", "#16A34A", "#D97706", "#7C3AED", "#EC4899", "#0891B2", "#EA580C"];
@@ -41,8 +45,19 @@ function StatCard({ title, value, sub, color, icon }: {
   );
 }
 
-export function AnalyticsDashboardClient({ revenue, productSales, deliveryPerf, topCustomers, plSummary, inventory }: Props) {
+export function AnalyticsDashboardClient({ revenue, productSales, deliveryPerf, topCustomers, plSummary, inventory, initialDateFrom = "", initialDateTo = "" }: Props) {
   const [activeTab, setActiveTab] = useState<"overview" | "delivery" | "customers" | "inventory">("overview");
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+
+  function handleDateChange(from: string, to: string) {
+    const params = new URLSearchParams();
+    if (from) params.set("dateFrom", from);
+    if (to) params.set("dateTo", to);
+    startTransition(() => {
+      router.push(`/admin/analytics?${params.toString()}`);
+    });
+  }
 
   const tabs = [
     { id: "overview", label: "P&L Overview" },
@@ -58,21 +73,23 @@ export function AnalyticsDashboardClient({ revenue, productSales, deliveryPerf, 
   return (
     <div>
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
         <div>
           <h1 className="text-[17px] font-semibold tracking-tight" style={{ color: "#18181B" }}>
             Analytics Dashboard
           </h1>
           <p className="text-[13px] mt-0.5" style={{ color: "#71717A" }}>
-            Business intelligence — current month unless noted
+            Business intelligence
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <DateRangePicker dateFrom={initialDateFrom} dateTo={initialDateTo} onChange={handleDateChange} />
           <button
             onClick={() => window.location.reload()}
-            className="btn btn-secondary flex items-center gap-1.5"
+            className="btn btn-secondary flex items-center gap-1.5 animate-none"
+            disabled={isPending}
           >
-            <RefreshCw className="w-3.5 h-3.5" /> Refresh
+            <RefreshCw className={`w-3.5 h-3.5 ${isPending ? "animate-spin" : ""}`} /> Refresh
           </button>
         </div>
       </div>

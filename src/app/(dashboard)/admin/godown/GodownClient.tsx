@@ -169,77 +169,82 @@ function CylinderRows({
           <p className="text-[11px] text-slate-400 mt-0.5">Click the "Add Cylinder Type" button to register cylinders to this vehicle.</p>
         </div>
       ) : (
-        <div className="border rounded-xl overflow-visible shadow-xs bg-white">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-slate-50 border-b" style={{ borderColor: "#E2E8F0" }}>
-                <th className="py-2.5 px-3 text-[11px] font-bold uppercase tracking-wider text-slate-400">Cylinder Product Type</th>
-                <th className="py-2.5 px-3 text-[11px] font-bold uppercase tracking-wider text-slate-400 text-center w-36">Quantity</th>
-                <th className="py-2.5 px-3 w-12 text-center"></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {items.map((row) => (
-                <tr key={row.id} className="hover:bg-slate-50/50 transition-colors">
-                  <td className="p-2.5">
-                    <CustomSelect
-                      value={row.productId}
-                      onChange={(val) => {
-                        updateRow(row.id, "productId", val);
-                      }}
-                      options={products.map((p) => ({ value: p.id, label: p.name }))}
-                      placeholder="Select Type..."
-                      onAddClick={() => {
-                        onAddType((p) => {
-                          onChange(
-                            items.map((r) =>
-                              r.id === row.id ? { ...r, productId: p.id, productName: p.name } : r
-                            )
-                          );
-                        });
-                      }}
-                      addLabel="+ Add New Type..."
-                    />
-                  </td>
-                  <td className="p-2.5">
-                    <div className="flex items-center gap-1.5 justify-center">
-                      <button
-                        type="button"
-                        onClick={() => updateRow(row.id, "qty", Math.max(0, row.qty - 1))}
-                        className="w-7 h-7 flex items-center justify-center rounded-lg border border-slate-200 hover:bg-slate-100 transition-colors text-slate-600 bg-white"
-                      >
-                        <Minus className="w-3.5 h-3.5" />
-                      </button>
-                      <input
-                        type="number"
-                        min="0"
-                        value={row.qty}
-                        onChange={(e) => updateRow(row.id, "qty", e.target.value)}
-                        className="input text-center font-extrabold text-slate-800 text-[13px] w-14 p-1 focus:border-blue-500"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => updateRow(row.id, "qty", row.qty + 1)}
-                        className="w-7 h-7 flex items-center justify-center rounded-lg border border-slate-200 hover:bg-slate-100 transition-colors text-slate-600 bg-white"
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </td>
-                  <td className="p-2.5 text-center">
-                    <button
-                      type="button"
-                      onClick={() => onChange(items.filter((r) => r.id !== row.id))}
-                      className="btn-action btn-action-danger w-8 h-8 rounded-lg"
-                      title="Remove Row"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </td>
+        <div className="border border-slate-200 rounded-xl overflow-hidden shadow-xs bg-white">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-slate-50 border-b" style={{ borderColor: "#E2E8F0" }}>
+                  <th className="py-2.5 px-3 text-[11px] font-bold uppercase tracking-wider text-slate-400">Cylinder Product Type</th>
+                  <th className="py-2.5 px-3 text-[11px] font-bold uppercase tracking-wider text-slate-400 text-center w-36">Quantity</th>
+                  <th className="py-2.5 px-3 w-12 text-center"></th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {items.map((row) => (
+                  <tr key={row.id} className="hover:bg-slate-50/50 transition-colors">
+                    <td className="p-2">
+                      <CustomSelect
+                        value={row.productId}
+                        onChange={(val) => {
+                          updateRow(row.id, "productId", val);
+                        }}
+                        options={products.map((p) => ({ value: p.id, label: p.name }))}
+                        placeholder="Select Type..."
+                        onAddClick={() => {
+                          onAddType((p) => {
+                            onChange(
+                              items.map((r) =>
+                                r.id === row.id ? { ...r, productId: p.id, productName: p.name } : r
+                              )
+                            );
+                          });
+                        }}
+                        addLabel="+ Add New Type..."
+                        size="sm"
+                      />
+                    </td>
+                    <td className="p-2">
+                      <div className="flex items-center justify-center">
+                        <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden h-7 bg-white">
+                          <button
+                            type="button"
+                            onClick={() => updateRow(row.id, "qty", Math.max(0, row.qty - 1))}
+                            className="w-7 h-7 flex items-center justify-center hover:bg-slate-50 transition-colors"
+                          >
+                            <Minus className="w-3 h-3 text-slate-500" />
+                          </button>
+                          <input
+                            type="number"
+                            min="0"
+                            value={row.qty}
+                            onChange={(e) => updateRow(row.id, "qty", e.target.value)}
+                            className="w-10 h-7 text-center font-semibold text-slate-800 text-[12px] focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none border-x border-slate-200"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => updateRow(row.id, "qty", row.qty + 1)}
+                            className="w-7 h-7 flex items-center justify-center hover:bg-slate-50 transition-colors"
+                          >
+                            <Plus className="w-3 h-3 text-slate-500" />
+                          </button>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="p-2 text-center">
+                      <button
+                        type="button"
+                        onClick={() => onChange(items.filter((r) => r.id !== row.id))}
+                        className="btn-action btn-action-danger w-8 h-8 rounded-lg flex items-center justify-center mx-auto"
+                        title="Remove Row"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 

@@ -12,6 +12,7 @@ import {
   AlertCircle, Check,
 } from "lucide-react";
 import { createDeliveryRecord } from "@/app/actions/deliveries";
+import { CalendarPicker } from "@/components/ui/CalendarPicker";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -40,6 +41,8 @@ export interface DeliveryRecord {
   returnedQty: number;
   pendingQty: number;
   cashCollected: number;
+  paymentMode: string;
+  creditAmount: number;
   status: string;
   notes: string | null;
   customer: { name: string; phone: string; address: string | null; type: string; customerCode: string | null };
@@ -439,10 +442,13 @@ interface DeliveryForm {
   returnedQty: string;
   pendingQty: string;
   cashCollected: string;
+  creditAmount: string;
   paymentMode: string;
+  partialCollectionMode: string;   // How the cash part of PARTIAL was collected
+  partialCollectionOther: string;  // Custom app name if partialCollectionMode === "Others"
   notes: string;
   date: string;
-  otherPaymentApp?: string;
+  otherPaymentApp?: string;        // Custom app name for main "Others" payment mode
 }
 
 function Step2DeliveryDetails({
@@ -459,15 +465,58 @@ function Step2DeliveryDetails({
   error: string;
 }) {
   const selectedProduct = products.find((p) => p.id === form.productId);
+  const totalValue = selectedProduct && selectedProduct.saleRate > 0
+    ? selectedProduct.saleRate * (Number(form.deliveredQty) || 0)
+    : 0;
+
+  const isDomestic = customer.type === "DOMESTIC";
+
+  // ── Payment mode chip options ─────────────────────────────────────────────
+  // DOMESTIC: no Credit/Udhari; COMMERCIAL: full set including Credit/Udhari
+  const mainModes = isDomestic
+    ? [
+        { val: "CASH",    label: "Cash",           icon: "💵" },
+        { val: "PhonePe", label: "PhonePe",        icon: "📱" },
+        { val: "GPay",    label: "GPay",           icon: "🔵" },
+        { val: "Paytm",   label: "Paytm",          icon: "💙" },
+        { val: "Others",  label: "Others",          icon: "➕" },
+        { val: "PARTIAL", label: "Partial Payment", icon: "💳" },
+      ]
+    : [
+        { val: "CASH",    label: "Cash",            icon: "💵" },
+        { val: "PhonePe", label: "PhonePe",         icon: "📱" },
+        { val: "GPay",    label: "GPay",            icon: "🔵" },
+        { val: "Paytm",   label: "Paytm",           icon: "💙" },
+        { val: "PARTIAL", label: "Partial Payment", icon: "💳" },
+        { val: "CREDIT",  label: "Credit / Udhari", icon: "📒" },
+        { val: "Others",  label: "Others",           icon: "➕" },
+      ];
+
+  // For DOMESTIC partial: online modes (PhonePe/GPay/Paytm/Others) for the second portion
+  const onlineModes = [
+    { val: "PhonePe", label: "PhonePe" },
+    { val: "GPay",    label: "GPay" },
+    { val: "Paytm",   label: "Paytm" },
+    { val: "Others",  label: "Others" },
+  ];
+
+  // For COMMERCIAL partial: cash collection modes (how cash was received)
+  const collectionModes = [
+    { val: "CASH",    label: "Cash" },
+    { val: "PhonePe", label: "PhonePe" },
+    { val: "GPay",    label: "GPay" },
+    { val: "Paytm",   label: "Paytm" },
+    { val: "Others",  label: "Others" },
+  ];
 
   return (
     <div>
       <StepIndicator step={2} />
 
-      {/* Customer reminder strip */}
+      {/* ── Customer reminder strip ───────────────────────────────────── */}
       <div className="flex items-center gap-3 px-4 py-3 rounded-xl mb-5" style={{ background: "#F0FDF4", border: "1px solid #BBF7D0" }}>
         <div className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-[12px] text-white flex-shrink-0"
-          style={{ background: customer.type === "DOMESTIC" ? "#2563EB" : "#7C3AED" }}>
+          style={{ background: isDomestic ? "#2563EB" : "#7C3AED" }}>
           {customer.name.charAt(0).toUpperCase()}
         </div>
         <div className="flex-1 min-w-0">
@@ -479,6 +528,12 @@ function Step2DeliveryDetails({
                 <Hash className="w-2.5 h-2.5" />{customer.customerCode}
               </span>
             )}
+            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
+              style={isDomestic
+                ? { background: "#EFF6FF", color: "#2563EB" }
+                : { background: "#F5F3FF", color: "#7C3AED" }}>
+              {isDomestic ? "Regular" : "Commercial"}
+            </span>
           </div>
         </div>
         <CheckCircle2 className="w-5 h-5 flex-shrink-0" style={{ color: "#16A34A" }} />
@@ -491,50 +546,40 @@ function Step2DeliveryDetails({
         </div>
       )}
 
-      <div className="space-y-4">
-        {/* Date + Product */}
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className={labelCls} style={labelSty}>Delivery Date *</label>
-            <div className="relative">
-              <CalendarDays className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5" style={{ color: "#A1A1AA" }} />
-              <input
-                type="date"
-                value={form.date}
-                onChange={(e) => onChange({ date: e.target.value })}
-                className={inputCls}
-                style={{ ...inputSty, paddingLeft: "2.25rem" }}
-              />
-            </div>
-          </div>
-          <div>
-            <label className={labelCls} style={labelSty}>Product / Cylinder *</label>
-            <select
-              value={form.productId}
-              onChange={(e) => onChange({ productId: e.target.value })}
-              className={inputCls}
-              style={inputSty}
-            >
-              <option value="">Select product...</option>
-              {products.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}{p.saleRate > 0 ? ` — ₹${p.saleRate}` : ""}
-                </option>
-              ))}
-            </select>
-          </div>
+      <div className="space-y-5">
+
+        {/* ── STEP A: Date ─────────────────────────────────────────────── */}
+        <div className="rounded-xl p-4" style={{ background: "#F8F8F8", border: "1px solid #E4E4E7" }}>
+          <p className="text-[11px] font-semibold uppercase tracking-wide mb-3" style={{ color: "#71717A" }}>① Delivery Date</p>
+          <CalendarPicker value={form.date} onChange={(val) => onChange({ date: val })} />
         </div>
 
-        {/* Cylinder quantities */}
+        {/* ── STEP B: Product ───────────────────────────────────────────── */}
+        <div className="rounded-xl p-4" style={{ background: "#F8F8F8", border: "1px solid #E4E4E7" }}>
+          <p className="text-[11px] font-semibold uppercase tracking-wide mb-3" style={{ color: "#71717A" }}>② Product / Cylinder</p>
+          <select
+            value={form.productId}
+            onChange={(e) => onChange({ productId: e.target.value })}
+            className={inputCls}
+            style={inputSty}
+          >
+            <option value="">Select product...</option>
+            {products.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}{p.saleRate > 0 ? ` — ₹${p.saleRate}` : ""}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* ── STEP C: Cylinder Count ────────────────────────────────────── */}
         <div className="rounded-xl p-4 space-y-3" style={{ background: "#F8F8F8", border: "1px solid #E4E4E7" }}>
-          <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "#71717A" }}>
-            Cylinder Count
-          </p>
+          <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "#71717A" }}>③ Cylinder Count</p>
           <div className="grid grid-cols-3 gap-3">
             {[
-              { label: "Delivered", key: "deliveredQty" as const, color: "#2563EB", hint: "Full cylinders given" },
-              { label: "Empty Returned", key: "returnedQty" as const, color: "#16A34A", hint: "Empty cylinders collected" },
-              { label: "Pending", key: "pendingQty" as const, color: "#D97706", hint: "Not delivered (absent etc.)" },
+              { label: "Delivered",     key: "deliveredQty" as const, color: "#2563EB", hint: "Full cylinders given" },
+              { label: "Empty Returned",key: "returnedQty"  as const, color: "#16A34A", hint: "Empty cylinders collected" },
+              { label: "Pending",       key: "pendingQty"   as const, color: "#D97706", hint: "Not delivered (absent etc.)" },
             ].map(({ label, key, color, hint }) => (
               <div key={key}>
                 <label className="block text-[11px] font-medium mb-1" style={{ color }}>{label}</label>
@@ -552,97 +597,303 @@ function Step2DeliveryDetails({
           </div>
         </div>
 
-        {/* Cash + payment mode */}
-        <div className="rounded-xl p-4 space-y-3" style={{ background: "#F8F8F8", border: "1px solid #E4E4E7" }}>
-          <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "#71717A" }}>
-            Payment
-          </p>
+        {/* ── STEP D: Payment Method ────────────────────────────────────── */}
+        <div className="rounded-xl p-4" style={{ background: "#F8F8F8", border: "1px solid #E4E4E7" }}>
+          <p className="text-[11px] font-semibold uppercase tracking-wide mb-3" style={{ color: "#71717A" }}>④ Payment Method</p>
+          <div className="grid grid-cols-2 gap-2">
+            {mainModes.map(({ val, label, icon }) => {
+              const active = form.paymentMode === val;
+              return (
+                <button
+                  key={val}
+                  type="button"
+                  onClick={() => onChange({
+                    paymentMode: val,
+                    cashCollected: "",
+                    creditAmount: "",
+                    partialCollectionMode: isDomestic ? "PhonePe" : "CASH",
+                    partialCollectionOther: "",
+                    otherPaymentApp: "",
+                  })}
+                  className="flex items-center gap-2 px-3 py-2.5 rounded-lg border text-left transition-all"
+                  style={{
+                    borderColor: active ? "#2563EB" : "#E4E4E7",
+                    background: active ? "#EFF6FF" : "#FFFFFF",
+                    color: active ? "#1D4ED8" : "#52525B",
+                    fontWeight: active ? 600 : 400,
+                  }}
+                >
+                  <span className="text-[14px]">{icon}</span>
+                  <span className="text-[12px]">{label}</span>
+                  {active && (
+                    <CheckCircle2 className="w-3.5 h-3.5 ml-auto" style={{ color: "#2563EB" }} />
+                  )}
+                </button>
+              );
+            })}
+          </div>
 
-          {/* CREDIT mode banner */}
-          {form.paymentMode === "CREDIT" && (
-            <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg" style={{ background: "#FEF3C7", border: "1px solid #FDE68A" }}>
-              <span className="text-[13px] flex-shrink-0">⚠️</span>
-              <p className="text-[11px] font-medium" style={{ color: "#92400E" }}>
-                <strong>Credit (Udhari)</strong> selected — the amount below will be automatically added to this customer&apos;s Credit Ledger as money owed. Enter the total cylinder value.
-              </p>
+          {/* Others — custom app name */}
+          {form.paymentMode === "Others" && (
+            <div className="mt-3">
+              <label className="block text-[11px] font-medium mb-1" style={{ color: "#71717A" }}>Specify Payment App *</label>
+              <input
+                type="text"
+                required
+                value={form.otherPaymentApp || ""}
+                onChange={(e) => onChange({ otherPaymentApp: e.target.value })}
+                placeholder="Enter payment app name..."
+                className="w-full px-3 py-2 rounded-lg text-[13px] border outline-none transition-colors focus:border-blue-500"
+                style={{ borderColor: "#D4D4D8", background: "#FFFFFF", color: "#18181B" }}
+              />
             </div>
           )}
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className={labelCls} style={labelSty}>
-                {form.paymentMode === "CREDIT" ? "Credit Amount (₹) *" : "Cash Collected (₹)"}
-              </label>
-              <div className="relative">
-                <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5" style={{ color: "#A1A1AA" }} />
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={form.cashCollected}
-                  onChange={(e) => onChange({ cashCollected: e.target.value })}
-                  placeholder={form.paymentMode === "CREDIT" ? "Enter total value of cylinders" : "0.00"}
-                  className={inputCls}
-                  style={{
-                    ...inputSty,
-                    paddingLeft: "2.25rem",
-                    ...(form.paymentMode === "CREDIT" ? { borderColor: "#F59E0B", background: "#FFFBEB" } : {}),
-                  }}
-                />
-              </div>
-              {selectedProduct && selectedProduct.saleRate > 0 && (
-                <p className="text-[11px] mt-1" style={{ color: form.paymentMode === "CREDIT" ? "#92400E" : "#A1A1AA" }}>
-                  {form.paymentMode === "CREDIT" ? "📋 " : ""}Rate: ₹{selectedProduct.saleRate} × {form.deliveredQty || 0} = ₹{(selectedProduct.saleRate * (Number(form.deliveredQty) || 0)).toFixed(0)}
-                  {form.paymentMode === "CREDIT" ? " (auto-used if left blank)" : ""}
-                </p>
-              )}
-            </div>
-            <div>
-              <label className={labelCls} style={labelSty}>Payment Mode</label>
-              <div className="flex flex-col gap-2 pt-1">
-                {[
-                  { val: "CASH", label: "Cash" },
-                  { val: "PhonePe", label: "PhonePe" },
-                  { val: "GPay", label: "GPay" },
-                  { val: "Paytm", label: "Paytm" },
-                  { val: "CREDIT", label: "Credit (Pending)" },
-                  { val: "Others", label: "Others" },
-                ].map(({ val, label }) => (
-                  <label key={val} className="flex items-center gap-2 cursor-pointer">
-                    <div
-                      className="w-4 h-4 rounded-full border-2 flex items-center justify-center transition-colors"
-                      style={form.paymentMode === val
-                        ? { borderColor: "#2563EB", background: "#2563EB" }
-                        : { borderColor: "#D4D4D8" }}
-                      onClick={() => onChange({ paymentMode: val })}
-                    >
-                      {form.paymentMode === val && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
-                    </div>
-                    <span className="text-[12px]" style={{ color: "#52525B" }}>{label}</span>
-                  </label>
-                ))}
-              </div>
-              {form.paymentMode === "Others" && (
-                <div className="mt-3">
-                  <label className="block text-[11px] font-medium mb-1" style={{ color: "#71717A" }}>Specify Payment App *</label>
-                  <input
-                    type="text"
-                    required
-                    value={form.otherPaymentApp || ""}
-                    onChange={(e) => onChange({ otherPaymentApp: e.target.value })}
-                    placeholder="Enter payment app name..."
-                    className="w-full px-3 py-2 rounded-lg text-[13px] border outline-none transition-colors focus:border-blue-500"
-                    style={{ borderColor: "#D4D4D8", background: "#FFFFFF", color: "#18181B" }}
-                  />
-                </div>
-              )}
-            </div>
-          </div>
         </div>
 
-        {/* Notes */}
-        <div>
-          <label className={labelCls} style={labelSty}>Notes (optional)</label>
+        {/* ── STEP E: Payment Amount ────────────────────────────────────── */}
+        {form.paymentMode !== "" && (
+          <div className="rounded-xl p-4 space-y-4" style={{ background: "#F8F8F8", border: "1px solid #E4E4E7" }}>
+            <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "#71717A" }}>⑤ Payment Amount</p>
+
+            {/* ── CREDIT — full udhari (COMMERCIAL only) ── */}
+            {form.paymentMode === "CREDIT" && (
+              <>
+                <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg" style={{ background: "#FEF3C7", border: "1px solid #FDE68A" }}>
+                  <span className="text-[13px]">⚠️</span>
+                  <p className="text-[11px] font-medium" style={{ color: "#92400E" }}>
+                    <strong>Credit / Udhari selected</strong> — this amount will be added to the customer&apos;s Credit Ledger. Leave blank to auto-use product rate × qty.
+                  </p>
+                </div>
+                <div>
+                  <label className={labelCls} style={labelSty}>Credit / Udhari Amount (₹)</label>
+                  <div className="relative">
+                    <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5" style={{ color: "#D97706" }} />
+                    <input
+                      type="number" min="0" step="0.01"
+                      value={form.cashCollected}
+                      onChange={(e) => onChange({ cashCollected: e.target.value })}
+                      placeholder={totalValue > 0 ? `Auto: ₹${totalValue.toFixed(0)}` : "Enter amount..."}
+                      className={inputCls}
+                      style={{ ...inputSty, paddingLeft: "2.25rem", borderColor: "#F59E0B", background: "#FFFBEB" }}
+                    />
+                  </div>
+                  {totalValue > 0 && (
+                    <p className="text-[11px] mt-1" style={{ color: "#92400E" }}>
+                      📋 Rate: ₹{selectedProduct!.saleRate} × {form.deliveredQty || 0} = ₹{totalValue.toFixed(0)} (used if left blank)
+                    </p>
+                  )}
+                </div>
+              </>
+            )}
+
+            {/* ── CASH / PhonePe / GPay / Paytm / Others — single amount ── */}
+            {["CASH", "PhonePe", "GPay", "Paytm", "Others"].includes(form.paymentMode) && (
+              <div>
+                <label className={labelCls} style={labelSty}>Amount Collected (₹)</label>
+                <div className="relative">
+                  <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5" style={{ color: "#A1A1AA" }} />
+                  <input
+                    type="number" min="0" step="0.01"
+                    value={form.cashCollected}
+                    onChange={(e) => onChange({ cashCollected: e.target.value })}
+                    placeholder="0.00"
+                    className={inputCls}
+                    style={{ ...inputSty, paddingLeft: "2.25rem" }}
+                  />
+                </div>
+                {totalValue > 0 && (
+                  <p className="text-[11px] mt-1" style={{ color: "#A1A1AA" }}>
+                    Rate: ₹{selectedProduct!.saleRate} × {form.deliveredQty || 0} = ₹{totalValue.toFixed(0)}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* ── PARTIAL — DOMESTIC: Cash + Online ── */}
+            {form.paymentMode === "PARTIAL" && isDomestic && (
+              <>
+                <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg" style={{ background: "#EFF6FF", border: "1px solid #BFDBFE" }}>
+                  <span className="text-[13px]">💳</span>
+                  <p className="text-[11px] font-medium" style={{ color: "#1D4ED8" }}>
+                    <strong>Partial Payment</strong> — enter the cash collected first, then select the online payment method and enter that amount.
+                  </p>
+                </div>
+
+                {/* Cash amount */}
+                <div>
+                  <label className={labelCls} style={labelSty}>Cash Collected (₹)</label>
+                  <div className="relative">
+                    <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5" style={{ color: "#16A34A" }} />
+                    <input
+                      type="number" min="0" step="0.01"
+                      value={form.cashCollected}
+                      onChange={(e) => onChange({ cashCollected: e.target.value })}
+                      placeholder="Cash amount received"
+                      className={inputCls}
+                      style={{ ...inputSty, paddingLeft: "2.25rem", borderColor: "#BBF7D0", background: "#F0FDF4" }}
+                    />
+                  </div>
+                  {totalValue > 0 && (
+                    <p className="text-[11px] mt-1" style={{ color: "#A1A1AA" }}>
+                      Total: ₹{totalValue.toFixed(0)}
+                    </p>
+                  )}
+                </div>
+
+                {/* Online payment mode selector */}
+                <div>
+                  <label className={labelCls} style={labelSty}>Online Payment Via *</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {onlineModes.map(({ val, label }) => {
+                      const active = form.partialCollectionMode === val;
+                      return (
+                        <button
+                          key={val}
+                          type="button"
+                          onClick={() => onChange({ partialCollectionMode: val, partialCollectionOther: "" })}
+                          className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border text-[12px] font-medium transition-all"
+                          style={{
+                            borderColor: active ? "#2563EB" : "#E4E4E7",
+                            background: active ? "#EFF6FF" : "#FFFFFF",
+                            color: active ? "#1D4ED8" : "#52525B",
+                          }}
+                        >
+                          {active && <CheckCircle2 className="w-3 h-3" style={{ color: "#2563EB" }} />}
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {form.partialCollectionMode === "Others" && (
+                    <div className="mt-2">
+                      <input
+                        type="text"
+                        required
+                        value={form.partialCollectionOther}
+                        onChange={(e) => onChange({ partialCollectionOther: e.target.value })}
+                        placeholder="Specify app name (required) *"
+                        className="w-full px-3 py-2 rounded-lg text-[13px] border outline-none transition-colors focus:border-blue-500"
+                        style={{ borderColor: "#FCA5A5", background: "#FFF", color: "#18181B" }}
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {/* Online amount */}
+                <div>
+                  <label className={labelCls} style={labelSty}>Online Amount (₹)</label>
+                  <div className="relative">
+                    <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5" style={{ color: "#7C3AED" }} />
+                    <input
+                      type="number" min="0" step="0.01"
+                      value={form.creditAmount}
+                      onChange={(e) => onChange({ creditAmount: e.target.value })}
+                      placeholder="Online amount received"
+                      className={inputCls}
+                      style={{ ...inputSty, paddingLeft: "2.25rem", borderColor: "#DDD6FE", background: "#F5F3FF" }}
+                    />
+                  </div>
+                  {totalValue > 0 && (
+                    <p className="text-[11px] mt-1" style={{ color: "#A1A1AA" }}>
+                      Total: ₹{totalValue.toFixed(0)} — Cash: ₹{Number(form.cashCollected || 0).toFixed(0)} = Online: ₹{Math.max(0, totalValue - Number(form.cashCollected || 0)).toFixed(0)}
+                    </p>
+                  )}
+                </div>
+              </>
+            )}
+
+            {/* ── PARTIAL — COMMERCIAL: Collection mode + Cash + Credit/Udhari ── */}
+            {form.paymentMode === "PARTIAL" && !isDomestic && (
+              <>
+                <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg" style={{ background: "#EFF6FF", border: "1px solid #BFDBFE" }}>
+                  <span className="text-[13px]">💳</span>
+                  <p className="text-[11px] font-medium" style={{ color: "#1D4ED8" }}>
+                    <strong>Partial Payment</strong> — select how the cash was collected, enter the cash amount, then enter the remaining credit/udhari.
+                  </p>
+                </div>
+
+                {/* Cash collection method */}
+                <div>
+                  <label className={labelCls} style={labelSty}>Cash Collected Via *</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {collectionModes.map(({ val, label }) => {
+                      const active = form.partialCollectionMode === val;
+                      return (
+                        <button
+                          key={val}
+                          type="button"
+                          onClick={() => onChange({ partialCollectionMode: val, partialCollectionOther: "" })}
+                          className="px-3 py-2 rounded-lg border text-center text-[12px] font-medium transition-all"
+                          style={{
+                            borderColor: active ? "#2563EB" : "#E4E4E7",
+                            background: active ? "#EFF6FF" : "#FFFFFF",
+                            color: active ? "#1D4ED8" : "#52525B",
+                          }}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {form.partialCollectionMode === "Others" && (
+                    <div className="mt-2">
+                      <input
+                        type="text"
+                        required
+                        value={form.partialCollectionOther}
+                        onChange={(e) => onChange({ partialCollectionOther: e.target.value })}
+                        placeholder="Specify app name (required) *"
+                        className="w-full px-3 py-2 rounded-lg text-[13px] border outline-none transition-colors focus:border-blue-500"
+                        style={{ borderColor: "#FCA5A5", background: "#FFF", color: "#18181B" }}
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {/* Cash collected */}
+                <div>
+                  <label className={labelCls} style={labelSty}>Cash Collected (₹) *</label>
+                  <div className="relative">
+                    <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5" style={{ color: "#16A34A" }} />
+                    <input
+                      type="number" min="0" step="0.01"
+                      value={form.cashCollected}
+                      onChange={(e) => onChange({ cashCollected: e.target.value })}
+                      placeholder="Amount received now"
+                      className={inputCls}
+                      style={{ ...inputSty, paddingLeft: "2.25rem", borderColor: "#BBF7D0", background: "#F0FDF4" }}
+                    />
+                  </div>
+                </div>
+
+                {/* Credit / udhari amount */}
+                <div>
+                  <label className={labelCls} style={labelSty}>Credit / Udhari Amount (₹) *</label>
+                  <div className="relative">
+                    <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5" style={{ color: "#D97706" }} />
+                    <input
+                      type="number" min="0" step="0.01"
+                      value={form.creditAmount}
+                      onChange={(e) => onChange({ creditAmount: e.target.value })}
+                      placeholder="Remaining amount on credit"
+                      className={inputCls}
+                      style={{ ...inputSty, paddingLeft: "2.25rem", borderColor: "#FDE68A", background: "#FFFBEB" }}
+                    />
+                  </div>
+                  {totalValue > 0 && (
+                    <p className="text-[11px] mt-1" style={{ color: "#92400E" }}>
+                      Total: ₹{totalValue.toFixed(0)} — Cash: ₹{Number(form.cashCollected || 0).toFixed(0)} = Udhari: ₹{Math.max(0, totalValue - Number(form.cashCollected || 0)).toFixed(0)}
+                    </p>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* ── STEP F: Notes ─────────────────────────────────────────────── */}
+        <div className="rounded-xl p-4" style={{ background: "#F8F8F8", border: "1px solid #E4E4E7" }}>
+          <p className="text-[11px] font-semibold uppercase tracking-wide mb-3" style={{ color: "#71717A" }}>⑥ Notes (Optional)</p>
           <div className="relative">
             <FileText className="absolute left-3 top-3 w-3.5 h-3.5" style={{ color: "#A1A1AA" }} />
             <textarea
@@ -655,12 +906,18 @@ function Step2DeliveryDetails({
             />
           </div>
         </div>
+
       </div>
     </div>
   );
 }
 
 // ─── Step 3: Review & Confirm ─────────────────────────────────────────────────
+
+
+// ─── Step 3: Review & Confirm ─────────────────────────────────────────────────
+
+
 
 function Step3Review({
   customer,
@@ -672,6 +929,16 @@ function Step3Review({
   product: ProductRecord | undefined;
 }) {
   const isDomestic = customer.type === "DOMESTIC";
+  const collectionLabel = form.partialCollectionMode === "Others"
+    ? (form.partialCollectionOther || "Others")
+    : (form.partialCollectionMode || "Cash");
+  const paymentLabel =
+    form.paymentMode === "CASH" ? "Cash"
+    : form.paymentMode === "CREDIT" ? "Credit / Udhari (Full)"
+    : form.paymentMode === "PARTIAL" ? `Partial (via ${collectionLabel} + Udhari)`
+    : form.paymentMode === "Others" ? (form.otherPaymentApp || "Others")
+    : form.paymentMode;
+
   const rows = [
     { label: "Customer", value: customer.name },
     { label: "Type", value: isDomestic ? "Regular (Domestic)" : "Commercial" },
@@ -686,17 +953,13 @@ function Step3Review({
     { label: "Delivered", value: `${form.deliveredQty} cylinder${Number(form.deliveredQty) !== 1 ? "s" : ""}`, highlight: true },
     Number(form.returnedQty) > 0 ? { label: "Empty Returned", value: `${form.returnedQty} empty cylinder${Number(form.returnedQty) !== 1 ? "s" : ""}` } : null,
     Number(form.pendingQty) > 0 ? { label: "Pending", value: `${form.pendingQty} not delivered`, warn: true } : null,
-    { label: "Cash Collected", value: `₹${Number(form.cashCollected || 0).toFixed(2)}`, highlight: true },
-    {
-      label: "Payment Mode",
-      value: form.paymentMode === "CASH"
-        ? "Cash"
-        : form.paymentMode === "CREDIT"
-          ? "Credit (Pending)"
-          : form.paymentMode === "Others"
-            ? (form.otherPaymentApp || "Others")
-            : form.paymentMode
-    },
+    { label: "Payment Mode", value: paymentLabel },
+    form.paymentMode !== "CREDIT"
+      ? { label: form.paymentMode === "PARTIAL" ? "Cash Received" : "Amount Collected", value: `₹${Number(form.cashCollected || 0).toFixed(2)}`, highlight: true }
+      : { label: "Credit Amount", value: `₹${Number(form.cashCollected || 0).toFixed(2)}`, warn: true },
+    form.paymentMode === "PARTIAL" && Number(form.creditAmount) > 0
+      ? { label: "Udhari (Credit)", value: `₹${Number(form.creditAmount).toFixed(2)}`, warn: true }
+      : null,
     form.notes ? { label: "Notes", value: form.notes } : null,
   ].filter(Boolean);
 
@@ -760,7 +1023,10 @@ export function MyDeliveriesClient({
     returnedQty: "0",
     pendingQty: "0",
     cashCollected: "",
+    creditAmount: "",
     paymentMode: "CASH",
+    partialCollectionMode: "CASH",
+    partialCollectionOther: "",
     notes: "",
     date: todayStr(),
     otherPaymentApp: "",
@@ -774,14 +1040,46 @@ export function MyDeliveriesClient({
   const pastDeliveries = deliveries.filter((d) => !isToday(d.date));
 
   const todayCylinders = todayDeliveries.reduce((a, d) => a + d.deliveredQty, 0);
-  const todayCash = todayDeliveries.reduce((a, d) => a + d.cashCollected, 0);
+  const todayTotals = todayDeliveries.reduce(
+    (acc, d) => {
+      const isDom = d.customer.type === "DOMESTIC";
+      const isPartial = d.paymentMode === "PARTIAL";
+      const isCredit = d.paymentMode === "CREDIT";
+      const isCash = d.paymentMode === "CASH";
+
+      let cashVal = 0;
+      let onlineVal = 0;
+      let creditVal = 0;
+
+      if (isCash) {
+        cashVal = d.cashCollected;
+      } else if (isCredit) {
+        creditVal = d.creditAmount || 0;
+      } else if (isPartial) {
+        cashVal = d.cashCollected;
+        if (isDom) {
+          onlineVal = d.creditAmount || 0;
+        } else {
+          creditVal = d.creditAmount || 0;
+        }
+      } else {
+        onlineVal = d.cashCollected;
+      }
+
+      acc.cash += cashVal;
+      acc.online += onlineVal;
+      acc.udhari += creditVal;
+      return acc;
+    },
+    { cash: 0, online: 0, udhari: 0 }
+  );
   const todayPending = todayDeliveries.reduce((a, d) => a + d.pendingQty, 0);
   const todayCustomers = todayDeliveries.length;
 
   function openWizard() {
     setStep(1);
     setSelectedCustomer(null);
-    setForm({ productId: "", deliveredQty: "1", returnedQty: "0", pendingQty: "0", cashCollected: "", paymentMode: "CASH", notes: "", date: todayStr(), otherPaymentApp: "" });
+    setForm({ productId: "", deliveredQty: "1", returnedQty: "0", pendingQty: "0", cashCollected: "", creditAmount: "", paymentMode: "CASH", partialCollectionMode: "CASH", partialCollectionOther: "", notes: "", date: todayStr(), otherPaymentApp: "" });
     setFormError("");
     setWizardOpen(true);
   }
@@ -800,6 +1098,16 @@ export function MyDeliveriesClient({
       setFormError("Please specify the payment app name.");
       return;
     }
+    if (form.paymentMode === "PARTIAL") {
+      if (!Number(form.cashCollected) && !Number(form.creditAmount)) {
+        setFormError("For partial payment, enter cash collected and/or credit amount.");
+        return;
+      }
+      if (form.partialCollectionMode === "Others" && !form.partialCollectionOther.trim()) {
+        setFormError("Please specify the app name for cash collection method.");
+        return;
+      }
+    }
     setFormError("");
     setStep(3);
   }
@@ -814,9 +1122,10 @@ export function MyDeliveriesClient({
     fd.append("returnedQty", form.returnedQty);
     fd.append("pendingQty", form.pendingQty);
     fd.append("cashCollected", form.cashCollected || "0");
+    fd.append("creditAmount", form.creditAmount || "0");
     fd.append("paymentMode", form.paymentMode === "Others" ? (form.otherPaymentApp || "Others").trim() : form.paymentMode);
+    fd.append("partialCollectionMode", form.partialCollectionMode === "Others" ? (form.partialCollectionOther || "Others").trim() : (form.partialCollectionMode || "CASH"));
     fd.append("notes", form.notes || "");
-    
     fd.append("date", form.date);
     fd.append("deliveredById", userId);
     startTransition(async () => {
@@ -874,9 +1183,9 @@ export function MyDeliveriesClient({
           color="blue"
         />
         <StatsCard
-          title="Cash Collected"
-          value={formatCurrency(todayCash)}
-          subtitle="Today"
+          title="Collected (Cash + Online)"
+          value={formatCurrency(todayTotals.cash + todayTotals.online)}
+          subtitle={`Cash: ${formatCurrency(todayTotals.cash)} | Online: ${formatCurrency(todayTotals.online)}`}
           icon={<Wallet className="w-4 h-4" />}
           color="green"
         />
@@ -956,7 +1265,17 @@ export function MyDeliveriesClient({
                     <span className="text-[12px] font-semibold" style={{ color: "#52525B" }}>{date}</span>
                     <div className="flex-1 h-px" style={{ background: "#E4E4E7" }} />
                     <span className="text-[11px]" style={{ color: "#A1A1AA" }}>
-                      {recs.reduce((a, r) => a + r.deliveredQty, 0)} cyl · {formatCurrency(recs.reduce((a, r) => a + r.cashCollected, 0))}
+                      {recs.reduce((a, r) => a + r.deliveredQty, 0)} cyl · {(() => {
+                        const totalColl = recs.reduce((acc, r) => {
+                          const isDom = r.customer.type === "DOMESTIC";
+                          const isPartial = r.paymentMode === "PARTIAL";
+                          if (isPartial && isDom) {
+                            return acc + r.cashCollected + (r.creditAmount || 0);
+                          }
+                          return acc + r.cashCollected;
+                        }, 0);
+                        return formatCurrency(totalColl);
+                      })()}
                     </span>
                   </div>
                   <DeliveryTable deliveries={recs} compact />
@@ -1078,6 +1397,28 @@ export function MyDeliveriesClient({
   );
 }
 
+// ─── Payment mode badge helper ────────────────────────────────────────────────
+
+function PaymentBadge({ mode }: { mode: string }) {
+  const cfg: Record<string, { label: string; bg: string; color: string }> = {
+    CASH:    { label: "Cash",    bg: "#F0FDF4", color: "#16A34A" },
+    CREDIT:  { label: "Udhari", bg: "#FEF3C7", color: "#B45309" },
+    PARTIAL: { label: "Partial",bg: "#EFF6FF", color: "#1D4ED8" },
+    PhonePe: { label: "PhonePe",bg: "#F5F3FF", color: "#7C3AED" },
+    GPay:    { label: "GPay",   bg: "#F0FDF4", color: "#059669" },
+    Paytm:   { label: "Paytm",  bg: "#EFF6FF", color: "#2563EB" },
+  };
+  const c = cfg[mode] ?? { label: mode, bg: "#F4F4F5", color: "#52525B" };
+  return (
+    <span
+      className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold"
+      style={{ background: c.bg, color: c.color }}
+    >
+      {c.label}
+    </span>
+  );
+}
+
 // ─── Delivery table ───────────────────────────────────────────────────────────
 
 function DeliveryTable({ deliveries, compact = false }: { deliveries: DeliveryRecord[]; compact?: boolean }) {
@@ -1093,69 +1434,152 @@ function DeliveryTable({ deliveries, compact = false }: { deliveries: DeliveryRe
               <th className="px-4 py-2.5 text-center font-medium" style={{ color: "#71717A" }}>Returned</th>
               <th className="px-4 py-2.5 text-center font-medium" style={{ color: "#71717A" }}>Pending</th>
               <th className="px-4 py-2.5 text-right font-medium" style={{ color: "#71717A" }}>Cash</th>
+              <th className="px-4 py-2.5 text-right font-medium" style={{ color: "#71717A" }}>Online</th>
+              <th className="px-4 py-2.5 text-right font-medium" style={{ color: "#71717A" }}>Udhari</th>
+              <th className="px-4 py-2.5 text-center font-medium" style={{ color: "#71717A" }}>Mode</th>
               {!compact && <th className="px-4 py-2.5 text-center font-medium" style={{ color: "#71717A" }}>Time</th>}
             </tr>
           </thead>
           <tbody>
-            {deliveries.map((d, i) => (
-              <tr key={d.id}
-                style={{ background: i % 2 === 0 ? "#FFFFFF" : "#FAFAFA", borderBottom: "1px solid #F4F4F5" }}>
-                <td className="px-4 py-3">
-                  <p className="font-medium" style={{ color: "#18181B" }}>{d.customer.name}</p>
-                  <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                    <span className="text-[11px]" style={{ color: "#A1A1AA" }}>{d.customer.phone}</span>
-                    {d.customer.customerCode && (
-                      <span className="flex items-center gap-0.5 text-[11px] font-mono" style={{ color: "#2563EB" }}>
-                        <Hash className="w-2.5 h-2.5" />{d.customer.customerCode}
+            {deliveries.map((d, i) => {
+              const isDom = d.customer.type === "DOMESTIC";
+              const isPartial = d.paymentMode === "PARTIAL";
+              const isCredit = d.paymentMode === "CREDIT";
+              const isCash = d.paymentMode === "CASH";
+
+              let cashVal = 0;
+              let onlineVal = 0;
+              let creditVal = 0;
+
+              if (isCash) {
+                cashVal = d.cashCollected;
+              } else if (isCredit) {
+                creditVal = d.creditAmount || 0;
+              } else if (isPartial) {
+                cashVal = d.cashCollected;
+                if (isDom) {
+                  onlineVal = d.creditAmount || 0;
+                } else {
+                  creditVal = d.creditAmount || 0;
+                }
+              } else {
+                onlineVal = d.cashCollected;
+              }
+
+              return (
+                <tr key={d.id}
+                  style={{ background: i % 2 === 0 ? "#FFFFFF" : "#FAFAFA", borderBottom: "1px solid #F4F4F5" }}>
+                  <td className="px-4 py-3">
+                    <p className="font-medium" style={{ color: "#18181B" }}>{d.customer.name}</p>
+                    <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                      <span className="text-[11px]" style={{ color: "#A1A1AA" }}>{d.customer.phone}</span>
+                      {d.customer.customerCode && (
+                        <span className="flex items-center gap-0.5 text-[11px] font-mono" style={{ color: "#2563EB" }}>
+                          <Hash className="w-2.5 h-2.5" />{d.customer.customerCode}
+                        </span>
+                      )}
+                      <span
+                        className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium"
+                        style={d.customer.type === "DOMESTIC"
+                          ? { background: "#EFF6FF", color: "#2563EB" }
+                          : { background: "#F5F3FF", color: "#7C3AED" }}
+                      >
+                        {d.customer.type === "DOMESTIC" ? "Regular" : "Commercial"}
                       </span>
-                    )}
-                    <span
-                      className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium"
-                      style={d.customer.type === "DOMESTIC"
-                        ? { background: "#EFF6FF", color: "#2563EB" }
-                        : { background: "#F5F3FF", color: "#7C3AED" }}
-                    >
-                      {d.customer.type === "DOMESTIC" ? "Regular" : "Commercial"}
-                    </span>
-                  </div>
-                </td>
-                <td className="px-4 py-3 text-[12px]" style={{ color: "#52525B" }}>{d.product.name}</td>
-                <td className="px-4 py-3 text-center font-bold" style={{ color: "#2563EB" }}>{d.deliveredQty}</td>
-                <td className="px-4 py-3 text-center" style={{ color: "#52525B" }}>{d.returnedQty || "—"}</td>
-                <td className="px-4 py-3 text-center font-medium"
-                  style={{ color: d.pendingQty > 0 ? "#D97706" : "#A1A1AA" }}>
-                  {d.pendingQty > 0 ? d.pendingQty : "—"}
-                </td>
-                <td className="px-4 py-3 text-right font-semibold" style={{ color: "#16A34A" }}>
-                  {formatCurrency(d.cashCollected)}
-                </td>
-                {!compact && (
-                  <td className="px-4 py-3 text-center text-[11px]" style={{ color: "#A1A1AA" }}>
-                    {fmtTime(d.createdAt)}
+                    </div>
                   </td>
-                )}
-              </tr>
-            ))}
+                  <td className="px-4 py-3 text-[12px]" style={{ color: "#52525B" }}>{d.product.name}</td>
+                  <td className="px-4 py-3 text-center font-bold" style={{ color: "#2563EB" }}>{d.deliveredQty}</td>
+                  <td className="px-4 py-3 text-center" style={{ color: "#52525B" }}>{d.returnedQty || "—"}</td>
+                  <td className="px-4 py-3 text-center font-medium"
+                    style={{ color: d.pendingQty > 0 ? "#D97706" : "#A1A1AA" }}>
+                    {d.pendingQty > 0 ? d.pendingQty : "—"}
+                  </td>
+                  <td className="px-4 py-3 text-right font-semibold" style={{ color: cashVal > 0 ? "#16A34A" : "#A1A1AA" }}>
+                    {cashVal > 0 ? formatCurrency(cashVal) : "—"}
+                  </td>
+                  <td className="px-4 py-3 text-right font-semibold" style={{ color: onlineVal > 0 ? "#7C3AED" : "#A1A1AA" }}>
+                    {onlineVal > 0 ? formatCurrency(onlineVal) : "—"}
+                  </td>
+                  <td className="px-4 py-3 text-right font-semibold" style={{ color: creditVal > 0 ? "#B45309" : "#A1A1AA" }}>
+                    {creditVal > 0 ? formatCurrency(creditVal) : "—"}
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    <PaymentBadge mode={d.paymentMode || "CASH"} />
+                  </td>
+                  {!compact && (
+                    <td className="px-4 py-3 text-center text-[11px]" style={{ color: "#A1A1AA" }}>
+                      {fmtTime(d.createdAt)}
+                    </td>
+                  )}
+                </tr>
+              );
+            })}
           </tbody>
           <tfoot>
-            <tr style={{ background: "#F8F8F8", borderTop: "1px solid #E4E4E7" }}>
-              <td colSpan={2} className="px-4 py-2.5 text-[12px] font-semibold" style={{ color: "#52525B" }}>
-                Total ({deliveries.length} records)
-              </td>
-              <td className="px-4 py-2.5 text-center text-[12px] font-bold" style={{ color: "#2563EB" }}>
-                {deliveries.reduce((a, d) => a + d.deliveredQty, 0)}
-              </td>
-              <td className="px-4 py-2.5 text-center text-[12px]" style={{ color: "#52525B" }}>
-                {deliveries.reduce((a, d) => a + d.returnedQty, 0)}
-              </td>
-              <td className="px-4 py-2.5 text-center text-[12px] font-medium" style={{ color: "#D97706" }}>
-                {deliveries.reduce((a, d) => a + d.pendingQty, 0) || "—"}
-              </td>
-              <td className="px-4 py-2.5 text-right text-[12px] font-bold" style={{ color: "#16A34A" }}>
-                {formatCurrency(deliveries.reduce((a, d) => a + d.cashCollected, 0))}
-              </td>
-              {!compact && <td />}
-            </tr>
+            {(() => {
+              const totals = deliveries.reduce(
+                (acc, d) => {
+                  const isDom = d.customer.type === "DOMESTIC";
+                  const isPartial = d.paymentMode === "PARTIAL";
+                  const isCredit = d.paymentMode === "CREDIT";
+                  const isCash = d.paymentMode === "CASH";
+
+                  let cashVal = 0;
+                  let onlineVal = 0;
+                  let creditVal = 0;
+
+                  if (isCash) {
+                    cashVal = d.cashCollected;
+                  } else if (isCredit) {
+                    creditVal = d.creditAmount || 0;
+                  } else if (isPartial) {
+                    cashVal = d.cashCollected;
+                    if (isDom) {
+                      onlineVal = d.creditAmount || 0;
+                    } else {
+                      creditVal = d.creditAmount || 0;
+                    }
+                  } else {
+                    onlineVal = d.cashCollected;
+                  }
+
+                  acc.cash += cashVal;
+                  acc.online += onlineVal;
+                  acc.udhari += creditVal;
+                  return acc;
+                },
+                { cash: 0, online: 0, udhari: 0 }
+              );
+
+              return (
+                <tr style={{ background: "#F8F8F8", borderTop: "1px solid #E4E4E7" }}>
+                  <td colSpan={2} className="px-4 py-2.5 text-[12px] font-semibold" style={{ color: "#52525B" }}>
+                    Total ({deliveries.length} records)
+                  </td>
+                  <td className="px-4 py-2.5 text-center text-[12px] font-bold" style={{ color: "#2563EB" }}>
+                    {deliveries.reduce((a, d) => a + d.deliveredQty, 0)}
+                  </td>
+                  <td className="px-4 py-2.5 text-center text-[12px]" style={{ color: "#52525B" }}>
+                    {deliveries.reduce((a, d) => a + d.returnedQty, 0)}
+                  </td>
+                  <td className="px-4 py-2.5 text-center text-[12px] font-medium" style={{ color: "#D97706" }}>
+                    {deliveries.reduce((a, d) => a + d.pendingQty, 0) || "—"}
+                  </td>
+                  <td className="px-4 py-2.5 text-right text-[12px] font-bold" style={{ color: "#16A34A" }}>
+                    {totals.cash > 0 ? formatCurrency(totals.cash) : "—"}
+                  </td>
+                  <td className="px-4 py-2.5 text-right text-[12px] font-bold" style={{ color: "#7C3AED" }}>
+                    {totals.online > 0 ? formatCurrency(totals.online) : "—"}
+                  </td>
+                  <td className="px-4 py-2.5 text-right text-[12px] font-bold" style={{ color: "#B45309" }}>
+                    {totals.udhari > 0 ? formatCurrency(totals.udhari) : "—"}
+                  </td>
+                  <td />
+                  {!compact && <td />}
+                </tr>
+              );
+            })()}
           </tfoot>
         </table>
       </div>

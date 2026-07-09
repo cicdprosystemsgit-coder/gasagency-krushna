@@ -10,19 +10,25 @@ import {
 } from "@/app/actions/analytics";
 import { AnalyticsDashboardClient } from "./AnalyticsDashboardClient";
 
-export default async function AnalyticsPage() {
+interface PageProps {
+  searchParams: Promise<{ dateFrom?: string; dateTo?: string }>;
+}
+
+export default async function AnalyticsPage({ searchParams }: PageProps) {
   const session = await getSession();
   if (!session || !["ADMIN", "MANAGER"].includes(session.role) || !session.agencyId) {
     redirect("/login");
   }
 
+  const { dateFrom, dateTo } = await searchParams;
+
   const [revenue, productSales, deliveryPerf, topCustomers, plSummary, inventory] =
     await Promise.all([
       getRevenueTrend(6),
-      getProductSales(),
-      getDeliveryBoyPerformance(),
+      getProductSales(dateFrom, dateTo),
+      getDeliveryBoyPerformance(dateFrom, dateTo),
       getTopCustomers(),
-      getPLSummary(),
+      getPLSummary(dateFrom, dateTo),
       getInventoryTurnover(),
     ]);
 
@@ -34,6 +40,8 @@ export default async function AnalyticsPage() {
       topCustomers={topCustomers.data}
       plSummary={plSummary.data}
       inventory={inventory.data}
+      initialDateFrom={dateFrom || ""}
+      initialDateTo={dateTo || ""}
     />
   );
 }

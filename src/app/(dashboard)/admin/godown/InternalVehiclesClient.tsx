@@ -550,11 +550,12 @@ export function InternalVehiclesClient({
         </form>
       </Modal>
 
-      {/* Record Trip Modal */}
+      {/* Record       {/* Record Trip Modal */}
       <Modal
         open={tripModal}
         onClose={() => setTripModal(false)}
         title="Record Vehicle Departure"
+        size="lg"
         centerFooter={true}
         footer={
           <>
@@ -639,92 +640,97 @@ export function InternalVehiclesClient({
                   <p className="text-[10px] text-slate-400 mt-0.5">Click "Add Cylinder Type" to add cylinders to this trip.</p>
                 </div>
               ) : (
-                <div className="border rounded-xl overflow-visible bg-white shadow-xs">
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="bg-slate-50 border-b border-slate-200">
-                        <th className="py-2 px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400">Type</th>
-                        <th className="py-2 px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400 text-center w-28">Quantity</th>
-                        <th className="py-2 px-3 w-10 text-center"></th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {departureItems.map((row) => (
-                        <tr key={row.id} className="hover:bg-slate-50/30 transition-colors">
-                          <td className="p-2">
-                            <CustomSelect
-                              value={row.productId}
-                              onChange={(val) => {
-                                const selectedProduct = productsState.find(p => p.id === val);
-                                setDepartureItems(prev =>
-                                  prev.map(r => r.id === row.id ? { ...r, productId: val, productName: selectedProduct?.name ?? "" } : r)
-                                );
-                              }}
-                              options={productsState.map((p) => ({ value: p.id, label: p.name }))}
-                              placeholder="Select Type..."
-                              onAddClick={() => {
-                                openAddType((p) => {
-                                  setDepartureItems(prev =>
-                                    prev.map(r => r.id === row.id ? { ...r, productId: p.id, productName: p.name } : r)
-                                  );
-                                });
-                              }}
-                              addLabel="+ Add New Type..."
-                            />
-                          </td>
-                          <td className="p-2">
-                            <div className="flex items-center gap-1 justify-center">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setDepartureItems(prev =>
-                                    prev.map(r => r.id === row.id ? { ...r, loaded: Math.max(0, r.loaded - 1) } : r)
-                                  );
-                                }}
-                                className="w-6 h-6 flex items-center justify-center rounded border border-slate-200 hover:bg-slate-100 bg-white"
-                              >
-                                <Minus className="w-3 h-3 text-slate-600" />
-                              </button>
-                              <input
-                                type="number"
-                                min="0"
-                                value={row.loaded}
-                                onChange={(e) => {
-                                  const val = Math.max(0, parseInt(e.target.value) || 0);
-                                  setDepartureItems(prev =>
-                                    prev.map(r => r.id === row.id ? { ...r, loaded: val } : r)
-                                  );
-                                }}
-                                className="input text-center font-bold text-slate-800 text-[12px] w-12 p-1"
-                              />
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setDepartureItems(prev =>
-                                    prev.map(r => r.id === row.id ? { ...r, loaded: r.loaded + 1 } : r)
-                                  );
-                                }}
-                                className="w-6 h-6 flex items-center justify-center rounded border border-slate-200 hover:bg-slate-100 bg-white"
-                              >
-                                <Plus className="w-3 h-3 text-slate-600" />
-                              </button>
-                            </div>
-                          </td>
-                          <td className="p-2 text-center">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setDepartureItems(prev => prev.filter(r => r.id !== row.id));
-                              }}
-                              className="text-rose-500 hover:text-rose-700 p-1 hover:bg-rose-50 rounded"
-                            >
-                              <X className="w-3.5 h-3.5" />
-                            </button>
-                          </td>
+                <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-xs">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="bg-slate-50 border-b border-slate-200">
+                          <th className="py-2.5 px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400">Type</th>
+                          <th className="py-2.5 px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400 text-center w-36">Quantity</th>
+                          <th className="py-2.5 px-3 w-10 text-center"></th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {departureItems.map((row) => (
+                          <tr key={row.id} className="hover:bg-slate-50/30 transition-colors">
+                            <td className="p-2">
+                              <CustomSelect
+                                value={row.productId}
+                                onChange={(val) => {
+                                  const selectedProduct = productsState.find(p => p.id === val);
+                                  setDepartureItems(prev =>
+                                    prev.map(r => r.id === row.id ? { ...r, productId: val, productName: selectedProduct?.name ?? "" } : r)
+                                  );
+                                }}
+                                options={productsState.map((p) => ({ value: p.id, label: p.name }))}
+                                placeholder="Select Type..."
+                                onAddClick={() => {
+                                  openAddType((p) => {
+                                    setDepartureItems(prev =>
+                                      prev.map(r => r.id === row.id ? { ...r, productId: p.id, productName: p.name } : r)
+                                    );
+                                  });
+                                }}
+                                addLabel="+ Add New Type..."
+                                size="sm"
+                              />
+                            </td>
+                            <td className="p-2">
+                              <div className="flex items-center justify-center">
+                                <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden h-7 bg-white">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setDepartureItems(prev =>
+                                        prev.map(r => r.id === row.id ? { ...r, loaded: Math.max(0, r.loaded - 1) } : r)
+                                      );
+                                    }}
+                                    className="w-7 h-7 flex items-center justify-center hover:bg-slate-50 transition-colors"
+                                  >
+                                    <Minus className="w-3 h-3 text-slate-500" />
+                                  </button>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    value={row.loaded}
+                                    onChange={(e) => {
+                                      const val = Math.max(0, parseInt(e.target.value) || 0);
+                                      setDepartureItems(prev =>
+                                        prev.map(r => r.id === row.id ? { ...r, loaded: val } : r)
+                                      );
+                                    }}
+                                    className="w-10 h-7 text-center font-semibold text-slate-800 text-[12px] focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none border-x border-slate-200"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setDepartureItems(prev =>
+                                        prev.map(r => r.id === row.id ? { ...r, loaded: r.loaded + 1 } : r)
+                                      );
+                                    }}
+                                    className="w-7 h-7 flex items-center justify-center hover:bg-slate-50 transition-colors"
+                                  >
+                                    <Plus className="w-3 h-3 text-slate-500" />
+                                  </button>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="p-2 text-center">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setDepartureItems(prev => prev.filter(r => r.id !== row.id));
+                                }}
+                                className="text-rose-500 hover:text-rose-700 p-1 hover:bg-rose-50 rounded"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                   {departureItems.length > 0 && (
                     <div className="flex items-center justify-between px-3 py-2 bg-slate-50 border-t border-slate-200">
                       <span className="text-[10px] font-bold text-slate-500 uppercase">Total Loaded</span>
@@ -754,6 +760,7 @@ export function InternalVehiclesClient({
         open={!!updateModal}
         onClose={() => setUpdateModal(null)}
         title="Update Vehicle Return"
+        size="lg"
         centerFooter={true}
         footer={
           <>
@@ -823,135 +830,142 @@ export function InternalVehiclesClient({
                   <p className="text-[10px] text-slate-400 mt-0.5">Click "Add Cylinder Type" to start reconciliation.</p>
                 </div>
               ) : (
-                <div className="border rounded-xl overflow-visible bg-white shadow-xs">
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="bg-slate-50 border-b border-slate-200">
-                        <th className="py-2 px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400">Type</th>
-                        <th className="py-2 px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400 text-center w-16">Loaded</th>
-                        <th className="py-2 px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400 text-center w-36">Empty Ret.</th>
-                        <th className="py-2 px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400 text-center w-36">Filled Ret.</th>
-                        <th className="py-2 px-3 w-10 text-center"></th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {returnItems.map((row) => (
-                        <tr key={row.id} className="hover:bg-slate-50/30 transition-colors">
-                          <td className="p-2">
-                            <CustomSelect
-                              value={row.productId}
-                              onChange={(val) => {
-                                const selectedProduct = productsState.find(p => p.id === val);
-                                setReturnItems(prev =>
-                                  prev.map(r => r.id === row.id ? { ...r, productId: val, productName: selectedProduct?.name ?? "" } : r)
-                                );
-                              }}
-                              options={productsState.map((p) => ({ value: p.id, label: p.name }))}
-                              placeholder="Select Type..."
-                              onAddClick={() => {
-                                openAddType((p) => {
-                                  setReturnItems(prev =>
-                                    prev.map(r => r.id === row.id ? { ...r, productId: p.id, productName: p.name } : r)
-                                  );
-                                });
-                              }}
-                              addLabel="+ Add New Type..."
-                            />
-                          </td>
-                          <td className="p-2 text-center text-[12px] font-semibold text-slate-600">
-                            {row.loaded}
-                          </td>
-                          <td className="p-2">
-                            <div className="flex items-center gap-1 justify-center">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setReturnItems(prev =>
-                                    prev.map(r => r.id === row.id ? { ...r, emptyReturned: Math.max(0, r.emptyReturned - 1) } : r)
-                                  );
-                                }}
-                                className="w-7 h-7 flex items-center justify-center rounded border border-slate-200 hover:bg-slate-100 bg-white flex-shrink-0"
-                              >
-                                <Minus className="w-3 h-3 text-slate-600" />
-                              </button>
-                              <input
-                                type="number"
-                                min="0"
-                                value={row.emptyReturned}
-                                onChange={(e) => {
-                                  const val = Math.max(0, parseInt(e.target.value) || 0);
-                                  setReturnItems(prev =>
-                                    prev.map(r => r.id === row.id ? { ...r, emptyReturned: val } : r)
-                                  );
-                                }}
-                                className="input text-center font-bold text-slate-800 text-[13px] w-14 px-1 py-0 h-7"
-                              />
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setReturnItems(prev =>
-                                    prev.map(r => r.id === row.id ? { ...r, emptyReturned: r.emptyReturned + 1 } : r)
-                                  );
-                                }}
-                                className="w-7 h-7 flex items-center justify-center rounded border border-slate-200 hover:bg-slate-100 bg-white flex-shrink-0"
-                              >
-                                <Plus className="w-3 h-3 text-slate-600" />
-                              </button>
-                            </div>
-                          </td>
-                          <td className="p-2">
-                            <div className="flex items-center gap-1 justify-center">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setReturnItems(prev =>
-                                    prev.map(r => r.id === row.id ? { ...r, unsoldReturned: Math.max(0, r.unsoldReturned - 1) } : r)
-                                  );
-                                }}
-                                className="w-7 h-7 flex items-center justify-center rounded border border-slate-200 hover:bg-slate-100 bg-white flex-shrink-0"
-                              >
-                                <Minus className="w-3 h-3 text-slate-600" />
-                              </button>
-                              <input
-                                type="number"
-                                min="0"
-                                value={row.unsoldReturned}
-                                onChange={(e) => {
-                                  const val = Math.max(0, parseInt(e.target.value) || 0);
-                                  setReturnItems(prev =>
-                                    prev.map(r => r.id === row.id ? { ...r, unsoldReturned: val } : r)
-                                  );
-                                }}
-                                className="input text-center font-bold text-slate-800 text-[13px] w-14 px-1 py-0 h-7"
-                              />
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setReturnItems(prev =>
-                                    prev.map(r => r.id === row.id ? { ...r, unsoldReturned: r.unsoldReturned + 1 } : r)
-                                  );
-                                }}
-                                className="w-7 h-7 flex items-center justify-center rounded border border-slate-200 hover:bg-slate-100 bg-white flex-shrink-0"
-                              >
-                                <Plus className="w-3 h-3 text-slate-600" />
-                              </button>
-                            </div>
-                          </td>
-                          <td className="p-2 text-center">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setReturnItems(prev => prev.filter(r => r.id !== row.id));
-                              }}
-                              className="text-rose-500 hover:text-rose-700 p-1 hover:bg-rose-50 rounded"
-                            >
-                              <X className="w-3.5 h-3.5" />
-                            </button>
-                          </td>
+                <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-xs">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="bg-slate-50 border-b border-slate-200">
+                          <th className="py-2.5 px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400">Type</th>
+                          <th className="py-2.5 px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400 text-center w-16">Loaded</th>
+                          <th className="py-2.5 px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400 text-center w-36">Empty Ret.</th>
+                          <th className="py-2.5 px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400 text-center w-36">Filled Ret.</th>
+                          <th className="py-2.5 px-3 w-10 text-center"></th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {returnItems.map((row) => (
+                          <tr key={row.id} className="hover:bg-slate-50/30 transition-colors">
+                            <td className="p-2">
+                              <CustomSelect
+                                value={row.productId}
+                                onChange={(val) => {
+                                  const selectedProduct = productsState.find(p => p.id === val);
+                                  setReturnItems(prev =>
+                                    prev.map(r => r.id === row.id ? { ...r, productId: val, productName: selectedProduct?.name ?? "" } : r)
+                                  );
+                                }}
+                                options={productsState.map((p) => ({ value: p.id, label: p.name }))}
+                                placeholder="Select Type..."
+                                onAddClick={() => {
+                                  openAddType((p) => {
+                                    setReturnItems(prev =>
+                                      prev.map(r => r.id === row.id ? { ...r, productId: p.id, productName: p.name } : r)
+                                    );
+                                  });
+                                }}
+                                addLabel="+ Add New Type..."
+                                size="sm"
+                              />
+                            </td>
+                            <td className="p-2 text-center text-[12px] font-semibold text-slate-600">
+                              {row.loaded}
+                            </td>
+                            <td className="p-2">
+                              <div className="flex items-center justify-center">
+                                <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden h-7 bg-white">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setReturnItems(prev =>
+                                        prev.map(r => r.id === row.id ? { ...r, emptyReturned: Math.max(0, r.emptyReturned - 1) } : r)
+                                      );
+                                    }}
+                                    className="w-7 h-7 flex items-center justify-center hover:bg-slate-50 transition-colors"
+                                  >
+                                    <Minus className="w-3 h-3 text-slate-500" />
+                                  </button>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    value={row.emptyReturned}
+                                    onChange={(e) => {
+                                      const val = Math.max(0, parseInt(e.target.value) || 0);
+                                      setReturnItems(prev =>
+                                        prev.map(r => r.id === row.id ? { ...r, emptyReturned: val } : r)
+                                      );
+                                    }}
+                                    className="w-10 h-7 text-center font-semibold text-slate-800 text-[12px] focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none border-x border-slate-200"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setReturnItems(prev =>
+                                        prev.map(r => r.id === row.id ? { ...r, emptyReturned: r.emptyReturned + 1 } : r)
+                                      );
+                                    }}
+                                    className="w-7 h-7 flex items-center justify-center hover:bg-slate-50 transition-colors"
+                                  >
+                                    <Plus className="w-3 h-3 text-slate-500" />
+                                  </button>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="p-2">
+                              <div className="flex items-center justify-center">
+                                <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden h-7 bg-white">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setReturnItems(prev =>
+                                        prev.map(r => r.id === row.id ? { ...r, unsoldReturned: Math.max(0, r.unsoldReturned - 1) } : r)
+                                      );
+                                    }}
+                                    className="w-7 h-7 flex items-center justify-center hover:bg-slate-50 transition-colors"
+                                  >
+                                    <Minus className="w-3 h-3 text-slate-500" />
+                                  </button>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    value={row.unsoldReturned}
+                                    onChange={(e) => {
+                                      const val = Math.max(0, parseInt(e.target.value) || 0);
+                                      setReturnItems(prev =>
+                                        prev.map(r => r.id === row.id ? { ...r, unsoldReturned: val } : r)
+                                      );
+                                    }}
+                                    className="w-10 h-7 text-center font-semibold text-slate-800 text-[12px] focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none border-x border-slate-200"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setReturnItems(prev =>
+                                        prev.map(r => r.id === row.id ? { ...r, unsoldReturned: r.unsoldReturned + 1 } : r)
+                                      );
+                                    }}
+                                    className="w-7 h-7 flex items-center justify-center hover:bg-slate-50 transition-colors"
+                                  >
+                                    <Plus className="w-3 h-3 text-slate-500" />
+                                  </button>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="p-2 text-center">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setReturnItems(prev => prev.filter(r => r.id !== row.id));
+                                }}
+                                className="text-rose-500 hover:text-rose-700 p-1 hover:bg-rose-50 rounded"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                   {returnItems.length > 0 && (
                     <div className="flex items-center justify-between px-3 py-2 bg-slate-50 border-t border-slate-200 text-[10px] font-bold text-slate-500 uppercase">
                       <div>

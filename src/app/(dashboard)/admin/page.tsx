@@ -23,7 +23,10 @@ export default async function AdminDashboard() {
     await Promise.all([
       prisma.user.count({ where: { isActive: true, agencyId, role: { not: "SYSTEM_ADMIN" } } }),
       prisma.dailySummary.count({ where: { status: "PENDING", agencyId } }),
-      prisma.deliveryRecord.findMany({ where: { date: { gte: todayStart, lte: todayEnd }, agencyId } }),
+      prisma.deliveryRecord.findMany({
+        where: { date: { gte: todayStart, lte: todayEnd }, agencyId },
+        include: { customer: { select: { type: true } } },
+      }),
       prisma.vehicleAgencyAsset.findMany({ where: { isActive: true, agencyId } }),
       prisma.dailySummary.findMany({
         take: 6,
@@ -35,7 +38,14 @@ export default async function AdminDashboard() {
     ]);
 
   const totalDelivered = todayDeliveries.reduce((s, d) => s + d.deliveredQty, 0);
-  const totalCash = todayDeliveries.reduce((s, d) => s + d.cashCollected, 0);
+  const totalCash = todayDeliveries.reduce((s, d) => {
+    const isDom = d.customer.type === "DOMESTIC";
+    const isPartial = d.paymentMode === "PARTIAL";
+    if (isPartial && isDom) {
+      return s + d.cashCollected + (d.creditAmount || 0);
+    }
+    return s + d.cashCollected;
+  }, 0);
   const pendingQty = todayDeliveries.reduce((s, d) => s + d.pendingQty, 0);
 
   const renewalAlerts = assets.filter((a) => {

@@ -46,6 +46,8 @@ export default async function MyDeliveriesPage() {
     ...d,
     date: (d.date as Date).toISOString(),
     createdAt: (d.createdAt as Date).toISOString(),
+    paymentMode: d.paymentMode ?? "CASH",
+    creditAmount: d.creditAmount ?? 0,
     updatedAt: undefined,
   }));
 

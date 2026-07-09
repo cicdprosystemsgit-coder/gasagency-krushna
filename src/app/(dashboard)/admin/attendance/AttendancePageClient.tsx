@@ -1,9 +1,11 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
 import { Clock, UserCheck, UserX, Coffee, Calendar, CheckCircle2, XCircle, ChevronDown } from "lucide-react";
 import { markAttendance } from "@/app/actions/attendance";
 import { formatDate } from "@/lib/utils";
+import { useRouter } from "next/navigation";
+import { DateNavigationHeader } from "@/components/ui/DateNavigationHeader";
 
 type Employee = { id: string; name: string; role: string };
 type AttendanceRecord = {
@@ -14,6 +16,7 @@ type AttendanceRecord = {
 type Props = {
   todayData: AttendanceRecord[];
   employees: Employee[];
+  selectedDate: string;
 };
 
 const STATUS_CONFIG: Record<string, { label: string; bg: string; color: string; icon: React.ReactNode }> = {
@@ -29,11 +32,17 @@ function formatTime(d: Date | null): string {
   return new Date(d).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
 }
 
-export function AttendancePageClient({ todayData, employees }: Props) {
+export function AttendancePageClient({ todayData, employees, selectedDate }: Props) {
+  const router = useRouter();
   const [records, setRecords] = useState<AttendanceRecord[]>(todayData);
   const [markingId, setMarkingId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [msg, setMsg] = useState<string | null>(null);
+
+  // Sync records when data changes from server (e.g. on page refresh / date navigation)
+  useEffect(() => {
+    setRecords(todayData);
+  }, [todayData]);
 
   const present = records.filter((r) => r.status === "PRESENT").length;
   const absent = records.filter((r) => r.status === "ABSENT").length;
@@ -43,8 +52,7 @@ export function AttendancePageClient({ todayData, employees }: Props) {
   const handleMarkStatus = (employeeId: string, status: string) => {
     setMarkingId(employeeId);
     startTransition(async () => {
-      const today = new Date().toISOString().split("T")[0];
-      const result = await markAttendance({ employeeId, date: today, status });
+      const result = await markAttendance({ employeeId, date: selectedDate, status });
       if ("error" in result && result.error) {
         setMsg(result.error);
       } else {
@@ -57,17 +65,25 @@ export function AttendancePageClient({ todayData, employees }: Props) {
     });
   };
 
+  const handleDateChange = (newDate: string) => {
+    router.push(`?date=${newDate}`);
+  };
+
   return (
     <div>
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
         <div>
           <h1 className="text-[17px] font-semibold tracking-tight" style={{ color: "#18181B" }}>
             Attendance
           </h1>
           <p className="text-[13px] mt-0.5" style={{ color: "#71717A" }}>
-            {formatDate(new Date())} — Daily punch summary
+            Daily punch summary
           </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-semibold text-slate-500">View Date:</span>
+          <DateNavigationHeader selectedDate={selectedDate} />
         </div>
       </div>
 

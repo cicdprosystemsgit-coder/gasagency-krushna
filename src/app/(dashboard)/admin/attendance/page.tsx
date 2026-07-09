@@ -4,13 +4,20 @@ import { prisma } from "@/lib/prisma";
 import { getTodayAttendanceSummary } from "@/app/actions/attendance";
 import { AttendancePageClient } from "./AttendancePageClient";
 
-export default async function AttendancePage() {
+interface PageProps {
+  searchParams: Promise<{ date?: string }>;
+}
+
+export default async function AttendancePage({ searchParams }: PageProps) {
   const session = await getSession();
   if (!session || !["ADMIN", "MANAGER"].includes(session.role) || !session.agencyId) {
     redirect("/login");
   }
 
-  const today = await getTodayAttendanceSummary();
+  const { date } = await searchParams;
+  const selectedDate = date || new Date().toISOString().split("T")[0];
+
+  const today = await getTodayAttendanceSummary(selectedDate);
 
   // Get employees for manual entry
   const employees = await prisma.user.findMany({
@@ -23,6 +30,7 @@ export default async function AttendancePage() {
     <AttendancePageClient
       todayData={today.data ?? []}
       employees={employees}
+      selectedDate={selectedDate}
     />
   );
 }

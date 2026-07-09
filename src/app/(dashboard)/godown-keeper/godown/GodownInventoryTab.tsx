@@ -337,7 +337,7 @@ export function GodownInventoryTab({
               <input type="number" min="1" value={rForm.qty} onChange={e => setRForm({ ...rForm, qty: e.target.value })} placeholder="0" className="input text-center text-lg font-bold" style={{ color: "#2563EB" }} />
             </div>
             <div>
-              <FieldLabel>Batch / Ref No.</FieldLabel>
+              <FieldLabel>Batch / Ref No/HSN No.</FieldLabel>
               <input value={rForm.batchNo} onChange={e => setRForm({ ...rForm, batchNo: e.target.value })} placeholder="e.g., LOT-001" className="input" />
             </div>
           </div>

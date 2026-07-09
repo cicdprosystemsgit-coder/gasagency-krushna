@@ -415,6 +415,8 @@ model DeliveryRecord {
   returnedQty   Int      @default(0)
   pendingQty    Int      @default(0)
   cashCollected Float    @default(0)
+  paymentMode   String   @default("CASH")  // CASH | CREDIT | PARTIAL | PhonePe | GPay | Paytm | Others
+  creditAmount  Float    @default(0)       // Udhari amount — used for CREDIT and PARTIAL payment modes
   status        String   @default("DELIVERED")
   notes         String?
   deliveredById String

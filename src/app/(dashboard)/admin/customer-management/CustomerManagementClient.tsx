@@ -638,7 +638,7 @@ function DomesticForm({ defaults }: { defaults?: Partial<Customer> }) {
       </div>
       <div>
         <label className={labelClass} style={labelStyle}>
-          Gas Connection Number <span style={{ color: "#DC2626" }}>*</span>
+          Consumer Number  <span style={{ color: "#DC2626" }}>*</span>
           <span className="ml-1 text-[11px] font-normal" style={{ color: "#A1A1AA" }}>
             (Number provided by gas company on registration paper)
           </span>

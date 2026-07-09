@@ -6,6 +6,8 @@ import { createPaymentReceipt, deletePaymentReceipt } from "@/app/actions/paymen
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { Modal } from "@/components/ui/Modal";
 import { createCustomer } from "@/app/actions/customers";
+import { CalendarPicker } from "@/components/ui/CalendarPicker";
+import { DateRangePicker } from "@/components/ui/DateRangePicker";
 
 type Customer = { id: string; name: string; phone: string; customerCode: string | null };
 type ReceiptRecord = {
@@ -61,6 +63,8 @@ export function PaymentReceiptsClient({ receipts: initial, customers, role }: Pr
   const [showForm, setShowForm] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
 
   const [otherPaymentApp, setOtherPaymentApp] = useState("");
   const [form, setForm] = useState({
@@ -109,7 +113,15 @@ export function PaymentReceiptsClient({ receipts: initial, customers, role }: Pr
     });
   }
 
-  const totalAmount = receipts.reduce((s, r) => s + r.amount, 0);
+  const filteredReceipts = receipts.filter((r) => {
+    const rDate = new Date(r.date);
+    rDate.setHours(0, 0, 0, 0);
+    if (dateFrom && rDate < new Date(dateFrom)) return false;
+    if (dateTo && rDate > new Date(dateTo)) return false;
+    return true;
+  });
+
+  const totalAmount = filteredReceipts.reduce((s, r) => s + r.amount, 0);
 
   const handleSubmit = () => {
     if (!form.customerId || !form.amount || !form.date) {
@@ -153,14 +165,17 @@ export function PaymentReceiptsClient({ receipts: initial, customers, role }: Pr
   return (
     <div>
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
         <div>
           <h1 className="text-[17px] font-semibold tracking-tight" style={{ color: "#18181B" }}>Payment Receipts</h1>
           <p className="text-[13px] mt-0.5" style={{ color: "#71717A" }}>Track and generate customer payment receipts</p>
         </div>
-        <button onClick={() => setShowForm(true)} className="btn btn-primary flex items-center gap-1.5">
-          <Plus className="w-3.5 h-3.5" /> New Receipt
-        </button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <DateRangePicker dateFrom={dateFrom} dateTo={dateTo} onChange={(from, to) => { setDateFrom(from); setDateTo(to); }} />
+          <button onClick={() => setShowForm(true)} className="btn btn-primary flex items-center gap-1.5">
+            <Plus className="w-3.5 h-3.5" /> New Receipt
+          </button>
+        </div>
       </div>
 
       {/* Stats */}
@@ -171,7 +186,7 @@ export function PaymentReceiptsClient({ receipts: initial, customers, role }: Pr
         </div>
         <div className="card p-4">
           <p className="text-[12px] mb-1" style={{ color: "#71717A" }}>Total Receipts</p>
-          <p className="text-[18px] font-bold" style={{ color: "#18181B" }}>{receipts.length}</p>
+          <p className="text-[18px] font-bold" style={{ color: "#18181B" }}>{filteredReceipts.length}</p>
         </div>
         {["CASH", "UPI"].map((mode) => (
           <div key={mode} className="card p-4">
@@ -179,8 +194,8 @@ export function PaymentReceiptsClient({ receipts: initial, customers, role }: Pr
             <p className="text-[18px] font-bold" style={{ color: "#18181B" }}>
               {formatCurrency(
                 mode === "CASH"
-                  ? receipts.filter((r) => r.paymentMode.toUpperCase() === "CASH").reduce((s, r) => s + r.amount, 0)
-                  : receipts.filter((r) => r.paymentMode.toUpperCase() !== "CASH" && r.paymentMode.toUpperCase() !== "BANK_TRANSFER" && r.paymentMode.toUpperCase() !== "CHEQUE").reduce((s, r) => s + r.amount, 0)
+                  ? filteredReceipts.filter((r) => r.paymentMode.toUpperCase() === "CASH").reduce((s, r) => s + r.amount, 0)
+                  : filteredReceipts.filter((r) => r.paymentMode.toUpperCase() !== "CASH" && r.paymentMode.toUpperCase() !== "BANK_TRANSFER" && r.paymentMode.toUpperCase() !== "CHEQUE").reduce((s, r) => s + r.amount, 0)
               )}
             </p>
           </div>
@@ -244,9 +259,9 @@ export function PaymentReceiptsClient({ receipts: initial, customers, role }: Pr
                   />
                 </div>
               )}
-              <div>
-                <label className="block text-[12px] font-medium mb-1.5" style={{ color: "#52525B" }}>Date *</label>
-                <input className="input" type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
+              <div className="flex flex-col gap-1">
+                <label className="block text-[12px] font-medium" style={{ color: "#52525B" }}>Date *</label>
+                <CalendarPicker value={form.date} onChange={(val) => setForm({ ...form, date: val })} />
               </div>
               {form.paymentMode !== "CASH" && (
                 <div>
@@ -289,13 +304,13 @@ export function PaymentReceiptsClient({ receipts: initial, customers, role }: Pr
             </tr>
           </thead>
           <tbody>
-            {receipts.length === 0 ? (
+            {filteredReceipts.length === 0 ? (
               <tr>
                 <td colSpan={8} className="py-10 text-center text-[13px]" style={{ color: "#A1A1AA" }}>
-                  No receipts yet. Create the first one.
+                  No receipts found for the selected date range.
                 </td>
               </tr>
-            ) : receipts.map((r) => {
+            ) : filteredReceipts.map((r) => {
               const modeCfg = getModeColor(r.paymentMode);
               return (
                 <tr key={r.id}>

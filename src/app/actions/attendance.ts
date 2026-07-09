@@ -150,13 +150,13 @@ export async function markAttendance(data: {
 }
 
 // ── Get all employees' attendance for today (admin view) ─────────────────────
-export async function getTodayAttendanceSummary() {
+export async function getTodayAttendanceSummary(dateStr?: string) {
   const session = await getSession();
   if (!session || !["ADMIN", "MANAGER"].includes(session.role) || !session.agencyId) {
     return { error: "Unauthorized", data: [] };
   }
 
-  const today = new Date();
+  const today = dateStr ? new Date(dateStr) : new Date();
   today.setHours(0, 0, 0, 0);
 
   const employees = await prisma.user.findMany({

@@ -65,7 +65,7 @@ function getNavSections(role: string, base: string): NavSection[] {
           { label: "My Salary",           href: `${base}/my-salary`,          icon: <Banknote className="w-4 h-4" /> },
           { label: "Expenses & Vehicles", href: `${base}/expenses`,           icon: <BarChart3 className="w-4 h-4" />,   featureKey: "expenses"           },
           { label: "Company Payments",    href: `${base}/company-payments`,   icon: <Building2 className="w-4 h-4" />,   featureKey: "company_payments"   },
-          { label: "Assets Management",   href: `${base}/assets`,             icon: <PieChart className="w-4 h-4" />  },
+          { label: "Assets Management",   href: `${base}/assets`,             icon: <PieChart className="w-4 h-4" />,    featureKey: "assets_management"  },
           { label: "Expense Categories",  href: `${base}/expense-categories`, icon: <TrendingUp className="w-4 h-4" />,  featureKey: "expense_categories" },
           { label: "Daily Closing",       href: `${base}/daily-closing`,      icon: <ClipboardCheck className="w-4 h-4" />, featureKey: "daily_closing"  },
         ],

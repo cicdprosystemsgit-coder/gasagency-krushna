@@ -2,6 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
+import { revalidatePath } from "next/cache";
 
 export async function createCreditEntry(formData: FormData) {
   const session = await getSession();
@@ -9,6 +10,7 @@ export async function createCreditEntry(formData: FormData) {
 
   const customerId = formData.get("customerId") as string;
   const amount = Number(formData.get("amount"));
+  const dateStr = formData.get("date") as string;
   if (!customerId || !amount || amount <= 0) return { error: "Invalid data" };
 
   const entry = await prisma.creditLedgerEntry.create({
@@ -17,7 +19,7 @@ export async function createCreditEntry(formData: FormData) {
       type: formData.get("type") as string,
       amount,
       description: (formData.get("description") as string) || null,
-      date: new Date(),
+      date: dateStr ? new Date(dateStr) : new Date(),
       addedById: session.userId,
       agencyId: session.agencyId,
     },
@@ -26,6 +28,11 @@ export async function createCreditEntry(formData: FormData) {
       addedBy: { select: { name: true } },
     },
   });
+
+  revalidatePath("/admin/credit-ledger");
+  revalidatePath("/manager/credit-ledger");
+  revalidatePath("/staff/credit-ledger");
+
   return { entry };
 }
 
@@ -52,5 +59,52 @@ export async function addCustomer(formData: FormData) {
       agencyId: session.agencyId,
     },
   });
+
+  revalidatePath("/admin/credit-ledger");
+  revalidatePath("/manager/credit-ledger");
+  revalidatePath("/staff/credit-ledger");
+
   return { customer };
+}
+
+export async function updateCreditEntry(id: string, formData: FormData) {
+  const session = await getSession();
+  if (!session || !["ADMIN", "MANAGER"].includes(session.role) || !session.agencyId) {
+    return { error: "Unauthorized" };
+  }
+
+  const amount = Number(formData.get("amount"));
+  const type = formData.get("type") as string;
+  const description = (formData.get("description") as string) || null;
+  const dateStr = formData.get("date") as string;
+
+  if (!amount || amount <= 0) return { error: "Invalid amount" };
+  if (!type || !["CREDIT", "PAYMENT"].includes(type)) return { error: "Invalid type" };
+
+  try {
+    const entry = await prisma.creditLedgerEntry.update({
+      where: {
+        id,
+        agencyId: session.agencyId,
+      },
+      data: {
+        amount,
+        type,
+        description,
+        date: dateStr ? new Date(dateStr) : new Date(),
+      },
+      include: {
+        customer: { select: { name: true, phone: true } },
+        addedBy: { select: { name: true } },
+      },
+    });
+
+    revalidatePath("/admin/credit-ledger");
+    revalidatePath("/manager/credit-ledger");
+    revalidatePath("/staff/credit-ledger");
+
+    return { entry };
+  } catch (error: any) {
+    return { error: error.message || "Failed to update entry" };
+  }
 }

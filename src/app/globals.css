@@ -80,6 +80,20 @@ body {
   letter-spacing: -0.01em;
 }
 
+button,
+[type='button'],
+[type='reset'],
+[type='submit'] {
+  cursor: pointer !important;
+}
+
+button:disabled,
+[type='button']:disabled,
+[type='reset']:disabled,
+[type='submit']:disabled {
+  cursor: not-allowed !important;
+}
+
 /* ─── Scrollbar ──────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
@@ -126,12 +140,12 @@ body {
   padding: 7px 14px;
   border-radius: var(--radius-md);
   border: 1px solid transparent;
-  cursor: pointer;
+  cursor: pointer !important;
   transition: background var(--transition), border-color var(--transition), box-shadow var(--transition);
   white-space: nowrap;
   user-select: none;
 }
-.btn:disabled { opacity: 0.5; pointer-events: none; }
+.btn:disabled { opacity: 0.5; cursor: not-allowed !important; }
 
 .btn-primary {
   background: var(--color-primary);

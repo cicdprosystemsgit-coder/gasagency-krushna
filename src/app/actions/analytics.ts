@@ -53,18 +53,21 @@ export async function getRevenueTrend(months = 6) {
   return { data };
 }
 
-// ── Analytics: Product-wise sales (this month) ──────────────────────────────
-export async function getProductSales() {
+// ── Analytics: Product-wise sales (this month or range) ──────────────────────
+export async function getProductSales(dateFrom?: string, dateTo?: string) {
   const session = await getSession();
   if (!session || !session.agencyId) return { data: [] };
   const agencyId = session.agencyId;
 
-  const start = new Date();
-  start.setDate(1);
+  const start = dateFrom ? new Date(dateFrom) : new Date();
+  if (!dateFrom) start.setDate(1);
   start.setHours(0, 0, 0, 0);
 
+  const end = dateTo ? new Date(dateTo) : new Date();
+  end.setHours(23, 59, 59, 999);
+
   const deliveries = await prisma.deliveryRecord.findMany({
-    where: { agencyId, date: { gte: start } },
+    where: { agencyId, date: { gte: start, lte: end } },
     select: { deliveredQty: true, cashCollected: true, product: { select: { name: true } } },
   });
 
@@ -83,15 +86,18 @@ export async function getProductSales() {
   return { data };
 }
 
-// ── Analytics: Delivery boy performance (this month) ────────────────────────
-export async function getDeliveryBoyPerformance() {
+// ── Analytics: Delivery boy performance (this month or range) ────────────────
+export async function getDeliveryBoyPerformance(dateFrom?: string, dateTo?: string) {
   const session = await getSession();
   if (!session || !session.agencyId) return { data: [] };
   const agencyId = session.agencyId;
 
-  const start = new Date();
-  start.setDate(1);
+  const start = dateFrom ? new Date(dateFrom) : new Date();
+  if (!dateFrom) start.setDate(1);
   start.setHours(0, 0, 0, 0);
+
+  const end = dateTo ? new Date(dateTo) : new Date();
+  end.setHours(23, 59, 59, 999);
 
   const deliveryBoys = await prisma.user.findMany({
     where: { agencyId, role: "DELIVERY_BOY", isActive: true },
@@ -110,7 +116,7 @@ export async function getDeliveryBoyPerformance() {
   const targetMap = new Map(targets.map((t) => [t.employeeId, t]));
 
   const records = await prisma.deliveryRecord.findMany({
-    where: { agencyId, date: { gte: start } },
+    where: { agencyId, date: { gte: start, lte: end } },
     select: { deliveredById: true, deliveredQty: true, cashCollected: true },
   });
 
@@ -173,27 +179,30 @@ export async function getTopCustomers() {
   return { data };
 }
 
-// ── Analytics: P&L Summary (this month) ─────────────────────────────────────
-export async function getPLSummary() {
+// ── Analytics: P&L Summary (this month or range) ─────────────────────────────
+export async function getPLSummary(dateFrom?: string, dateTo?: string) {
   const session = await getSession();
   if (!session || !session.agencyId) return { data: null };
   const agencyId = session.agencyId;
 
-  const start = new Date();
-  start.setDate(1);
+  const start = dateFrom ? new Date(dateFrom) : new Date();
+  if (!dateFrom) start.setDate(1);
   start.setHours(0, 0, 0, 0);
+
+  const end = dateTo ? new Date(dateTo) : new Date();
+  end.setHours(23, 59, 59, 999);
 
   const [deliveries, commercial, expenses, products] = await Promise.all([
     prisma.deliveryRecord.findMany({
-      where: { agencyId, date: { gte: start } },
+      where: { agencyId, date: { gte: start, lte: end } },
       select: { deliveredQty: true, cashCollected: true, product: { select: { unitCost: true, saleRate: true } } },
     }),
     prisma.commercialSale.findMany({
-      where: { agencyId, date: { gte: start } },
+      where: { agencyId, date: { gte: start, lte: end } },
       select: { amount: true, qty: true, product: { select: { unitCost: true } } },
     }),
     prisma.expense.findMany({
-      where: { agencyId, date: { gte: start } },
+      where: { agencyId, date: { gte: start, lte: end } },
       select: { amount: true, category: true },
     }),
     prisma.product.findMany({

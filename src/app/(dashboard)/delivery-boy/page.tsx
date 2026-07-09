@@ -19,7 +19,7 @@ export default async function DeliveryBoyDashboard() {
     prisma.deliveryRecord.findMany({
       where: { deliveredById: session.userId, agencyId, date: { gte: todayStart, lte: todayEnd } },
       include: {
-        customer: { select: { name: true, phone: true } },
+        customer: { select: { name: true, phone: true, type: true } },
         product: { select: { name: true } },
       },
       orderBy: { createdAt: "desc" },
@@ -36,7 +36,14 @@ export default async function DeliveryBoyDashboard() {
   ]);
 
   const totalDelivered = deliveries.reduce((a, d) => a + d.deliveredQty, 0);
-  const totalCash = deliveries.reduce((a, d) => a + d.cashCollected, 0);
+  const totalCash = deliveries.reduce((a, d) => {
+    const isDom = d.customer.type === "DOMESTIC";
+    const isPartial = d.paymentMode === "PARTIAL";
+    if (isPartial && isDom) {
+      return a + d.cashCollected + (d.creditAmount || 0);
+    }
+    return a + d.cashCollected;
+  }, 0);
   const totalPending = deliveries.reduce((a, d) => a + d.pendingQty, 0);
 
   const TRIP_STATUS_MAP: Record<string, { label: string; color: string; bg: string }> = {
@@ -147,7 +154,11 @@ export default async function DeliveryBoyDashboard() {
                   <td className="muted text-[12px]">{d.product.name}</td>
                   <td className="text-center font-bold" style={{ color: "#2563EB" }}>{d.deliveredQty}</td>
                   <td className="text-center font-medium" style={{ color: d.pendingQty > 0 ? "#D97706" : "#A1A1AA" }}>{d.pendingQty || "—"}</td>
-                  <td className="text-right font-semibold" style={{ color: "#16A34A" }}>{formatCurrency(d.cashCollected)}</td>
+                  <td className="text-right font-semibold" style={{ color: "#16A34A" }}>
+                    {formatCurrency(
+                      d.cashCollected + (d.paymentMode === "PARTIAL" && d.customer.type === "DOMESTIC" ? (d.creditAmount ?? 0) : 0)
+                    )}
+                  </td>
                   <td className="text-center">
                     {d.pendingQty > 0
                       ? <span className="badge badge-pending">Pending</span>

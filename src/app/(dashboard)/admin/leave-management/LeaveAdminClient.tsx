@@ -8,6 +8,7 @@ import {
   AlertTriangle, Users, Search, Filter,
   CalendarRange, ChevronDown, UserCheck,
 } from "lucide-react";
+import { DateRangePicker } from "@/components/ui/DateRangePicker";
 import { Modal } from "@/components/ui/Modal";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -332,12 +333,8 @@ export function LeaveAdminClient({
               </div>
 
               {/* Date from/to */}
-              <div className="flex items-center gap-1.5">
-                <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)}
-                  className="input text-[12px] flex-1" placeholder="From" />
-                <span className="text-[11px]" style={{ color: "#A1A1AA" }}>–</span>
-                <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)}
-                  className="input text-[12px] flex-1" placeholder="To" />
+              <div className="flex items-center">
+                <DateRangePicker dateFrom={dateFrom} dateTo={dateTo} onChange={(from, to) => { setDateFrom(from); setDateTo(to); }} />
               </div>
             </div>
 

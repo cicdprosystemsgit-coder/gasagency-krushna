@@ -6,6 +6,8 @@ import { StatusBadge } from "@/components/ui/StatusBadge";
 import { formatDate, formatCurrency } from "@/lib/utils";
 import { Plus, ClipboardCheck, CheckCircle2 } from "lucide-react";
 import { createDailyClosing, approveDailyClosing } from "@/app/actions/daily-closing";
+import { CalendarPicker } from "@/components/ui/CalendarPicker";
+import { DateRangePicker } from "@/components/ui/DateRangePicker";
 
 interface Closing {
   id: string;
@@ -31,6 +33,8 @@ export function DailyClosingClient({ initialClosings, role }: DailyClosingClient
   const [modalOpen, setModalOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [form, setForm] = useState({
     date: new Date().toISOString().slice(0, 10),
     totalDeliveries: "",
@@ -39,6 +43,15 @@ export function DailyClosingClient({ initialClosings, role }: DailyClosingClient
     returnedCylinders: "",
     cashOnHand: "",
     notes: "",
+  });
+
+  const filteredClosings = closings.filter((c) => {
+    const cDate = new Date(c.date);
+    // Strip time portion to perform exact date boundary check
+    cDate.setHours(0, 0, 0, 0);
+    if (dateFrom && cDate < new Date(dateFrom)) return false;
+    if (dateTo && cDate > new Date(dateTo)) return false;
+    return true;
   });
 
   function handleSubmit(e: React.FormEvent) {
@@ -68,8 +81,11 @@ export function DailyClosingClient({ initialClosings, role }: DailyClosingClient
 
   return (
     <>
-      <div className="flex items-center justify-between mb-4">
-        <span className="text-sm text-slate-500">{closings.length} closing records</span>
+      <div className="flex items-center justify-between mb-4 flex-wrap gap-4">
+        <div className="flex items-center gap-4 flex-wrap">
+          <span className="text-sm text-slate-500">{filteredClosings.length} closing records</span>
+          <DateRangePicker dateFrom={dateFrom} dateTo={dateTo} onChange={(from, to) => { setDateFrom(from); setDateTo(to); }} />
+        </div>
         <button
           onClick={() => { setError(""); setModalOpen(true); }}
           className="flex items-center gap-2 bg-blue-700 text-white px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-blue-800 transition"
@@ -95,14 +111,14 @@ export function DailyClosingClient({ initialClosings, role }: DailyClosingClient
               </tr>
             </thead>
             <tbody>
-              {closings.length === 0 ? (
+              {filteredClosings.length === 0 ? (
                 <tr>
                   <td colSpan={9} className="px-5 py-14 text-center">
                     <ClipboardCheck className="w-10 h-10 mx-auto mb-3 text-slate-300" />
-                    <p className="text-slate-400">No daily closing records yet</p>
+                    <p className="text-slate-400">No daily closing records found</p>
                   </td>
                 </tr>
-              ) : closings.map((c) => (
+              ) : filteredClosings.map((c) => (
                 <tr key={c.id} className="table-row border-b border-slate-50 last:border-0">
                   <td className="px-5 py-3 font-medium text-slate-800">{formatDate(c.date)}</td>
                   <td className="px-5 py-3 text-center font-bold text-blue-700">{c.totalDeliveries}</td>
@@ -129,9 +145,9 @@ export function DailyClosingClient({ initialClosings, role }: DailyClosingClient
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="Add Daily Closing" size="md">
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-lg text-sm">{error}</div>}
-          <div>
-            <label className="block text-sm font-semibold text-slate-700 mb-1.5">Date *</label>
-            <input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          <div className="flex flex-col gap-1.5">
+            <label className="block text-sm font-semibold text-slate-700">Date *</label>
+            <CalendarPicker value={form.date} onChange={(val) => setForm({ ...form, date: val })} />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>

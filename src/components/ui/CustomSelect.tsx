@@ -19,6 +19,7 @@ interface CustomSelectProps {
   addLabel?: string;
   className?: string;
   disabled?: boolean;
+  size?: "sm" | "md";
 }
 
 export function CustomSelect({
@@ -31,6 +32,7 @@ export function CustomSelect({
   addLabel = "+ Add New...",
   className = "",
   disabled = false,
+  size = "md",
 }: CustomSelectProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -71,6 +73,8 @@ export function CustomSelect({
     setOpen(false);
   };
 
+  const isSm = size === "sm";
+
   return (
     <div ref={containerRef} className={`relative w-full ${className}`}>
       {/* Trigger Button */}
@@ -78,8 +82,12 @@ export function CustomSelect({
         type="button"
         disabled={disabled}
         onClick={() => setOpen((prev) => !prev)}
-        className="w-full flex items-center justify-between px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-[13px] font-medium text-slate-800 shadow-xs hover:border-slate-300 transition-all text-left focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 disabled:bg-slate-50 disabled:text-slate-400 disabled:cursor-not-allowed"
-        style={{ minHeight: "42px" }}
+        className={`w-full flex items-center justify-between bg-white border border-slate-200 shadow-xs hover:border-slate-300 transition-all text-left focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 disabled:bg-slate-50 disabled:text-slate-400 disabled:cursor-not-allowed ${
+          isSm
+            ? "px-2.5 py-1 text-[12px] rounded-lg"
+            : "px-3.5 py-2.5 text-[13px] font-medium text-slate-800 rounded-xl"
+        }`}
+        style={{ minHeight: isSm ? "30px" : "42px" }}
       >
         <span className="truncate">{displayLabel}</span>
         <ChevronDown
