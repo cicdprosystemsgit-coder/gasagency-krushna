@@ -16,10 +16,12 @@ module.exports = {
       env: {
         NODE_ENV: "development",
         PORT: 3000,
+        ROOT_DOMAIN: "localhost",
       },
       env_production: {
         NODE_ENV: "production",
         PORT: 3000,
+        ROOT_DOMAIN: "cicdprosystems.com",
       },
       // Logging
       log_date_format: "YYYY-MM-DD HH:mm:ss Z",
