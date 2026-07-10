@@ -9,11 +9,15 @@ import {
   ArrowRight, ClipboardCheck, Boxes, ChevronRight
 } from "lucide-react";
 import Link from "next/link";
+import { getTranslations } from "next-intl/server";
+
 
 export default async function AdminDashboard() {
   const session = await getSession();
   if (!session || session.role !== "ADMIN" || !session.agencyId) redirect("/login");
   const agencyId = session.agencyId;
+  const t = await getTranslations();
+
 
   const today = new Date();
   const todayStart = new Date(today.setHours(0, 0, 0, 0));
@@ -60,10 +64,10 @@ export default async function AdminDashboard() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-[17px] font-semibold tracking-tight" style={{ color: "#18181B" }}>
-            Dashboard
+            {t("dashboard.title")}
           </h1>
           <p className="text-[13px] mt-0.5" style={{ color: "#71717A" }}>
-            {formatDate(new Date())} — Welcome back, {session.name}
+            {formatDate(new Date())} — {t("dashboard.welcome")}, {session.name}
           </p>
         </div>
         {pendingApprovals > 0 && (
@@ -73,7 +77,7 @@ export default async function AdminDashboard() {
             style={{ background: "#EFF6FF", border: "1px solid #BFDBFE", color: "#1D4ED8" }}
           >
             <ClipboardCheck className="w-3.5 h-3.5" />
-            {pendingApprovals} pending approval{pendingApprovals > 1 ? "s" : ""}
+            {pendingApprovals} {t("status.PENDING").toLowerCase()} approval{pendingApprovals > 1 ? "s" : ""}
             <ChevronRight className="w-3.5 h-3.5" />
           </Link>
         )}
@@ -118,30 +122,30 @@ export default async function AdminDashboard() {
       {/* ── KPI grid ─────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
         <StatsCard
-          title="Cylinders Delivered"
+          title={t("dashboard.cylindersDelivered")}
           value={totalDelivered}
-          subtitle="Today"
+          subtitle={t("common.today")}
           icon={<Package className="w-4 h-4" />}
           color="blue"
         />
         <StatsCard
-          title="Cash Collected"
+          title={t("dashboard.cashCollected")}
           value={formatCurrency(totalCash)}
-          subtitle="Today"
+          subtitle={t("common.today")}
           icon={<DollarSign className="w-4 h-4" />}
           color="green"
         />
         <StatsCard
-          title="Pending Deliveries"
+          title={t("dashboard.pendingDeliveries")}
           value={pendingQty}
-          subtitle="Need follow-up"
+          subtitle={t("dashboard.needFollowUp")}
           icon={<Truck className="w-4 h-4" />}
           color={pendingQty > 0 ? "orange" : "green"}
         />
         <StatsCard
-          title="Active Staff"
+          title={t("dashboard.activeStaff")}
           value={totalStaff}
-          subtitle="All roles"
+          subtitle={t("dashboard.allRoles")}
           icon={<Users className="w-4 h-4" />}
           color="purple"
         />
@@ -160,23 +164,23 @@ export default async function AdminDashboard() {
             style={{ borderBottom: "1px solid #E4E4E7" }}
           >
             <p className="text-[13px] font-semibold" style={{ color: "#18181B" }}>
-              Recent Submissions
+              {t("dashboard.recentSubmissions")}
             </p>
             <Link
               href="/admin/approvals"
               className="flex items-center gap-1 text-[12px] font-medium transition-colors"
               style={{ color: "#2563EB" }}
             >
-              View all <ArrowRight className="w-3 h-3" />
+              {t("common.viewAll")} <ArrowRight className="w-3 h-3" />
             </Link>
           </div>
           <table className="table">
             <thead>
               <tr>
-                <th>Employee</th>
-                <th>Role</th>
-                <th>Date</th>
-                <th>Status</th>
+                <th>{t("dashboard.employee")}</th>
+                <th>{t("dashboard.role")}</th>
+                <th>{t("dashboard.date")}</th>
+                <th>{t("dashboard.status")}</th>
                 <th></th>
               </tr>
             </thead>
@@ -184,7 +188,7 @@ export default async function AdminDashboard() {
               {recentSummaries.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="py-10 text-center text-[13px]" style={{ color: "#A1A1AA" }}>
-                    No submissions yet
+                    {t("common.noData")}
                   </td>
                 </tr>
               ) : recentSummaries.map((s) => (
@@ -202,7 +206,11 @@ export default async function AdminDashboard() {
                       </span>
                     </div>
                   </td>
-                  <td className="muted text-[12px]">{s.submittedBy.role.replace(/_/g, " ")}</td>
+                  <td className="muted text-[12px]">
+                    {t.has(`roles.${s.submittedBy.role}`)
+                      ? t(`roles.${s.submittedBy.role}`)
+                      : s.submittedBy.role.replace(/_/g, " ")}
+                  </td>
                   <td className="muted text-[12px]">{formatDate(s.date)}</td>
                   <td><StatusBadge status={s.status} /></td>
                   <td>
@@ -211,7 +219,7 @@ export default async function AdminDashboard() {
                       className="text-[12px] font-medium transition-colors"
                       style={{ color: "#2563EB" }}
                     >
-                      Review
+                      {t("common.review")}
                     </Link>
                   </td>
                 </tr>
@@ -229,16 +237,18 @@ export default async function AdminDashboard() {
             style={{ background: "#FFFFFF", border: "1px solid #E4E4E7", boxShadow: "0 1px 2px 0 rgba(0,0,0,0.04)" }}
           >
             <div className="px-5 py-3.5" style={{ borderBottom: "1px solid #E4E4E7" }}>
-              <p className="text-[13px] font-semibold" style={{ color: "#18181B" }}>Quick actions</p>
+              <p className="text-[13px] font-semibold" style={{ color: "#18181B" }}>
+                {t("dashboard.quickActions")}
+              </p>
             </div>
             <div className="p-3 space-y-1">
               {[
-                { label: "Review approvals", href: "/admin/approvals", badge: pendingApprovals },
-                { label: "Add product", href: "/admin/inventory" },
-                { label: "Record godown entry", href: "/admin/godown" },
-                { label: "New commercial sale", href: "/admin/commercial-sales" },
-                { label: "Log expense", href: "/admin/expenses" },
-                { label: "Staff management", href: "/admin/staff-management" },
+                { label: t("dashboard.reviewApprovals"), href: "/admin/approvals", badge: pendingApprovals },
+                { label: t("dashboard.addProduct"), href: "/admin/inventory" },
+                { label: t("dashboard.recordGodownEntry"), href: "/admin/godown" },
+                { label: t("dashboard.newCommercialSale"), href: "/admin/commercial-sales" },
+                { label: t("dashboard.logExpense"), href: "/admin/expenses" },
+                { label: t("dashboard.staffManagement"), href: "/admin/staff-management" },
               ].map((a) => (
                 <Link
                   key={a.href}
@@ -272,18 +282,22 @@ export default async function AdminDashboard() {
               className="flex items-center justify-between px-5 py-3.5"
               style={{ borderBottom: "1px solid #E4E4E7" }}
             >
-              <p className="text-[13px] font-semibold" style={{ color: "#18181B" }}>Products</p>
+              <p className="text-[13px] font-semibold" style={{ color: "#18181B" }}>
+                {t("dashboard.products")}
+              </p>
               <Link href="/admin/inventory" className="text-[12px] font-medium" style={{ color: "#2563EB" }}>
-                Manage →
+                {t("common.manage")} →
               </Link>
             </div>
             <div className="divide-y" style={{ borderColor: "#F4F4F5" }}>
               {products.length === 0 ? (
                 <div className="py-8 text-center">
                   <Boxes className="w-6 h-6 mx-auto mb-2 text-zinc-200" />
-                  <p className="text-[12px]" style={{ color: "#A1A1AA" }}>No products added</p>
+                  <p className="text-[12px]" style={{ color: "#A1A1AA" }}>
+                    {t("dashboard.noProducts")}
+                  </p>
                   <Link href="/admin/inventory" className="text-[12px] font-medium mt-1 block" style={{ color: "#2563EB" }}>
-                    Add product →
+                    {t("dashboard.addProduct")} →
                   </Link>
                 </div>
               ) : products.map((p) => (
@@ -293,7 +307,7 @@ export default async function AdminDashboard() {
                     <p className="text-[13px] font-semibold" style={{ color: "#16A34A" }}>
                       {formatCurrency(p.saleRate)}
                     </p>
-                    <p className="text-[11px]" style={{ color: "#A1A1AA" }}>sale rate</p>
+                    <p className="text-[11px]" style={{ color: "#A1A1AA" }}>{t("dashboard.saleRate")}</p>
                   </div>
                 </div>
               ))}

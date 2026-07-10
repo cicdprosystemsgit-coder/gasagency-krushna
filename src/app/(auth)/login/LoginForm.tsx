@@ -5,6 +5,8 @@ import { loginAction, verify2FALogin } from "@/app/actions/auth";
 import { Flame, Eye, EyeOff, Loader2, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
+import { useTranslations } from "next-intl";
+import { LanguageSwitcher } from "@/components/ui/LanguageSwitcher";
 
 interface LoginFormProps {
   agencyName?: string | null;
@@ -21,6 +23,8 @@ export function LoginForm({
   const [twoFAState, twoFAActionFn, twoFAPending] = useActionState(verify2FALogin, {});
   const [showPwd, setShowPwd] = useState(false);
   const [useBackup, setUseBackup] = useState(false);
+  const t = useTranslations("login");
+  const tRoles = useTranslations("roles");
 
   const requires2FA = loginState.requires2FA;
 
@@ -54,14 +58,14 @@ export function LoginForm({
         </div>
         <div>
           <h2 className="text-[22px] font-bold text-zinc-900 leading-snug mb-4">
-            Manage deliveries, stock,<br />and approvals — all in one place.
+            {t("featureTitle")}
           </h2>
           <ul className="space-y-3">
             {[
-              "Real-time cylinder stock tracking",
-              "4-level daily approval workflow",
-              "Role-based access for all staff",
-              "PUC & licence renewal reminders",
+              t("feature1"),
+              t("feature2"),
+              t("feature3"),
+              t("feature4"),
             ].map((item) => (
               <li key={item} className="flex items-center gap-2.5">
                 <div
@@ -81,7 +85,12 @@ export function LoginForm({
       </div>
 
       {/* ── Right Panel ────────────────────────────────── */}
-      <div className="flex-1 flex items-center justify-center p-6 bg-white">
+      <div className="flex-1 flex items-center justify-center p-6 bg-white relative">
+        {/* Floating Language Switcher in the top right of the login screen */}
+        <div className="absolute top-4 right-4">
+          <LanguageSwitcher />
+        </div>
+
         <div className="w-full max-w-sm">
           {/* Mobile logo */}
           <Link href="/" className="flex lg:hidden items-center gap-2 mb-8">
@@ -116,9 +125,9 @@ export function LoginForm({
             {!requires2FA && (
               <>
                 <div className="mb-7">
-                  <h1 className="text-[20px] font-bold tracking-tight text-zinc-900">Sign in</h1>
+                  <h1 className="text-[20px] font-bold tracking-tight text-zinc-900">{t("title")}</h1>
                   <p className="text-[13px] text-zinc-500 mt-1">
-                    Enter credentials to access your {agencyName ? `${agencyName} ` : ""}dashboard
+                    {t("desc")}
                   </p>
                 </div>
 
@@ -135,14 +144,14 @@ export function LoginForm({
                 <form action={loginActionFn} className="space-y-4">
                   <div>
                     <label htmlFor="email" className="block text-[12px] font-medium text-zinc-700 mb-1.5">
-                      Email address
+                      {t("emailLabel")}
                     </label>
                     <input id="email" name="email" type="email" required autoComplete="email"
                       placeholder="you@agency.com" className="input" style={{ fontSize: "14px", height: "38px" }} />
                   </div>
                   <div>
                     <label htmlFor="password" className="block text-[12px] font-medium text-zinc-700 mb-1.5">
-                      Password
+                      {t("passwordLabel")}
                     </label>
                     <div className="relative">
                       <input id="password" name="password" type={showPwd ? "text" : "password"} required
@@ -160,7 +169,7 @@ export function LoginForm({
                     className="btn w-full justify-center mt-2 text-white hover:brightness-95 transition-all font-medium rounded-lg flex items-center gap-2"
                     style={{ height: "38px", fontSize: "14px", backgroundColor: themeColor }}
                   >
-                    {loginPending ? <><Loader2 className="w-4 h-4 animate-spin" />Signing in…</> : "Sign in"}
+                    {loginPending ? <><Loader2 className="w-4 h-4 animate-spin" />{t("signingIn")}</> : t("signInBtn")}
                   </button>
                 </form>
               </>
@@ -177,9 +186,9 @@ export function LoginForm({
                     <ShieldCheck className="w-5 h-5" style={{ color: themeColor }} />
                   </div>
                   <div>
-                    <h1 className="text-[18px] font-bold tracking-tight text-zinc-900">Two-Factor Verification</h1>
+                    <h1 className="text-[18px] font-bold tracking-tight text-zinc-900">{t("twoFATitle")}</h1>
                     <p className="text-[13px] text-zinc-500 mt-0.5">
-                      {useBackup ? "Enter a backup code" : "Enter the code from your authenticator app"}
+                      {useBackup ? t("twoFADescBackup") : t("twoFADescToken")}
                     </p>
                   </div>
                 </div>
@@ -198,7 +207,7 @@ export function LoginForm({
                   <input type="hidden" name="useBackup" value={useBackup ? "true" : "false"} />
                   <div>
                     <label htmlFor="token" className="block text-[12px] font-medium text-zinc-700 mb-1.5">
-                      {useBackup ? "Backup code (XXXX-XXXX)" : "6-digit code"}
+                      {useBackup ? t("tokenLabelBackup") : t("tokenLabelSixDigit")}
                     </label>
                     <input id="token" name="token" type="text" required autoFocus autoComplete="one-time-code"
                       placeholder={useBackup ? "XXXX-XXXX" : "000000"}
@@ -212,14 +221,14 @@ export function LoginForm({
                     className="btn w-full justify-center text-white hover:brightness-95 transition-all font-medium rounded-lg flex items-center gap-2"
                     style={{ height: "38px", fontSize: "14px", backgroundColor: themeColor }}
                   >
-                    {twoFAPending ? <><Loader2 className="w-4 h-4 animate-spin" />Verifying…</> : "Verify"}
+                    {twoFAPending ? <><Loader2 className="w-4 h-4 animate-spin" />{t("verifying")}</> : t("verifyBtn")}
                   </button>
                 </form>
 
                 <div className="mt-4 text-center">
                   <button onClick={() => setUseBackup(!useBackup)}
                     className="text-[12px] text-zinc-500 hover:text-zinc-800 transition-colors underline-offset-2 hover:underline">
-                    {useBackup ? "Use authenticator app instead" : "Use a backup code instead"}
+                    {useBackup ? t("useAppLink") : t("useBackupLink")}
                   </button>
                 </div>
               </>
@@ -229,18 +238,20 @@ export function LoginForm({
           {/* Role hint — only show on step 1 */}
           {!requires2FA && (
             <div className="mt-5 rounded-lg p-4" style={{ background: "#F8FAFC", border: "1px solid #E2E8F0" }}>
-              <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-2.5">Available roles</p>
+              <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-2.5">{t("availableRoles")}</p>
               <div className="flex flex-wrap gap-1.5">
-                {["Admin", "Manager", "Godown Keeper", "Staff", "Delivery Boy"].map((role) => (
+                {["ADMIN", "MANAGER", "GODOWN_KEEPER", "STAFF", "DELIVERY_BOY"].map((role) => (
                   <span key={role} className="text-[11px] font-medium px-2.5 py-1 rounded-md"
-                    style={{ background: "#E2E8F0", color: "#475569" }}>{role}</span>
+                    style={{ background: "#E2E8F0", color: "#475569" }}>
+                    {tRoles.has(role) ? tRoles(role) : role}
+                  </span>
                 ))}
               </div>
             </div>
           )}
 
           <p className="text-center mt-5 text-[12px] text-zinc-400">
-            <Link href="/" className="hover:text-zinc-700 transition-colors">← Back to home</Link>
+            <Link href="/" className="hover:text-zinc-700 transition-colors">{t("backToHome")}</Link>
           </p>
         </div>
       </div>

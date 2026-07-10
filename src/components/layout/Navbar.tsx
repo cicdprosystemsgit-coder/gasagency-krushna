@@ -5,6 +5,8 @@ import { logoutAction } from "@/app/actions/auth";
 import Link from "next/link";
 import { NotificationBell } from "@/components/layout/NotificationBell";
 import { GlobalSearch } from "@/components/ui/GlobalSearch";
+import { LanguageSwitcher } from "@/components/ui/LanguageSwitcher";
+import { ThemeToggle } from "@/components/layout/ThemeToggle";
 
 interface NavbarProps {
   userName: string;
@@ -47,6 +49,12 @@ export function Navbar({ userName, role, renewalAlerts = 0, sidebarCollapsed }: 
           </Link>
         )}
 
+        {/* Language Switcher */}
+        <LanguageSwitcher />
+
+        {/* Theme Toggle */}
+        <ThemeToggle />
+
         {/* Real Notification Bell */}
         <NotificationBell />
 
@@ -57,7 +65,7 @@ export function Navbar({ userName, role, renewalAlerts = 0, sidebarCollapsed }: 
         <div className="flex items-center gap-2.5">
           <div className="hidden sm:block text-right">
             <p className="text-[13px] font-medium text-zinc-900 dark:text-zinc-100 leading-none">{userName}</p>
-            <p className="text-[11px] mt-0.5 leading-none" style={{ color: "var(--color-text-secondary)" }}>{ROLE_LABELS[role]}</p>
+            <p className="text-[11px] mt-0.5 leading-none" style={{ color: "var(--color-text-secondary)" }}>{ROLE_LABELS[role] || role}</p>
           </div>
           <form action={logoutAction}>
             <button
@@ -73,3 +81,4 @@ export function Navbar({ userName, role, renewalAlerts = 0, sidebarCollapsed }: 
     </header>
   );
 }
+

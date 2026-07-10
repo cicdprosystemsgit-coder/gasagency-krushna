@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { useTranslations } from "next-intl";
 import {
   LayoutDashboard, Package, Warehouse, ShoppingCart, BookOpen,
   Receipt, Wallet, Users, ClipboardCheck, FileText, Truck,
@@ -10,6 +11,7 @@ import {
   Banknote, CalendarDays, Car, TrendingUp, Clock, FolderOpen, MessageSquarePlus,
   ShieldCheck, Building2, KeyRound, FileDown, Palette, BadgeDollarSign, PieChart,
 } from "lucide-react";
+
 
 interface SidebarProps {
   role: string;
@@ -211,6 +213,57 @@ export function Sidebar({
   const pathname = usePathname();
   const base = getBase(role);
   const sections = filterSections(getNavSections(role, base), enabledFeatures);
+  const t = useTranslations();
+
+  const getTranslationKey = (label: string): string => {
+    const map: Record<string, string> = {
+      "Dashboard": "dashboard",
+      "Inventory": "inventory",
+      "Godown": "godown",
+      "Godown & Fleet": "godown",
+      "Vehicle Management": "vehicle_management",
+      "Delivery Plan": "delivery_plan",
+      "Customer Management": "customer_management",
+      "Office Transactions": "office_transactions",
+      "Commercial Sales": "commercial_sales",
+      "Credit Ledger": "credit_ledger",
+      "GST Invoicing": "gst_invoicing",
+      "Salaries & Drawings": "salaries",
+      "My Salary": "my_salary",
+      "Expenses & Vehicles": "expenses",
+      "Company Payments": "company_payments",
+      "Assets Management": "assets_management",
+      "Expense Categories": "expense_categories",
+      "Daily Closing": "daily_closing",
+      "Staff Management": "staff_management",
+      "Approvals": "approvals",
+      "Leave Management": "leave_management",
+      "Attendance": "attendance",
+      "Analytics": "analytics",
+      "Payment Receipts": "payment_receipts",
+      "Documents": "documents",
+      "Complaints": "complaints",
+      "Data Export": "export",
+      "Branches": "branches",
+      "Billing": "billing",
+      "API Gateway": "api_gateway",
+      "Security / 2FA": "security",
+      "Branding Config": "settings",
+      "My Deliveries": "my_deliveries",
+      "Delivery Ledger": "delivery_ledger",
+      "Office Stock": "inventory",
+      "Operations": "operations",
+      "Accounts": "accounts",
+      "Finance": "finance",
+      "People": "people",
+      "Intelligence": "intelligence",
+      "Enterprise": "enterprise",
+      "Deliveries": "deliveries",
+      "My Account": "myAccount",
+      "Modules": "modules",
+    };
+    return map[label] || label;
+  };
 
   return (
     <aside
@@ -252,16 +305,23 @@ export function Sidebar({
         {sections.map((section, si) => (
           <div key={si} className={si > 0 ? "mt-4" : ""}>
             {section.label && !collapsed && (
-              <p className="nav-section-label px-2">{section.label}</p>
+              <p className="nav-section-label px-2">
+                {t.has(`nav.${getTranslationKey(section.label)}`)
+                  ? t(`nav.${getTranslationKey(section.label)}`)
+                  : section.label}
+              </p>
             )}
             {section.items.map((item) => {
               const isActive = pathname === item.href ||
                 (item.href !== base && pathname.startsWith(item.href));
+              const translatedLabel = t.has(`nav.${getTranslationKey(item.label)}`)
+                ? t(`nav.${getTranslationKey(item.label)}`)
+                : item.label;
               return (
                 <Link
                   key={item.href}
                   href={item.href}
-                  title={collapsed ? item.label : undefined}
+                  title={collapsed ? translatedLabel : undefined}
                   className={cn(
                     "nav-item",
                     isActive && "active",
@@ -270,7 +330,7 @@ export function Sidebar({
                   style={{ height: 32 }}
                 >
                   <span className="nav-icon flex-shrink-0">{item.icon}</span>
-                  {!collapsed && <span className="truncate">{item.label}</span>}
+                  {!collapsed && <span className="truncate">{translatedLabel}</span>}
                 </Link>
               );
             })}
@@ -293,7 +353,9 @@ export function Sidebar({
             </div>
             <div className="min-w-0 flex-1">
               <p className="text-[12px] font-medium text-zinc-900 truncate leading-none mb-0.5">{userName}</p>
-              <p className="text-[11px] leading-none" style={{ color: "var(--color-text-secondary)" }}>{ROLE_LABELS[role]}</p>
+              <p className="text-[11px] leading-none" style={{ color: "var(--color-text-secondary)" }}>
+                {t.has(`roles.${role}`) ? t(`roles.${role}`) : (ROLE_LABELS[role] || role)}
+              </p>
             </div>
           </div>
         )}
@@ -301,11 +363,11 @@ export function Sidebar({
           onClick={onToggle}
           className={cn("nav-item w-full", collapsed && "justify-center px-0")}
           style={{ height: 30 }}
-          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          title={collapsed ? t("nav.collapse") : undefined}
         >
           {collapsed
             ? <PanelLeft className="w-4 h-4 flex-shrink-0" />
-            : <><PanelLeftClose className="w-4 h-4 flex-shrink-0 nav-icon" /><span className="text-[12px]">Collapse</span></>
+            : <><PanelLeftClose className="w-4 h-4 flex-shrink-0 nav-icon" /><span className="text-[12px]">{t("nav.collapse")}</span></>
           }
         </button>
       </div>

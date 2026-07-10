@@ -32,6 +32,7 @@ import type { Customer } from "@/generated/prisma";
 interface Entry {
   id: string;
   date: Date | string;
+  createdAt?: Date | string;
   type: string;
   amount: number;
   description: string | null;
@@ -170,9 +171,19 @@ export function CreditLedgerClient({ customers, initialEntries, canEdit, userId 
     }
 
     // Sort chronologically ascending to calculate running balance correctly
-    const chronological = [...list].sort(
-      (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
-    );
+    const chronological = [...list].sort((a, b) => {
+      const timeA = new Date(a.date).getTime();
+      const timeB = new Date(b.date).getTime();
+      if (timeA !== timeB) return timeA - timeB;
+      
+      // If dates are identical (same day), sort by database createdAt time
+      const createA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const createB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      if (createA !== createB) return createA - createB;
+
+      // Safe fallback to id to keep the sorting stable
+      return a.id.localeCompare(b.id);
+    });
 
     // Calculate running balance
     let running = 0;

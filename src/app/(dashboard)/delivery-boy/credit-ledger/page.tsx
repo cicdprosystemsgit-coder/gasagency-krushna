@@ -13,7 +13,10 @@ export default async function DeliveryCreditLedgerPage() {
     prisma.customer.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
     prisma.creditLedgerEntry.findMany({
       where: { addedById: session.userId },
-      orderBy: { date: "desc" },
+      orderBy: [
+        { date: "desc" },
+        { createdAt: "desc" }
+      ],
       take: 100,
       include: {
         customer: { select: { name: true, phone: true } },

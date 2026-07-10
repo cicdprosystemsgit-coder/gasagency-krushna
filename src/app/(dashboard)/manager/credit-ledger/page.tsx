@@ -12,7 +12,10 @@ export default async function ManagerCreditLedgerPage() {
   const [customers, entries] = await Promise.all([
     prisma.customer.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
     prisma.creditLedgerEntry.findMany({
-      orderBy: { date: "desc" },
+      orderBy: [
+        { date: "desc" },
+        { createdAt: "desc" }
+      ],
       take: 200,
       include: {
         customer: { select: { name: true, phone: true } },

@@ -19,11 +19,15 @@ export default async function CreditLedgerPage() {
     }),
     prisma.creditLedgerEntry.findMany({
       where: { agencyId: session.agencyId! },
-      orderBy: { date: "desc" },
+      orderBy: [
+        { date: "desc" },
+        { createdAt: "desc" }
+      ],
       take: 1000,
       select: {
         id: true,
         date: true,
+        createdAt: true,
         type: true,
         amount: true,
         description: true,
