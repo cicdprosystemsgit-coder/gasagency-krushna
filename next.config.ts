@@ -29,6 +29,9 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   transpilePackages: ["lucide-react"],
+  env: {
+    ROOT_DOMAIN: process.env.ROOT_DOMAIN ?? "localhost",
+  },
   async headers() {
     if (process.env.NODE_ENV !== "production") {
       return [];
