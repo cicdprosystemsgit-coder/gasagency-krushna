@@ -1,0 +1,22 @@
+version: "3.9"
+
+# ─── Local dev override — runs WITHOUT Nginx (no SSL needed locally) ──────────
+# Usage: docker compose -f docker-compose.yml -f docker-compose.local.yml up
+
+services:
+  app:
+    ports:
+      - "3000:3000"    # Access at http://localhost:3000
+    environment:
+      NODE_ENV: production
+      NEXTAUTH_URL: http://localhost:3000
+      ROOT_DOMAIN: localhost
+
+  postgres:
+    ports:
+      - "5432:5432"    # Access DB from host with any Postgres client
+
+  # Disable nginx for local testing
+  nginx:
+    profiles:
+      - production-only

@@ -28,6 +28,7 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  output: "standalone",
   transpilePackages: ["lucide-react"],
   env: {
     ROOT_DOMAIN: process.env.ROOT_DOMAIN ?? "localhost",

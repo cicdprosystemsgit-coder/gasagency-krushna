@@ -1,0 +1,38 @@
+# Dependencies
+node_modules
+npm-debug.log*
+
+# Build output
+.next
+/build
+/out
+
+# Environment files (will be passed at runtime)
+.env
+.env.*
+!.env.example
+
+# Git
+.git
+.gitignore
+
+# Dev tools / IDE
+.vscode
+.idea
+*.tsbuildinfo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docs
+*.md
+!README.md
+
+# Test / CI
+coverage
+.github
+
+# Misc
+deploy.sh
+ecosystem.config.js
