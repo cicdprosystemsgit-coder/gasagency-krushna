@@ -5,10 +5,15 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { Users } from "lucide-react";
 import { CustomerManagementClient } from "@/app/(dashboard)/admin/customer-management/CustomerManagementClient";
 
+import { checkPermission } from "@/lib/rbac";
+
 export default async function StaffCustomerManagementPage() {
   const session = await getSession();
   if (!session || session.role !== "STAFF" || !session.agencyId)
     redirect("/login");
+
+  const isAllowed = await checkPermission(session.userId, "customers", "read");
+  if (!isAllowed) redirect("/staff");
 
   const customers = await prisma.customer.findMany({
     where: { agencyId: session.agencyId },

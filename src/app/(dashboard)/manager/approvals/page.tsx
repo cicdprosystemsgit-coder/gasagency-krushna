@@ -5,9 +5,14 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { BookOpen } from "lucide-react";
 import { ApprovalsClient } from "@/app/(dashboard)/admin/approvals/ApprovalsClient";
 
+import { checkPermission } from "@/lib/rbac";
+
 export default async function ManagerApprovalsPage() {
   const session = await getSession();
   if (!session || session.role !== "MANAGER") redirect("/login");
+
+  const isAllowed = await checkPermission(session.userId, "approvals", "read");
+  if (!isAllowed) redirect("/manager");
 
   const [summaries, salaryRequests, leaveRequests] = await Promise.all([
     prisma.dailySummary.findMany({

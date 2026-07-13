@@ -5,9 +5,14 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { CreditCard } from "lucide-react";
 import { CreditLedgerClient } from "@/app/(dashboard)/admin/credit-ledger/CreditLedgerClient";
 
+import { checkPermission } from "@/lib/rbac";
+
 export default async function ManagerCreditLedgerPage() {
   const session = await getSession();
   if (!session || session.role !== "MANAGER") redirect("/login");
+
+  const isAllowed = await checkPermission(session.userId, "customers", "read");
+  if (!isAllowed) redirect("/manager");
 
   const [customers, entries] = await Promise.all([
     prisma.customer.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),

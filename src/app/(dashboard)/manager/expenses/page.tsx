@@ -5,9 +5,14 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { BarChart3 } from "lucide-react";
 import { ExpensesClient } from "@/app/(dashboard)/admin/expenses/ExpensesClient";
 
+import { checkPermission } from "@/lib/rbac";
+
 export default async function ManagerExpensesPage() {
   const session = await getSession();
   if (!session || session.role !== "MANAGER") redirect("/login");
+
+  const isAllowed = await checkPermission(session.userId, "expenses", "read");
+  if (!isAllowed) redirect("/manager");
 
   const [expenses, assets] = await Promise.all([
     prisma.expense.findMany({

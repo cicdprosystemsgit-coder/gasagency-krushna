@@ -45,6 +45,7 @@ export async function GET(req: NextRequest) {
     where: { id: userId },
     select: {
       id: true, email: true, name: true, role: true,
+      customRole: true, customRoleId: true,
       agencyId: true, isActive: true,
       agency: { select: { slug: true, status: true } },
     },
@@ -64,6 +65,8 @@ export async function GET(req: NextRequest) {
     email:      user.email,
     name:       user.name,
     role:       user.role,
+    customRole: user.customRole,
+    customRoleId: user.customRoleId,
     agencyId:   user.agencyId   ?? null,
     agencySlug: user.agency?.slug ?? null,
   });

@@ -5,9 +5,14 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { Boxes } from "lucide-react";
 import { OfficeInventorySection } from "@/components/ui/OfficeInventorySection";
 
+import { checkPermission } from "@/lib/rbac";
+
 export default async function StaffInventoryPage() {
   const session = await getSession();
   if (!session || session.role !== "STAFF" || !session.agencyId) redirect("/login");
+
+  const isAllowed = await checkPermission(session.userId, "inventory", "read");
+  if (!isAllowed) redirect("/staff");
 
   const godownMovements = await prisma.godownInventory.findMany({
     where: { agencyId: session.agencyId, product: { is: { isCylinder: false } } },

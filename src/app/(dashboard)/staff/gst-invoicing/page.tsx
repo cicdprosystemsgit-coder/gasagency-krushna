@@ -5,9 +5,14 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { FileText } from "lucide-react";
 import { GstInvoicingClient } from "./GstInvoicingClient";
 
+import { checkPermission } from "@/lib/rbac";
+
 export default async function StaffGstInvoicingPage() {
   const session = await getSession();
   if (!session || session.role !== "STAFF" || !session.agencyId) redirect("/login");
+
+  const isAllowed = await checkPermission(session.userId, "gstInvoices", "read");
+  if (!isAllowed) redirect("/staff");
 
   const [invoices, customers, products, agency] = await Promise.all([
     prisma.gstInvoice.findMany({

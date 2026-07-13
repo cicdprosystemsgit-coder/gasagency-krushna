@@ -1,13 +1,18 @@
 "use client";
 
 import { useRef, useState, useEffect } from "react";
-import { AlertTriangle, Eye, EyeOff, Camera, User, Check, ArrowRight, ArrowLeft, Upload, FileText, Trash2, ExternalLink } from "lucide-react";
+import { AlertTriangle, Eye, EyeOff, Camera, User, Check, ArrowRight, ArrowLeft, Upload, FileText, Trash2, ExternalLink, Plus, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { uploadDocument, deleteDocument, getEmployeeDocuments, getDocumentForDownload } from "@/app/actions/documents";
 import { validatePassword } from "@/lib/passwordPolicy";
+import { getCustomRoles, createCustomRole } from "@/app/actions/staff";
+import { type Role } from "@/generated/prisma";
+import { Modal } from "@/components/ui/Modal";
 
 export type FormState = {
   name: string; email: string; phone: string; role: string; password: string;
+  customRole: string;
+  customRoleId: string;
   bankAccountNo: string; bankName: string; ifscCode: string;
   aadhaarNo: string; panNo: string; photoBase64: string;
   // Salary Profile fields
@@ -18,6 +23,8 @@ export type FormState = {
 
 export const EMPTY_FORM: FormState = {
   name: "", email: "", phone: "", role: "STAFF", password: "",
+  customRole: "",
+  customRoleId: "",
   bankAccountNo: "", bankName: "", ifscCode: "",
   aadhaarNo: "", panNo: "", photoBase64: "",
   monthlySalary: "",
@@ -103,6 +110,57 @@ export function StaffForm({ form, setForm, error, isPending, onCancel, submitLab
   const [selectedDocFile, setSelectedDocFile] = useState<{ name: string; base64: string; mime: string } | null>(null);
   const [docUploading, setDocUploading]       = useState(false);
   const [docError, setDocError]               = useState("");
+
+  const [customRoles, setCustomRoles] = useState<{ id: string; name: string; baseRole: string }[]>([]);
+  const [showAddRoleModal, setShowAddRoleModal] = useState(false);
+  const [newRoleName, setNewRoleName] = useState("");
+  const [newRoleBase, setNewRoleBase] = useState<Role>("STAFF");
+  const [addRoleError, setAddRoleError] = useState("");
+  const [addRolePending, setAddRolePending] = useState(false);
+
+  // Fetch custom roles on mount
+  useEffect(() => {
+    getCustomRoles().then((res) => {
+      if (res.customRoles) {
+        setCustomRoles(res.customRoles.map(cr => ({ id: cr.id, name: cr.name, baseRole: cr.baseRole })));
+      }
+    });
+  }, []);
+
+  async function handleAddCustomRole() {
+    const trimmed = newRoleName.trim();
+    if (!trimmed) {
+      setAddRoleError("Role name cannot be empty");
+      return;
+    }
+    setAddRolePending(true);
+    setAddRoleError("");
+    try {
+      const res = await createCustomRole(trimmed, newRoleBase);
+      if (res.error) {
+        setAddRoleError(res.error);
+        return;
+      }
+      if (res.customRole) {
+        const newCr = { id: res.customRole.id, name: res.customRole.name, baseRole: res.customRole.baseRole };
+        setCustomRoles(prev => [...prev, newCr]);
+        // Automatically select the newly created role
+        setForm({
+          ...form,
+          role: res.customRole.baseRole,
+          customRole: res.customRole.name,
+          customRoleId: res.customRole.id
+        });
+        setShowAddRoleModal(false);
+        setNewRoleName("");
+      }
+    } catch (err) {
+      console.error(err);
+      setAddRoleError("Failed to add custom role");
+    } finally {
+      setAddRolePending(false);
+    }
+  }
 
   // Notify parent whenever step changes
   function goToStep(next: number) {
@@ -336,7 +394,8 @@ export function StaffForm({ form, setForm, error, isPending, onCancel, submitLab
   ];
 
   return (
-    <div className="space-y-5">
+    <>
+      <div className="space-y-5">
       {/* ── Steps Navigation ── */}
       <div className="flex items-center justify-between border-b border-slate-100 pb-4">
         {steps.map((s, idx) => (
@@ -431,12 +490,48 @@ export function StaffForm({ form, setForm, error, isPending, onCancel, submitLab
                   placeholder="9876543210" className={inp} autoComplete="tel" />
               </div>
               <div>
-                <label className={lbl} style={lblColor}>Role {req}</label>
-                <select value={form.role} onChange={set("role")} className={`${inp} select`}>
-                  <option value="MANAGER">Manager</option>
-                  <option value="GODOWN_KEEPER">Godown Keeper</option>
-                  <option value="STAFF">Staff</option>
-                  <option value="DELIVERY_BOY">Delivery Boy</option>
+                <div className="flex items-center justify-between mb-1">
+                  <label className={lbl} style={{ ...lblColor, marginBottom: 0 }}>Role {req}</label>
+                </div>
+                <select value={form.customRoleId ? `CUSTOM:${form.customRoleId}` : form.role}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val.startsWith("CUSTOM:")) {
+                      const id = val.replace("CUSTOM:", "");
+                      const found = customRoles.find(cr => cr.id === id);
+                      if (found) {
+                        setForm({
+                          ...form,
+                          role: found.baseRole,
+                          customRole: found.name,
+                          customRoleId: found.id
+                        });
+                      }
+                    } else {
+                      setForm({
+                        ...form,
+                        role: val,
+                        customRole: "",
+                        customRoleId: ""
+                      });
+                    }
+                    setLocalError("");
+                  }}
+                  className={`${inp} select`}>
+                  <optgroup label="System Roles">
+                    <option value="MANAGER">Manager</option>
+                    <option value="GODOWN_KEEPER">Godown Keeper</option>
+                    <option value="CASHIER">Cashier</option>
+                    <option value="STAFF">Staff</option>
+                    <option value="DELIVERY_BOY">Delivery Boy</option>
+                  </optgroup>
+                  {customRoles.length > 0 && (
+                    <optgroup label="Custom Roles">
+                      {customRoles.map((cr) => (
+                        <option key={cr.id} value={`CUSTOM:${cr.id}`}>{cr.name}</option>
+                      ))}
+                    </optgroup>
+                  )}
                 </select>
               </div>
             </div>
@@ -768,5 +863,53 @@ export function StaffForm({ form, setForm, error, isPending, onCancel, submitLab
         </div>
       </div>
     </div>
+
+      {/* ── Add Custom Role Modal ── */}
+      <Modal open={showAddRoleModal} onClose={() => setShowAddRoleModal(false)} title="Add Custom Staff Role" size="sm">
+        <div className="space-y-4 pt-1">
+          {addRoleError && (
+            <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg text-[13px] bg-red-50 border border-red-200 text-red-700">
+              <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+              <span>{addRoleError}</span>
+            </div>
+          )}
+          
+          <div className="space-y-1">
+            <label className="text-[12px] font-medium text-slate-700">Role Name (e.g. Supervisor, Accountant)</label>
+            <input type="text" value={newRoleName} onChange={(e) => setNewRoleName(e.target.value)}
+              placeholder="Enter role name" className="input" style={{ height: "38px" }} />
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-[12px] font-medium text-slate-700">Base Template Role</label>
+            <select value={newRoleBase} onChange={(e) => setNewRoleBase(e.target.value as Role)}
+              className="input select" style={{ height: "38px" }}>
+              <option value="STAFF">Office Staff (Default)</option>
+              <option value="MANAGER">Manager</option>
+              <option value="GODOWN_KEEPER">Godown Keeper</option>
+              <option value="CASHIER">Cashier</option>
+              <option value="DELIVERY_BOY">Delivery Boy</option>
+            </select>
+            <p className="text-[11px] text-slate-400 mt-1">
+              Select a template to copy default permissions and screen layouts.
+            </p>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2">
+            <button type="button" onClick={() => setShowAddRoleModal(false)} className="btn btn-secondary">
+              Cancel
+            </button>
+            <button type="button" onClick={handleAddCustomRole} disabled={addRolePending}
+              className="btn btn-primary flex items-center gap-1.5">
+              {addRolePending ? (
+                <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Adding...</>
+              ) : (
+                "Save Role"
+              )}
+            </button>
+          </div>
+        </div>
+      </Modal>
+    </>
   );
 }

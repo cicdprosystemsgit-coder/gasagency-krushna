@@ -12,11 +12,18 @@ export async function getRolePermissions() {
       return { error: "Unauthorized" };
     }
 
-    const overrides = await prisma.rolePermission.findMany({
-      where: { agencyId: session.agencyId },
-    });
+    const [overrides, customRoles] = await Promise.all([
+      prisma.rolePermission.findMany({
+        where: { agencyId: session.agencyId },
+      }),
+      prisma.customRole.findMany({
+        where: { agencyId: session.agencyId },
+        select: { id: true, name: true, baseRole: true },
+        orderBy: { createdAt: "asc" },
+      }),
+    ]);
 
-    return { overrides };
+    return { overrides, customRoles };
   } catch (error) {
     console.error("[getRolePermissions] Error:", error);
     return { error: "Failed to fetch permissions" };
@@ -24,7 +31,7 @@ export async function getRolePermissions() {
 }
 
 export async function savePermissionsBatch(
-  updates: { role: Role; resource: string; action: string; isAllowed: boolean }[]
+  updates: { role: string; resource: string; action: string; isAllowed: boolean }[]
 ) {
   try {
     const session = await getSession();

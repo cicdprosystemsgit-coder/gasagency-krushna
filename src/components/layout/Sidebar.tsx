@@ -21,6 +21,8 @@ interface SidebarProps {
   enabledFeatures?: string[];
   agencyName?: string | null;
   logoBase64?: string | null;
+  customRoleName?: string | null;
+  customRolePermissions?: { resource: string; action: string; isAllowed: boolean }[];
 }
 
 interface NavItem {
@@ -35,8 +37,89 @@ interface NavSection {
   items: NavItem[];
 }
 
-function getNavSections(role: string, base: string): NavSection[] {
+const RESOURCE_TO_NAV: Record<string, { section: string; label: string; href: string; icon: React.ReactNode }> = {
+  customers:        { section: "Accounts",    label: "Customer Management", href: "/customer-management", icon: <Users className="w-4 h-4" /> },
+  inventory:        { section: "Operations",  label: "Office Stock",        href: "/inventory",           icon: <Boxes className="w-4 h-4" /> },
+  godown:           { section: "Operations",  label: "Godown",              href: "/godown",              icon: <Warehouse className="w-4 h-4" /> },
+  vehicles:         { section: "Operations",  label: "Vehicle Management",  href: "/vehicle-management",  icon: <Car className="w-4 h-4" /> },
+  deliveries:       { section: "Operations",  label: "Delivery Plan",       href: "/delivery-plan",       icon: <Truck className="w-4 h-4" /> },
+  transactions:     { section: "Accounts",    label: "Office Transactions", href: "/office-transactions", icon: <Receipt className="w-4 h-4" /> },
+  gstInvoices:      { section: "Accounts",    label: "GST Invoicing",       href: "/gst-invoicing",       icon: <FileText className="w-4 h-4" /> },
+  salaries:         { section: "Finance",     label: "Salaries & Drawings", href: "/salaries",            icon: <Wallet className="w-4 h-4" /> },
+  expenses:         { section: "Finance",     label: "Expenses & Vehicles", href: "/expenses",            icon: <BarChart3 className="w-4 h-4" /> },
+  leaves:           { section: "People",      label: "Leave Management",    href: "/leave-management",    icon: <CalendarDays className="w-4 h-4" /> },
+  paymentReceipts:  { section: "Intelligence",label: "Payment Receipts",    href: "/payment-receipts",    icon: <Receipt className="w-4 h-4" /> },
+  documents:        { section: "Intelligence",label: "Documents",           href: "/documents",           icon: <FolderOpen className="w-4 h-4" /> },
+  complaints:       { section: "Intelligence",label: "Complaints",          href: "/complaints",          icon: <MessageSquarePlus className="w-4 h-4" /> },
+  analytics:        { section: "Intelligence",label: "Analytics",           href: "/analytics",           icon: <TrendingUp className="w-4 h-4" /> },
+  approvals:        { section: "People",      label: "Approvals",           href: "/approvals",           icon: <BookOpen className="w-4 h-4" /> },
+  branches:         { section: "Enterprise",  label: "Branches",            href: "/branches",            icon: <Building2 className="w-4 h-4" /> },
+};
+
+function getCustomRoleNavSections(
+  permissions: { resource: string; action: string; isAllowed: boolean }[],
+  base: string
+): NavSection[] {
+  // Filter resources that have at least read allowed
+  const allowedResources = new Set(
+    permissions
+      .filter((p) => p.action === "read" && p.isAllowed)
+      .map((p) => p.resource)
+  );
+
   const dashboard = { label: "Dashboard", href: base, icon: <LayoutDashboard className="w-4 h-4" /> };
+  const sections: NavSection[] = [{ items: [dashboard] }];
+
+  // Group by section
+  const sectionGroups: Record<string, NavItem[]> = {};
+
+  for (const resource of Array.from(allowedResources)) {
+    const navItem = RESOURCE_TO_NAV[resource];
+    if (navItem) {
+      if (!sectionGroups[navItem.section]) {
+        sectionGroups[navItem.section] = [];
+      }
+      sectionGroups[navItem.section].push({
+        label: navItem.label,
+        href: `${base}${navItem.href}`,
+        icon: navItem.icon,
+      });
+    }
+  }
+
+  // Add the grouped sections
+  const SECTION_ORDER = ["Operations", "Accounts", "Finance", "People", "Intelligence", "Enterprise"];
+  for (const sectName of SECTION_ORDER) {
+    const items = sectionGroups[sectName];
+    if (items && items.length > 0) {
+      sections.push({
+        label: sectName,
+        items,
+      });
+    }
+  }
+
+  // Always append personal account section
+  sections.push({
+    label: "My Account",
+    items: [
+      { label: "My Salary", href: `${base}/my-salary`, icon: <Banknote className="w-4 h-4" /> },
+    ],
+  });
+
+  return sections;
+}
+
+function getNavSections(
+  role: string,
+  base: string,
+  customRolePermissions?: { resource: string; action: string; isAllowed: boolean }[]
+): NavSection[] {
+  const dashboard = { label: "Dashboard", href: base, icon: <LayoutDashboard className="w-4 h-4" /> };
+
+  if (customRolePermissions && customRolePermissions.length > 0) {
+    return getCustomRoleNavSections(customRolePermissions, base);
+  }
 
   if (role === "ADMIN" || role === "MANAGER") {
     return [
@@ -209,10 +292,12 @@ export function Sidebar({
   enabledFeatures = [],
   agencyName,
   logoBase64,
+  customRoleName,
+  customRolePermissions = [],
 }: SidebarProps) {
   const pathname = usePathname();
   const base = getBase(role);
-  const sections = filterSections(getNavSections(role, base), enabledFeatures);
+  const sections = filterSections(getNavSections(role, base, customRolePermissions), enabledFeatures);
   const t = useTranslations();
 
   const getTranslationKey = (label: string): string => {
@@ -353,8 +438,8 @@ export function Sidebar({
             </div>
             <div className="min-w-0 flex-1">
               <p className="text-[12px] font-medium text-zinc-900 truncate leading-none mb-0.5">{userName}</p>
-              <p className="text-[11px] leading-none" style={{ color: "var(--color-text-secondary)" }}>
-                {t.has(`roles.${role}`) ? t(`roles.${role}`) : (ROLE_LABELS[role] || role)}
+              <p className="text-[11px] leading-none truncate font-medium text-blue-600 mt-0.5" title={customRoleName || undefined}>
+                {customRoleName || (t.has(`roles.${role}`) ? t(`roles.${role}`) : (ROLE_LABELS[role] || role))}
               </p>
             </div>
           </div>

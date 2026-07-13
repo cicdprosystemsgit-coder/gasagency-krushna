@@ -3,13 +3,15 @@
 import { useState, useTransition, useEffect } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { formatDate } from "@/lib/utils";
-import { Plus, Users, ToggleLeft, ToggleRight, Pencil, Trash2, AlertTriangle, Eye, FileText, ExternalLink, FolderOpen } from "lucide-react";
-import { createStaffUser, updateStaffUser, deleteStaffUser, toggleStaffStatus } from "@/app/actions/staff";
+import Link from "next/link";
+import { Plus, Users, ToggleLeft, ToggleRight, Pencil, Trash2, AlertTriangle, Eye, FileText, ExternalLink, FolderOpen, ShieldCheck, Tags, X, Loader2 } from "lucide-react";
+import { createStaffUser, updateStaffUser, deleteStaffUser, toggleStaffStatus, createCustomRole, getCustomRoles } from "@/app/actions/staff";
 import { getEmployeeDocuments, uploadDocument, getDocumentForDownload } from "@/app/actions/documents";
 import { StaffForm, EMPTY_FORM, type FormState, type PendingDoc } from "./StaffForm";
 
 interface Staff {
   id: string; name: string; email: string; phone: string | null; role: string;
+  customRole: string | null; customRoleId: string | null;
   isActive: boolean; createdAt: Date | string;
   bankAccountNo: string | null; bankName: string | null; ifscCode: string | null;
   aadhaarNo: string | null; panNo: string | null; photoBase64: string | null;
@@ -31,12 +33,13 @@ const ROLE_COLORS: Record<string, { bg: string; color: string }> = {
   ADMIN:         { bg: "#DBEAFE", color: "#1D4ED8" },
   MANAGER:       { bg: "#D1FAE5", color: "#065F46" },
   GODOWN_KEEPER: { bg: "#EDE9FE", color: "#5B21B6" },
+  CASHIER:       { bg: "#FCE7F3", color: "#9D174D" },
   STAFF:         { bg: "#FEF3C7", color: "#92400E" },
   DELIVERY_BOY:  { bg: "#FEE2E2", color: "#991B1B" },
 };
 const ROLE_LABEL: Record<string, string> = {
   ADMIN:"Admin", MANAGER:"Manager", GODOWN_KEEPER:"Godown Keeper",
-  STAFF:"Staff", DELIVERY_BOY:"Delivery Boy",
+  CASHIER:"Cashier", STAFF:"Staff", DELIVERY_BOY:"Delivery Boy",
 };
 const AV_COLORS = ["#3B82F6","#8B5CF6","#10B981","#F59E0B","#EF4444","#06B6D4","#EC4899"];
 function avColor(name: string) {
@@ -83,6 +86,14 @@ export function StaffManagementClient({ initialStaff }: { initialStaff: Staff[] 
   const [deleteTarget, setDeleteTarget] = useState<Staff | null>(null);
   const [deleteError,  setDeleteError]  = useState("");
 
+  // ── Add Staff Role modal state ──────────────────────────────────────────────
+  const [roleModalOpen, setRoleModalOpen] = useState(false);
+  const [newRoleName, setNewRoleName] = useState("");
+  const [newRoleBase, setNewRoleBase] = useState<"MANAGER" | "STAFF" | "GODOWN_KEEPER" | "CASHIER" | "DELIVERY_BOY">("STAFF");
+  const [roleModalError, setRoleModalError] = useState("");
+  const [roleModalPending, setRoleModalPending] = useState(false);
+  const [roleModalSuccess, setRoleModalSuccess] = useState("");
+
   // Load documents when viewing an employee profile
   useEffect(() => {
     if (!viewTarget) { setViewDocs([]); return; }
@@ -98,6 +109,8 @@ export function StaffManagementClient({ initialStaff }: { initialStaff: Staff[] 
     return {
       name: s.name, email: s.email, phone: s.phone ?? "",
       role: s.role, password: "",
+      customRole: s.customRole ?? "",
+      customRoleId: s.customRoleId ?? "",
       bankAccountNo: s.bankAccountNo ?? "", bankName: s.bankName ?? "",
       ifscCode: s.ifscCode ?? "", aadhaarNo: s.aadhaarNo ?? "",
       panNo: s.panNo ?? "", photoBase64: s.photoBase64 ?? "",
@@ -207,6 +220,29 @@ export function StaffManagementClient({ initialStaff }: { initialStaff: Staff[] 
     }
   }
 
+  // ── handleAddRole ───────────────────────────────────────────────────────────
+  async function handleAddRole(e: React.FormEvent) {
+    e.preventDefault();
+    const trimmed = newRoleName.trim();
+    if (!trimmed) { setRoleModalError("Role name is required"); return; }
+    setRoleModalPending(true);
+    setRoleModalError("");
+    const res = await createCustomRole(trimmed, newRoleBase);
+    setRoleModalPending(false);
+    if (res.error) { setRoleModalError(res.error); return; }
+    setRoleModalSuccess(`"${trimmed}" role created! You can now assign it to staff members and configure its permissions in Security Settings.`);
+    setNewRoleName("");
+    setNewRoleBase("STAFF");
+  }
+
+  function closeRoleModal() {
+    setRoleModalOpen(false);
+    setRoleModalError("");
+    setRoleModalSuccess("");
+    setNewRoleName("");
+    setNewRoleBase("STAFF");
+  }
+
   // ── render ─────────────────────────────────────────────────────────────────
   return (
     <>
@@ -214,9 +250,21 @@ export function StaffManagementClient({ initialStaff }: { initialStaff: Staff[] 
         <span className="text-[13px]" style={{ color: "#A1A1AA" }}>
           {staff.length} total · {staff.filter((s) => s.isActive).length} active
         </span>
-        <button onClick={() => { setAddError(""); setAddForm(EMPTY_FORM); setAddOpen(true); }} className="btn btn-primary">
-          <Plus className="w-3.5 h-3.5" /> Add Staff Member
-        </button>
+        <div className="flex items-center gap-2">
+          <Link href="/admin/security" className="btn btn-secondary flex items-center gap-1.5 text-[12px] h-9">
+            <ShieldCheck className="w-4 h-4 text-zinc-600" /> Manage Roles &amp; Permissions
+          </Link>
+          <button
+            onClick={() => { setRoleModalError(""); setRoleModalSuccess(""); setRoleModalOpen(true); }}
+            className="btn btn-secondary flex items-center gap-1.5 text-[12px] h-9"
+            style={{ borderColor: "#6366F1", color: "#6366F1" }}
+          >
+            <Tags className="w-3.5 h-3.5" /> Add Staff Role
+          </button>
+          <button onClick={() => { setAddError(""); setAddForm(EMPTY_FORM); setAddOpen(true); }} className="btn btn-primary">
+            <Plus className="w-3.5 h-3.5" /> Add Staff Member
+          </button>
+        </div>
       </div>
 
       {/* Table */}
@@ -261,7 +309,7 @@ export function StaffManagementClient({ initialStaff }: { initialStaff: Staff[] 
                     {/* Role */}
                     <td>
                       <span className="badge text-[11px]" style={{ background:rc.bg, color:rc.color, border:"none" }}>
-                        {ROLE_LABEL[s.role] ?? s.role}
+                        {s.customRole || (ROLE_LABEL[s.role] ?? s.role)}
                       </span>
                     </td>
                     {/* Bank */}
@@ -361,7 +409,7 @@ export function StaffManagementClient({ initialStaff }: { initialStaff: Staff[] 
               <p className="text-[15px] font-bold" style={{ color:"#18181B" }}>{viewTarget.name}</p>
               <span className="badge text-[11px]"
                 style={{ background: ROLE_COLORS[viewTarget.role]?.bg, color: ROLE_COLORS[viewTarget.role]?.color, border:"none" }}>
-                {ROLE_LABEL[viewTarget.role]}
+                {viewTarget.customRole || ROLE_LABEL[viewTarget.role]}
               </span>
             </div>
 
@@ -442,7 +490,7 @@ export function StaffManagementClient({ initialStaff }: { initialStaff: Staff[] 
               <div>
                 <p className="text-[13px] font-semibold" style={{ color:"#18181B" }}>{deleteTarget.name}</p>
                 <p className="text-[12px]" style={{ color:"#71717A" }}>
-                  {deleteTarget.email} · {ROLE_LABEL[deleteTarget.role]}
+                  {deleteTarget.email} · {deleteTarget.customRole || ROLE_LABEL[deleteTarget.role]}
                 </p>
               </div>
             </div>
@@ -458,6 +506,143 @@ export function StaffManagementClient({ initialStaff }: { initialStaff: Staff[] 
               {isPending ? "Deleting…" : "Yes, Delete"}
             </button>
           </div>
+        </div>
+      </Modal>
+
+      {/* ── Add Staff Role Modal ─────────────────────────────────────────────── */}
+      <Modal
+        open={roleModalOpen}
+        onClose={closeRoleModal}
+        title=""
+        size="sm"
+      >
+        <div className="space-y-4">
+          {/* Header */}
+          <div className="flex items-center gap-3 pb-3" style={{ borderBottom: "1px solid #F4F4F5" }}>
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+              style={{ background: "#EEF2FF" }}>
+              <Tags className="w-5 h-5" style={{ color: "#6366F1" }} />
+            </div>
+            <div>
+              <h3 className="text-[15px] font-semibold" style={{ color: "#18181B" }}>Create Staff Role</h3>
+              <p className="text-[12px]" style={{ color: "#71717A" }}>
+                Define a custom role for your agency
+              </p>
+            </div>
+          </div>
+
+          {roleModalSuccess ? (
+            /* Success state */
+            <div className="space-y-4">
+              <div className="flex items-start gap-3 p-4 rounded-xl"
+                style={{ background: "#F0FDF4", border: "1px solid #BBF7D0" }}>
+                <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
+                  style={{ background: "#22C55E" }}>
+                  <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="text-[13px] font-semibold" style={{ color: "#166534" }}>Role Created!</p>
+                  <p className="text-[12px] mt-0.5 leading-relaxed" style={{ color: "#166534" }}>
+                    {roleModalSuccess}
+                  </p>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => { setRoleModalSuccess(""); }}
+                  className="btn btn-secondary flex-1 text-[12px]"
+                >
+                  Create Another Role
+                </button>
+                <Link
+                  href="/admin/security"
+                  onClick={closeRoleModal}
+                  className="btn btn-primary flex-1 text-[12px] text-center flex items-center justify-center gap-1.5"
+                >
+                  <ShieldCheck className="w-3.5 h-3.5" /> Set Permissions
+                </Link>
+              </div>
+            </div>
+          ) : (
+            /* Form state */
+            <form onSubmit={handleAddRole} className="space-y-4">
+              {/* Role Name */}
+              <div>
+                <label className="block text-[12px] font-medium mb-1.5" style={{ color: "#3F3F46" }}>
+                  Role Name <span style={{ color: "#EF4444" }}>*</span>
+                </label>
+                <input
+                  type="text"
+                  value={newRoleName}
+                  onChange={(e) => setNewRoleName(e.target.value)}
+                  placeholder="e.g. Senior Accountant, Field Agent, Supervisor..."
+                  className="input w-full text-[13px]"
+                  maxLength={50}
+                  autoFocus
+                  required
+                />
+                <p className="text-[11px] mt-1" style={{ color: "#A1A1AA" }}>
+                  {newRoleName.length}/50 characters
+                </p>
+              </div>
+
+              {/* Base Template */}
+              <div>
+                <label className="block text-[12px] font-medium mb-1.5" style={{ color: "#3F3F46" }}>
+                  Base Permission Template
+                </label>
+                <select
+                  value={newRoleBase}
+                  onChange={(e) => setNewRoleBase(e.target.value as typeof newRoleBase)}
+                  className="input w-full text-[13px]"
+                >
+                  <option value="MANAGER">Manager — Full operations access</option>
+                  <option value="STAFF">Staff — Customer & transactions</option>
+                  <option value="CASHIER">Cashier — Billing & receipts</option>
+                  <option value="GODOWN_KEEPER">Godown Keeper — Inventory & godown</option>
+                  <option value="DELIVERY_BOY">Delivery Boy — Deliveries only</option>
+                </select>
+                <p className="text-[11px] mt-1" style={{ color: "#A1A1AA" }}>
+                  This role will inherit these default permissions. You can fine-tune them in Security Settings.
+                </p>
+              </div>
+
+              {/* Info banner */}
+              <div className="flex items-start gap-2.5 p-3 rounded-lg"
+                style={{ background: "#F5F3FF", border: "1px solid #DDD6FE" }}>
+                <ShieldCheck className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: "#7C3AED" }} />
+                <p className="text-[12px] leading-relaxed" style={{ color: "#5B21B6" }}>
+                  After creating, go to <strong>Security → Role Permissions</strong> to configure exactly which modules this role can access.
+                </p>
+              </div>
+
+              {roleModalError && (
+                <p className="text-[12px] px-3 py-2 rounded-lg"
+                  style={{ background: "#FEF2F2", border: "1px solid #FCA5A5", color: "#B91C1C" }}>
+                  {roleModalError}
+                </p>
+              )}
+
+              <div className="flex gap-2 pt-1">
+                <button type="button" className="btn btn-secondary flex-1" onClick={closeRoleModal}>
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={roleModalPending || !newRoleName.trim()}
+                  className="btn btn-primary flex-1 flex items-center justify-center gap-1.5"
+                  style={{ background: "#6366F1", borderColor: "#6366F1" }}
+                >
+                  {roleModalPending
+                    ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Creating…</>
+                    : <><Tags className="w-3.5 h-3.5" /> Create Role</>
+                  }
+                </button>
+              </div>
+            </form>
+          )}
         </div>
       </Modal>
     </>

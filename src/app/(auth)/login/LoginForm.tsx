@@ -240,7 +240,7 @@ export function LoginForm({
             <div className="mt-5 rounded-lg p-4" style={{ background: "#F8FAFC", border: "1px solid #E2E8F0" }}>
               <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-2.5">{t("availableRoles")}</p>
               <div className="flex flex-wrap gap-1.5">
-                {["ADMIN", "MANAGER", "GODOWN_KEEPER", "STAFF", "DELIVERY_BOY"].map((role) => (
+                {["ADMIN", "MANAGER", "GODOWN_KEEPER", "CASHIER", "STAFF", "DELIVERY_BOY"].map((role) => (
                   <span key={role} className="text-[11px] font-medium px-2.5 py-1 rounded-md"
                     style={{ background: "#E2E8F0", color: "#475569" }}>
                     {tRoles.has(role) ? tRoles(role) : role}

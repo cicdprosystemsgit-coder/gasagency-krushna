@@ -6,9 +6,14 @@ import { GodownKeeperClient } from "./GodownKeeperClient";
 
 import { getAgencyTodayRange } from "@/lib/utils";
 
+import { checkPermission } from "@/lib/rbac";
+
 export default async function GodownKeeperGodownPage() {
   const session = await getSession();
   if (!session || session.role !== "GODOWN_KEEPER") redirect("/login");
+
+  const isAllowed = await checkPermission(session.userId, "godown", "read");
+  if (!isAllowed) redirect("/godown-keeper");
 
   const { todayStart, todayEnd } = getAgencyTodayRange();
 

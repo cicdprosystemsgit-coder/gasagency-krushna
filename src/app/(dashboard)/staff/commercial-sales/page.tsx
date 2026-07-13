@@ -5,9 +5,14 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { ShoppingCart } from "lucide-react";
 import { CommercialSalesClient } from "@/app/(dashboard)/admin/commercial-sales/CommercialSalesClient";
 
+import { checkPermission } from "@/lib/rbac";
+
 export default async function StaffCommercialSalesPage() {
   const session = await getSession();
   if (!session || session.role !== "STAFF") redirect("/login");
+
+  const isAllowed = await checkPermission(session.userId, "transactions", "read");
+  if (!isAllowed) redirect("/staff");
 
   const [sales, customers, products] = await Promise.all([
     prisma.commercialSale.findMany({

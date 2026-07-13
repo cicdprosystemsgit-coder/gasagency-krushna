@@ -3,9 +3,14 @@ import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { GodownInventoryClient } from "./GodownInventoryClient";
 
+import { checkPermission } from "@/lib/rbac";
+
 export default async function GodownInventoryPage() {
   const session = await getSession();
   if (!session || session.role !== "GODOWN_KEEPER" || !session.agencyId) redirect("/login");
+
+  const isAllowed = await checkPermission(session.userId, "inventory", "read");
+  if (!isAllowed) redirect("/godown-keeper");
 
   const [movements, products] = await Promise.all([
     prisma.godownInventory.findMany({

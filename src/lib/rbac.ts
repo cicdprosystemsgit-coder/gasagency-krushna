@@ -58,6 +58,15 @@ export const DEFAULT_PERMISSIONS: Record<Role, Record<string, string[]>> = {
     leaves: ["create", "read"],
     salaries: ["read"],
   },
+  CASHIER: {
+    customers: ["create", "read", "update"],
+    transactions: ["create", "read"],
+    gstInvoices: ["create", "read"],
+    inventory: ["read"],
+    leaves: ["create", "read"],
+    salaries: ["read"],
+    paymentReceipts: ["create", "read"],
+  },
   STAFF: {
     customers: ["create", "read", "update"],
     transactions: ["create", "read"],
@@ -87,7 +96,7 @@ export async function checkPermission(
     // Fetch user details
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, role: true, agencyId: true, isActive: true },
+      select: { id: true, role: true, customRoleId: true, agencyId: true, isActive: true },
     });
 
     if (!user || !user.isActive) {
@@ -103,7 +112,23 @@ export async function checkPermission(
       return false;
     }
 
-    // 1. Check database for specific override
+    // 1. Check database for custom role override first
+    if (user.customRoleId) {
+      const customOverride = await prisma.rolePermission.findFirst({
+        where: {
+          agencyId: user.agencyId,
+          role: user.customRoleId,
+          resource: resource,
+          action: action,
+        },
+      });
+
+      if (customOverride !== null) {
+        return customOverride.isAllowed;
+      }
+    }
+
+    // 2. Check database for specific override of the base role
     const override = await prisma.rolePermission.findFirst({
       where: {
         agencyId: user.agencyId,
@@ -117,7 +142,7 @@ export async function checkPermission(
       return override.isAllowed;
     }
 
-    // 2. Fall back to the default static permission matrix
+    // 3. Fall back to the default static permission matrix
     const roleDefaultRules = DEFAULT_PERMISSIONS[user.role];
     if (!roleDefaultRules) {
       return false;

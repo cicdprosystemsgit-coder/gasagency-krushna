@@ -14,6 +14,7 @@ export default async function StaffManagementPage() {
     orderBy: { createdAt: "desc" },
     select: {
       id: true, name: true, email: true, phone: true, role: true,
+      customRole: true, customRoleId: true,
       isActive: true, createdAt: true,
       bankAccountNo: true, bankName: true, ifscCode: true,
       aadhaarNo: true, panNo: true, photoBase64: true,

@@ -12,6 +12,7 @@ enum Role {
   ADMIN
   MANAGER
   GODOWN_KEEPER
+  CASHIER
   STAFF
   DELIVERY_BOY
 }
@@ -192,6 +193,7 @@ model Agency {
   // Feature gating — keys of features enabled for this agency (empty = all features)
   enabledFeatures    String[]          @default([])
   companyPayments    CompanyPayment[]
+  customRoles        CustomRole[]
 }
 
 model User {
@@ -201,6 +203,8 @@ model User {
   phone          String?
   password       String
   role           Role
+  customRole     String?  // Name of the custom role (e.g. "Senior Accountant")
+  customRoleId   String?  // Reference to CustomRole
   isActive       Boolean  @default(true)
   agencyId       String?
   agency         Agency?  @relation(fields: [agencyId], references: [id])
@@ -1044,7 +1048,7 @@ model RolePermission {
   id         String   @id @default(cuid())
   agencyId   String
   agency     Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
-  role       Role
+  role       String
   resource   String   // e.g. "customers", "salaries", "godown", "billing"
   action     String   // e.g. "read", "create", "update", "delete"
   isAllowed  Boolean  @default(true)
@@ -1118,4 +1122,17 @@ model CompanyPayment {
   updatedAt     DateTime @updatedAt
 
   @@index([agencyId, date])
+}
+
+model CustomRole {
+  id        String   @id @default(cuid())
+  name      String   // e.g. "Accountant", "Supervisor"
+  baseRole  Role     // MANAGER, STAFF, etc.
+  agencyId  String
+  agency    Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([agencyId, name])
+  @@index([agencyId])
 }

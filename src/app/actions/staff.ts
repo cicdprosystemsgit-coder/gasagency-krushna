@@ -6,10 +6,12 @@ import bcrypt from "bcryptjs";
 import { type Role } from "@/generated/prisma";
 import { validatePassword } from "@/lib/passwordPolicy";
 import { writeAuditLog, AUDIT_ACTIONS } from "@/lib/audit";
+import { revalidatePath } from "next/cache";
 
 // ── Select shape shared between create/update responses ──────────────────────
 const USER_SELECT = {
   id: true, name: true, email: true, phone: true, role: true,
+  customRole: true, customRoleId: true,
   isActive: true, createdAt: true,
   bankAccountNo: true, bankName: true, ifscCode: true,
   aadhaarNo: true, panNo: true, photoBase64: true,
@@ -38,8 +40,10 @@ export async function createStaffUser(formData: FormData) {
   const name     = str(formData, "name");
   const email    = str(formData, "email").toLowerCase();
   const phone    = optStr(formData, "phone");
-  const role     = str(formData, "role") as Role;
-  const password = str(formData, "password");
+  const role         = str(formData, "role") as Role;
+  const customRole   = optStr(formData, "customRole");
+  const customRoleId = optStr(formData, "customRoleId");
+  const password     = str(formData, "password");
 
   // Extended profile
   const bankAccountNo = optStr(formData, "bankAccountNo");
@@ -75,6 +79,8 @@ export async function createStaffUser(formData: FormData) {
   const user = await prisma.user.create({
     data: {
       name, email, phone, role, password: hashed,
+      customRole,
+      customRoleId,
       agencyId: session.agencyId,
       bankAccountNo,
       bankName,
@@ -105,6 +111,8 @@ export async function updateStaffUser(formData: FormData) {
   const email       = str(formData, "email").toLowerCase();
   const phone       = optStr(formData, "phone");
   const role        = str(formData, "role") as Role;
+  const customRole   = optStr(formData, "customRole");
+  const customRoleId = optStr(formData, "customRoleId");
   const newPassword = str(formData, "password");
 
   // Extended profile
@@ -146,6 +154,8 @@ export async function updateStaffUser(formData: FormData) {
 
   const data: Record<string, any> = {
     name, email, phone, role,
+    customRole,
+    customRoleId,
     bankAccountNo,
     bankName,
     ifscCode: ifscCode ? ifscCode.toUpperCase() : null,
@@ -230,4 +240,75 @@ export async function toggleStaffStatus(id: string, isActive: boolean) {
   if (!session || session.role !== "ADMIN" || !session.agencyId) return { success: false };
   await prisma.user.update({ where: { id, agencyId: session.agencyId }, data: { isActive } });
   return { success: true };
+}
+
+export async function getCustomRoles() {
+  const session = await getSession();
+  if (!session || !session.agencyId) return { error: "Unauthorized" };
+
+  try {
+    const customRoles = await prisma.customRole.findMany({
+      where: { agencyId: session.agencyId },
+      orderBy: { name: "asc" },
+    });
+    return { customRoles };
+  } catch (error) {
+    console.error("[getCustomRoles] Error:", error);
+    return { error: "Failed to fetch custom roles" };
+  }
+}
+
+export async function createCustomRole(name: string, baseRole: Role) {
+  const session = await getSession();
+  if (!session || session.role !== "ADMIN" || !session.agencyId) return { error: "Unauthorized" };
+
+  const trimmedName = name.trim();
+  if (!trimmedName) return { error: "Role name cannot be empty" };
+
+  try {
+    const customRole = await prisma.customRole.create({
+      data: {
+        name: trimmedName,
+        baseRole,
+        agencyId: session.agencyId,
+      },
+    });
+    return { customRole };
+  } catch (error: any) {
+    console.error("[createCustomRole] Error:", error);
+    if (error.code === "P2002") {
+      return { error: "A role with this name already exists in your agency" };
+    }
+    return { error: "Failed to create custom role" };
+  }
+}
+
+export async function deleteCustomRole(customRoleId: string) {
+  const session = await getSession();
+  if (!session || session.role !== "ADMIN" || !session.agencyId) return { error: "Unauthorized" };
+
+  try {
+    await prisma.$transaction([
+      // Reset users assigned to this custom role back to their base role
+      prisma.user.updateMany({
+        where: { customRoleId, agencyId: session.agencyId },
+        data: { customRole: null, customRoleId: null },
+      }),
+      // Remove all permission overrides for this custom role
+      prisma.rolePermission.deleteMany({
+        where: { agencyId: session.agencyId, role: customRoleId },
+      }),
+      // Delete the custom role itself
+      prisma.customRole.delete({
+        where: { id: customRoleId, agencyId: session.agencyId },
+      }),
+    ]);
+
+    revalidatePath("/admin/staff-management");
+    revalidatePath("/admin/security");
+    return { success: true };
+  } catch (error) {
+    console.error("[deleteCustomRole] Error:", error);
+    return { error: "Failed to delete custom role" };
+  }
 }

@@ -38,6 +38,8 @@ export interface AccessTokenPayload {
   email: string;
   name: string;
   role: Role;
+  customRole: string | null;
+  customRoleId: string | null;
   agencyId: string | null;
   agencySlug: string | null;
   type: "access";
@@ -58,6 +60,8 @@ export interface SessionPayload {
   email: string;
   name: string;
   role: Role;
+  customRole?: string | null;
+  customRoleId?: string | null;
   agencyId?: string | null;
   agencySlug?: string | null;
   exp?: number;
@@ -75,6 +79,8 @@ export async function createTokenPair(user: {
   email: string;
   name: string;
   role: Role;
+  customRole: string | null;
+  customRoleId: string | null;
   agencyId: string | null;
   agencySlug: string | null;
 }) {
@@ -86,6 +92,8 @@ export async function createTokenPair(user: {
     email:      user.email,
     name:       user.name,
     role:       user.role,
+    customRole: user.customRole,
+    customRoleId: user.customRoleId,
     agencyId:   user.agencyId,
     agencySlug: user.agencySlug,
     type:       "access" as const,
@@ -208,6 +216,8 @@ export async function getSession(): Promise<SessionPayload | null> {
     email:      payload.email,
     name:       payload.name,
     role:       payload.role,
+    customRole: payload.customRole,
+    customRoleId: payload.customRoleId,
     agencyId:   payload.agencyId,
     agencySlug: payload.agencySlug,
     exp:        payload.exp,
@@ -223,6 +233,8 @@ export async function verifySession(token: string): Promise<SessionPayload | nul
     email:      payload.email,
     name:       payload.name,
     role:       payload.role,
+    customRole: payload.customRole,
+    customRoleId: payload.customRoleId,
     agencyId:   payload.agencyId,
     agencySlug: payload.agencySlug,
     exp:        payload.exp,
@@ -281,6 +293,7 @@ export function getRoleDashboard(role: Role): string {
     ADMIN:         "/admin",
     MANAGER:       "/manager",
     GODOWN_KEEPER: "/godown-keeper",
+    CASHIER:       "/staff",
     STAFF:         "/staff",
     DELIVERY_BOY:  "/delivery-boy",
   };

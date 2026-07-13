@@ -8,9 +8,14 @@ import { InternalVehiclesClient } from "@/app/(dashboard)/admin/godown/InternalV
 
 import { getAgencyTodayRange } from "@/lib/utils";
 
+import { checkPermission } from "@/lib/rbac";
+
 export default async function ManagerGodownPage() {
   const session = await getSession();
   if (!session || session.role !== "MANAGER") redirect("/login");
+
+  const isAllowed = await checkPermission(session.userId, "godown", "read");
+  if (!isAllowed) redirect("/manager");
 
   const { todayStart, todayEnd } = getAgencyTodayRange();
 

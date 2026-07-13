@@ -1,6 +1,7 @@
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
+import { DEFAULT_PERMISSIONS } from "@/lib/rbac";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +23,7 @@ export async function GET() {
   let themeColor = "#2563eb";
   let logoBase64: string | null = null;
   let agencyName: string | null = null;
+  let customRolePermissions: { resource: string; action: string; isAllowed: boolean }[] = [];
 
   if (session.agencyId) {
     const agency = await prisma.agency.findUnique({
@@ -39,6 +41,46 @@ export async function GET() {
       logoBase64 = agency.logoBase64;
       agencyName = agency.name;
     }
+
+    if (session.customRoleId) {
+      // 1. Fetch DB overrides for this custom role
+      const overrides = await prisma.rolePermission.findMany({
+        where: {
+          agencyId: session.agencyId,
+          role: session.customRoleId,
+        },
+        select: {
+          resource: true,
+          action: true,
+          isAllowed: true,
+        },
+      });
+
+      if (overrides.length > 0) {
+        customRolePermissions = overrides;
+      } else {
+        // 2. Fetch the custom role base role template defaults
+        const customRoleObj = await prisma.customRole.findUnique({
+          where: { id: session.customRoleId },
+          select: { baseRole: true },
+        });
+
+        if (customRoleObj) {
+          const basePermissions = DEFAULT_PERMISSIONS[customRoleObj.baseRole];
+          if (basePermissions) {
+            for (const [resource, actions] of Object.entries(basePermissions)) {
+              for (const action of actions) {
+                customRolePermissions.push({
+                  resource,
+                  action,
+                  isAllowed: true,
+                });
+              }
+            }
+          }
+        }
+      }
+    }
   }
 
   return NextResponse.json(
@@ -50,6 +92,9 @@ export async function GET() {
       themeColor,
       logoBase64,
       agencyName,
+      customRole: session.customRole || null,
+      customRoleId: session.customRoleId || null,
+      customRolePermissions,
     },
     {
       headers: {

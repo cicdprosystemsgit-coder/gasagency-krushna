@@ -199,7 +199,16 @@ export async function impersonateAgency(agencyId: string) {
   // Find the admin user for this agency
   const targetUser = await prisma.user.findFirst({
     where: { agencyId, role: "ADMIN", isActive: true },
-    include: { agency: { select: { slug: true } } },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      role: true,
+      customRole: true,
+      customRoleId: true,
+      agencyId: true,
+      agency: { select: { slug: true } },
+    },
   });
 
   if (!targetUser) {
@@ -218,6 +227,8 @@ export async function impersonateAgency(agencyId: string) {
     email:      targetUser.email,
     name:       targetUser.name,
     role:       targetUser.role,
+    customRole: targetUser.customRole,
+    customRoleId: targetUser.customRoleId,
     agencyId:   targetUser.agencyId,
     agencySlug: targetUser.agency.slug,
   });

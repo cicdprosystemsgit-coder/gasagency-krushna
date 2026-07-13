@@ -1,16 +1,18 @@
 "use client";
 
 import { useState, useEffect, useTransition } from "react";
-import { ShieldAlert, Save, RefreshCw, Check, AlertCircle } from "lucide-react";
+import { ShieldAlert, Save, RefreshCw, Check, AlertCircle, Trash2 } from "lucide-react";
 import { getRolePermissions, savePermissionsBatch } from "@/app/actions/rbac";
+import { deleteCustomRole } from "@/app/actions/staff";
 
-type Role = "ADMIN" | "MANAGER" | "STAFF" | "GODOWN_KEEPER" | "DELIVERY_BOY" | "SYSTEM_ADMIN";
+type Role = "ADMIN" | "MANAGER" | "STAFF" | "GODOWN_KEEPER" | "CASHIER" | "DELIVERY_BOY" | "SYSTEM_ADMIN";
 
-const ROLES = [
-  { key: "MANAGER" as Role, label: "Manager" },
-  { key: "STAFF" as Role, label: "Office Staff" },
-  { key: "GODOWN_KEEPER" as Role, label: "Godown Keeper" },
-  { key: "DELIVERY_BOY" as Role, label: "Delivery Boy" },
+const ROLES: { key: string; label: string; baseRole?: string }[] = [
+  { key: "MANAGER", label: "Manager" },
+  { key: "STAFF", label: "Office Staff" },
+  { key: "GODOWN_KEEPER", label: "Godown Keeper" },
+  { key: "CASHIER", label: "Cashier" },
+  { key: "DELIVERY_BOY", label: "Delivery Boy" },
 ];
 
 const RESOURCES = [
@@ -73,6 +75,15 @@ const DEFAULT_PERMISSIONS_STATIC: Record<string, Record<string, string[]>> = {
     leaves: ["create", "read"],
     salaries: ["read"],
   },
+  CASHIER: {
+    customers: ["create", "read", "update"],
+    transactions: ["create", "read"],
+    gstInvoices: ["create", "read"],
+    inventory: ["read"],
+    leaves: ["create", "read"],
+    salaries: ["read"],
+    paymentReceipts: ["create", "read"],
+  },
   STAFF: {
     customers: ["create", "read", "update"],
     transactions: ["create", "read"],
@@ -90,7 +101,8 @@ const DEFAULT_PERMISSIONS_STATIC: Record<string, Record<string, string[]>> = {
 };
 
 export function RolePermissionsClient() {
-  const [activeRole, setActiveRole] = useState<Role>("MANAGER");
+  const [allRoles, setAllRoles] = useState<{ key: string; label: string; baseRole?: string }[]>(ROLES);
+  const [activeRole, setActiveRole] = useState<string>("MANAGER");
   const [dbOverrides, setDbOverrides] = useState<any[]>([]);
   const [matrixState, setMatrixState] = useState<Record<string, Record<string, Record<string, boolean>>>>({});
   const [isPending, startTransition] = useTransition();
@@ -114,10 +126,19 @@ export function RolePermissionsClient() {
     const overrides = result.overrides || [];
     setDbOverrides(overrides);
 
+    const customRoles = result.customRoles || [];
+    const mappedCustom = customRoles.map((cr: any) => ({
+      key: cr.id,
+      label: cr.name,
+      baseRole: cr.baseRole,
+    }));
+    const updatedRoles = [...ROLES, ...mappedCustom];
+    setAllRoles(updatedRoles);
+
     // Build the grid state: Role -> Resource -> Action -> boolean
     const initialMatrix: any = {};
 
-    ROLES.forEach((r) => {
+    updatedRoles.forEach((r) => {
       initialMatrix[r.key] = {};
       RESOURCES.forEach((res) => {
         initialMatrix[r.key][res.key] = {};
@@ -130,8 +151,9 @@ export function RolePermissionsClient() {
           if (dbOverride !== undefined) {
             initialMatrix[r.key][res.key][act.key] = dbOverride.isAllowed;
           } else {
-            // Fall back to static defaults
-            const defaults = DEFAULT_PERMISSIONS_STATIC[r.key] || {};
+            // Fall back to static defaults based on baseRole
+            const baseTemplate = r.baseRole || r.key;
+            const defaults = DEFAULT_PERMISSIONS_STATIC[baseTemplate] || {};
             const allowedActions = defaults[res.key] || [];
             initialMatrix[r.key][res.key][act.key] = allowedActions.includes(act.key);
           }
@@ -143,7 +165,7 @@ export function RolePermissionsClient() {
     setIsLoading(false);
   };
 
-  const handleToggle = (role: Role, resource: string, action: string) => {
+  const handleToggle = (role: string, resource: string, action: string) => {
     setMatrixState((prev) => {
       const current = prev[role]?.[resource]?.[action];
       return {
@@ -163,15 +185,16 @@ export function RolePermissionsClient() {
     setMessage(null);
     startTransition(async () => {
       // Gather all updates
-      const updates: { role: Role; resource: string; action: string; isAllowed: boolean }[] = [];
+      const updates: { role: string; resource: string; action: string; isAllowed: boolean }[] = [];
 
-      ROLES.forEach((r) => {
+      allRoles.forEach((r) => {
         RESOURCES.forEach((res) => {
           ACTIONS.forEach((act) => {
             const val = matrixState[r.key]?.[res.key]?.[act.key];
             
             // Check if this differs from default or exists as override
-            const defaults = DEFAULT_PERMISSIONS_STATIC[r.key] || {};
+            const baseTemplate = r.baseRole || r.key;
+            const defaults = DEFAULT_PERMISSIONS_STATIC[baseTemplate] || {};
             const allowedActions = defaults[res.key] || [];
             const wasAllowedByDefault = allowedActions.includes(act.key);
             
@@ -182,7 +205,7 @@ export function RolePermissionsClient() {
             // Only update/upsert if it is customized (differs from default or we have an override)
             if (val !== wasAllowedByDefault || existingOverride !== undefined) {
               updates.push({
-                role: r.key as Role,
+                role: r.key,
                 resource: res.key,
                 action: act.key,
                 isAllowed: val,
@@ -205,6 +228,25 @@ export function RolePermissionsClient() {
         loadPermissions(); // reload from DB
       }
     });
+  };
+
+  const handleDeleteRole = async (roleId: string, roleName: string) => {
+    if (!confirm(`Are you sure you want to delete the custom role "${roleName}"? Any users assigned to this role will revert to having no custom role and will inherit permissions from their base template role.`)) {
+      return;
+    }
+    
+    setIsLoading(true);
+    const res = await deleteCustomRole(roleId);
+    if (res.error) {
+      setMessage({ type: "error", text: res.error });
+      setIsLoading(false);
+    } else {
+      setMessage({ type: "success", text: `Successfully deleted custom role "${roleName}"!` });
+      if (activeRole === roleId) {
+        setActiveRole("MANAGER");
+      }
+      loadPermissions();
+    }
   };
 
   if (isLoading) {
@@ -230,19 +272,29 @@ export function RolePermissionsClient() {
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-zinc-200">
-        {ROLES.map((role) => (
-          <button
-            key={role.key}
-            onClick={() => setActiveRole(role.key as Role)}
-            className={`px-4 py-2 text-[13px] font-semibold transition-colors border-b-2 outline-none -mb-px ${
-              activeRole === role.key
-                ? "border-blue-600 text-blue-600"
-                : "border-transparent text-zinc-400 hover:text-zinc-600"
-            }`}
-          >
-            {role.label}
-          </button>
+      <div className="flex flex-wrap border-b border-zinc-200 gap-y-1">
+        {allRoles.map((role) => (
+          <div key={role.key} className="flex items-center relative -mb-px">
+            <button
+              onClick={() => setActiveRole(role.key)}
+              className={`px-4 py-2 text-[13px] font-semibold transition-colors border-b-2 outline-none ${
+                activeRole === role.key
+                  ? "border-blue-600 text-blue-600"
+                  : "border-transparent text-zinc-400 hover:text-zinc-600"
+              }`}
+            >
+              {role.label}
+            </button>
+            {role.baseRole && (
+              <button
+                onClick={() => handleDeleteRole(role.key, role.label)}
+                title={`Delete custom role "${role.label}"`}
+                className="p-1 text-zinc-400 hover:text-red-500 hover:bg-zinc-100 rounded-md transition-colors mr-2 my-auto"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
         ))}
       </div>
 
@@ -266,7 +318,9 @@ export function RolePermissionsClient() {
                     const isChecked = matrixState[activeRole]?.[res.key]?.[act.key] || false;
                     
                     // Check if this is custom or default
-                    const defaults = DEFAULT_PERMISSIONS_STATIC[activeRole] || {};
+                    const activeRoleObj = allRoles.find(r => r.key === activeRole);
+                    const baseTemplate = activeRoleObj?.baseRole || activeRole;
+                    const defaults = DEFAULT_PERMISSIONS_STATIC[baseTemplate] || {};
                     const allowedActions = defaults[res.key] || [];
                     const wasAllowedByDefault = allowedActions.includes(act.key);
                     const isCustomized = isChecked !== wasAllowedByDefault;

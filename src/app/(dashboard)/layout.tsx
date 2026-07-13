@@ -13,6 +13,9 @@ interface SessionData {
   themeColor?: string;
   logoBase64?: string | null;
   agencyName?: string | null;
+  customRole?: string | null;
+  customRoleId?: string | null;
+  customRolePermissions?: { resource: string; action: string; isAllowed: boolean }[];
 }
 
 function adjustColorBrightness(hex: string, percent: number) {
@@ -95,6 +98,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         enabledFeatures={session.enabledFeatures ?? []}
         agencyName={session.agencyName}
         logoBase64={session.logoBase64}
+        customRoleName={session.customRole}
+        customRolePermissions={session.customRolePermissions}
       />
       <Navbar
         userName={session.name}

@@ -6,9 +6,14 @@ import { Boxes, Package } from "lucide-react";
 import { InventoryClient } from "@/app/(dashboard)/admin/inventory/InventoryClient";
 import { OfficeInventorySection } from "@/components/ui/OfficeInventorySection";
 
+import { checkPermission } from "@/lib/rbac";
+
 export default async function ManagerInventoryPage() {
   const session = await getSession();
   if (!session || session.role !== "MANAGER") redirect("/login");
+
+  const isAllowed = await checkPermission(session.userId, "inventory", "read");
+  if (!isAllowed) redirect("/manager");
 
   const startOfMonth = new Date();
   startOfMonth.setDate(1);

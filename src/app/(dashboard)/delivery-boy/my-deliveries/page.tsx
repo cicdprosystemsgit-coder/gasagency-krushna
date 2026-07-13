@@ -5,9 +5,14 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { Truck } from "lucide-react";
 import { MyDeliveriesClient } from "./MyDeliveriesClient";
 
+import { checkPermission } from "@/lib/rbac";
+
 export default async function MyDeliveriesPage() {
   const session = await getSession();
   if (!session || session.role !== "DELIVERY_BOY") redirect("/login");
+
+  const isAllowed = await checkPermission(session.userId, "deliveries", "read");
+  if (!isAllowed) redirect("/delivery-boy");
 
   const now = new Date();
   const todayStart = new Date(now); todayStart.setHours(0, 0, 0, 0);

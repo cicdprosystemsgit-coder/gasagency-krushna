@@ -25,9 +25,14 @@ function PaymentBadge({ mode }: { mode: string }) {
   );
 }
 
+import { checkPermission } from "@/lib/rbac";
+
 export default async function DeliveryLedgerPage() {
   const session = await getSession();
   if (!session || session.role !== "DELIVERY_BOY") redirect("/login");
+
+  const isAllowed = await checkPermission(session.userId, "deliveries", "read");
+  if (!isAllowed) redirect("/delivery-boy");
 
   const deliveries = await prisma.deliveryRecord.findMany({
     where: { deliveredById: session.userId },

@@ -5,9 +5,14 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { Receipt } from "lucide-react";
 import { OfficeTransactionsClient } from "@/app/(dashboard)/admin/office-transactions/OfficeTransactionsClient";
 
+import { checkPermission } from "@/lib/rbac";
+
 export default async function StaffOfficeTransactionsPage() {
   const session = await getSession();
   if (!session || session.role !== "STAFF") redirect("/login");
+
+  const isAllowed = await checkPermission(session.userId, "transactions", "read");
+  if (!isAllowed) redirect("/staff");
 
   const [transactions, products] = await Promise.all([
     prisma.officeTransaction.findMany({

@@ -7,9 +7,14 @@ import { fetchMySalaryData } from "@/lib/fetchMySalaryData";
 
 export const metadata = { title: "My Salary | GasAgency" };
 
+import { checkPermission } from "@/lib/rbac";
+
 export default async function DeliveryBoyMySalaryPage() {
   const session = await getSession();
   if (!session || session.role !== "DELIVERY_BOY" || !session.agencyId) redirect("/login");
+
+  const isAllowed = await checkPermission(session.userId, "salaries", "read");
+  if (!isAllowed) redirect("/delivery-boy");
 
   const { profile, drawings, advances, bonuses, agency } = await fetchMySalaryData(session.userId, session.agencyId);
 

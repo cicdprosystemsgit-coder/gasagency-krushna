@@ -36,7 +36,7 @@ export type LoginState = {
 
 // ── Shared helper: issue tokens + set cookies ─────────────────────────────────
 async function issueSession(params: {
-  user: { id: string; email: string; name: string; role: Role; agencyId: string | null; agencySlug: string | null };
+  user: { id: string; email: string; name: string; role: Role; customRole: string | null; customRoleId: string | null; agencyId: string | null; agencySlug: string | null };
   ip: string;
   userAgent: string;
 }) {
@@ -52,6 +52,8 @@ async function issueSession(params: {
     email:      user.email,
     name:       user.name,
     role:       user.role,
+    customRole: user.customRole,
+    customRoleId: user.customRoleId,
     agencyId:   user.agencyId,
     agencySlug: user.agencySlug,
   });
@@ -100,6 +102,7 @@ export async function loginAction(
     where: { email: parsed.data.email },
     select: {
       id: true, email: true, name: true, role: true,
+      customRole: true, customRoleId: true,
       agencyId: true, isActive: true, password: true,
       twoFactorEnabled: true,
       agency: { select: { slug: true, status: true } },
@@ -157,6 +160,7 @@ export async function verify2FALogin(
     where: { id: userId },
     select: {
       id: true, email: true, name: true, role: true, agencyId: true,
+      customRole: true, customRoleId: true,
       isActive: true, twoFactorSecret: true, twoFactorEnabled: true,
       twoFactorBackupCodes: true,
       agency: { select: { slug: true, status: true } },
