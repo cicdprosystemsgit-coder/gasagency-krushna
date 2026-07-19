@@ -6,7 +6,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 COPY prisma ./prisma/
 
-RUN npm ci --frozen-lockfile
+RUN npm install
 
 # ─── Stage 2: Builder ─────────────────────────────────────────────────────────
 FROM node:20-alpine AS builder
