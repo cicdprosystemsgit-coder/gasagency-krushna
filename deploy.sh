@@ -1,91 +1,97 @@
 #!/bin/bash
 # =============================================================================
-#  Gasagency — VPS Deployment Script
-#  Place this at: /home/deploy/deploy.sh on your VPS
-#  Usage: bash /home/deploy/deploy.sh
+#  Gasagency — Docker VPS Deployment Script
+#  Domain: https://dev.agency.cicdprosystems.com
+#  Place at: /home/deploy/gasagency/gasagency/deploy.sh
+#  Usage:    bash /home/deploy/gasagency/gasagency/deploy.sh
 # =============================================================================
+set -euo pipefail
 
-set -e  # Exit immediately on any error
-
-# ─── Config ───────────────────────────────────────────────────────────────────
 APP_DIR="/home/deploy/gasagency/gasagency"
-BRANCH="my-idea"       # <-- your branch name
-PM2_APP_NAME="gasagency"
+BRANCH="my-idea"
+DOMAIN="dev.agency.cicdprosystems.com"
 
-# ─── Colors ───────────────────────────────────────────────────────────────────
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-RED='\033[0;31m'
-NC='\033[0m' # No Color
-
+GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; NC='\033[0m'
 log()  { echo -e "${GREEN}[✔] $1${NC}"; }
 warn() { echo -e "${YELLOW}[!] $1${NC}"; }
 fail() { echo -e "${RED}[✘] $1${NC}"; exit 1; }
 
-# ─── Start ────────────────────────────────────────────────────────────────────
 echo ""
-echo "================================================="
-echo "  🚀  Gasagency — Deployment Started"
+echo "=================================================="
+echo "  🚀  Gasagency Docker Deployment"
+echo "  🌐  ${DOMAIN}"
 echo "  📅  $(date '+%Y-%m-%d %H:%M:%S')"
-echo "================================================="
+echo "=================================================="
 echo ""
 
-# Step 1: Navigate to app directory
-cd "$APP_DIR" || fail "Could not navigate to $APP_DIR"
-log "Changed to app directory: $APP_DIR"
+# ── Pre-flight checks ──────────────────────────────────────────────────────
+cd "$APP_DIR" || fail "Cannot cd to $APP_DIR"
 
-# Step 2: Pull latest code
+[ -f ".env.production" ]         || fail ".env.production missing — create it on the VPS first (never commit it)."
+[ -f "nginx/dhparam.pem" ]       || fail "nginx/dhparam.pem missing — run: openssl dhparam -out nginx/dhparam.pem 2048"
+[ -d "/etc/letsencrypt/live/${DOMAIN}" ] || fail "SSL certs missing — run certbot first (see deployment plan)."
+
+log "Pre-flight checks passed"
+
+# ── Install logrotate config (idempotent) ─────────────────────────────────
+if [ ! -f "/etc/logrotate.d/gasagency-nginx" ]; then
+    warn "Installing logrotate config for Nginx logs..."
+    sudo cp "$APP_DIR/nginx/logrotate-nginx.conf" /etc/logrotate.d/gasagency-nginx
+    log "Logrotate config installed"
+fi
+
+# ── Pull latest code ──────────────────────────────────────────────────────
 warn "Pulling latest code from branch: $BRANCH..."
 git fetch origin
 git checkout "$BRANCH"
 git pull origin "$BRANCH"
-log "Code updated successfully"
+log "Code updated"
 
-# Step 3: Install / update dependencies
-warn "Installing dependencies..."
-npm install --production=false
-log "Dependencies installed"
+# ── Build Docker image ────────────────────────────────────────────────────
+warn "Building Docker image (no-cache)..."
+docker compose build --no-cache app
+log "Image built"
 
-# Step 4: Generate Prisma client
-warn "Generating Prisma client..."
-npm run db:generate
-log "Prisma client generated"
+# ── Run DB migrations ─────────────────────────────────────────────────────
+warn "Running DB migrations..."
+docker compose run --rm --env-file .env.production app \
+    sh -c "npx prisma migrate deploy"
+log "DB migrations applied"
 
-# Step 5: Run database migrations (safe — only applies new ones)
-warn "Running database migrations..."
-npx prisma migrate deploy
-log "Database migrations applied"
+# ── Start / restart containers ────────────────────────────────────────────
+warn "Starting containers..."
+docker compose up -d --remove-orphans
+log "Containers started"
 
-# Step 6: Build Next.js app
-warn "Building Next.js application..."
-npm run build
-log "Build completed successfully"
+# ── Health check ──────────────────────────────────────────────────────────
+warn "Waiting 15s for app to initialise..."
+sleep 15
 
-# Step 7: Create logs directory if missing
-mkdir -p logs
-log "Logs directory ready"
-
-# Step 8: Restart or start app with PM2
-if pm2 describe "$PM2_APP_NAME" > /dev/null 2>&1; then
-  warn "Restarting PM2 process: $PM2_APP_NAME..."
-  pm2 restart "$PM2_APP_NAME" --update-env
-  log "PM2 process restarted"
+if curl -sf --max-time 10 "https://${DOMAIN}/api/health" > /dev/null; then
+    log "Health check passed ✅"
 else
-  warn "Starting PM2 process for the first time..."
-  pm2 start ecosystem.config.js --env production
-  log "PM2 process started"
+    warn "HTTPS health check failed — trying internal..."
+    docker compose exec app curl -sf http://localhost:3000/api/health \
+        && log "Internal health check passed (SSL may still be starting)" \
+        || fail "Health check failed — check: docker compose logs app"
 fi
 
-# Step 9: Save PM2 process list
-pm2 save
-log "PM2 process list saved"
+# ── Cleanup ───────────────────────────────────────────────────────────────
+docker image prune -f > /dev/null
+log "Old images pruned"
 
-# ─── Done ─────────────────────────────────────────────────────────────────────
+# ── Certbot auto-renew cron (installs once) ───────────────────────────────
+CRON_ENTRY="0 3 1 */2 * certbot renew --quiet && docker compose -f ${APP_DIR}/docker-compose.yml restart nginx"
+if ! crontab -l 2>/dev/null | grep -qF "certbot renew"; then
+    (crontab -l 2>/dev/null; echo "$CRON_ENTRY") | crontab -
+    log "Certbot auto-renew cron installed"
+fi
+
 echo ""
-echo "================================================="
+echo "=================================================="
 echo "  ✅  Deployment Complete!"
-echo "  🌐  App running at: https://yourdomain.com"
-echo "  📊  PM2 Status:"
-echo "================================================="
-pm2 status
+echo "  🌐  https://${DOMAIN}"
+echo ""
+docker compose ps
+echo "=================================================="
 echo ""

@@ -1,15 +1,32 @@
 import { PrismaClient } from "@/generated/prisma";
 import { PrismaPg } from "@prisma/adapter-pg";
+import { Pool } from "pg";
 
 function createPrismaClient() {
-  const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });
-  return new PrismaClient({ adapter } as ConstructorParameters<typeof PrismaClient>[0]);
+  // Explicit pg.Pool prevents unlimited DB connections under concurrent load.
+  // DB_POOL_MAX: tune per VPS RAM (default 10; each conn ~5-10 MB on Postgres).
+  // PgBouncer sits upstream; connection_limit=1 in DATABASE_URL is intentional.
+  const pool = new Pool({
+    connectionString: process.env.DATABASE_URL!,
+    max: parseInt(process.env.DB_POOL_MAX ?? "10"),
+    idleTimeoutMillis: 30_000,       // release idle connections after 30 s
+    connectionTimeoutMillis: 5_000,  // throw if no connection available in 5 s
+    allowExitOnIdle: false,          // keep pool alive across requests
+  });
+
+  const adapter = new PrismaPg(pool);
+
+  return new PrismaClient({
+    adapter,
+    log:
+      process.env.NODE_ENV === "development"
+        ? [{ emit: "stdout", level: "query" }, { emit: "stdout", level: "warn" }, { emit: "stdout", level: "error" }]
+        : [{ emit: "stdout", level: "warn" }, { emit: "stdout", level: "error" }],
+  } as ConstructorParameters<typeof PrismaClient>[0]);
 }
 
-// Production: singleton to avoid exhausting the connection pool across requests.
-// Development: always create a fresh client so `prisma generate` changes take
-// effect immediately without a full server restart (globalThis would otherwise
-// keep the stale pre-generate instance alive across HMR reloads).
+// Production: singleton — one pool per process.
+// Development: fresh client on each HMR reload.
 let prisma: PrismaClient;
 
 if (process.env.NODE_ENV === "production") {

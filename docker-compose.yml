@@ -1,7 +1,7 @@
 version: "3.9"
 
 services:
-  # ─── PostgreSQL Database ────────────────────────────────────────────────────
+  # ─── PostgreSQL — internal only, not reachable from Nginx ──────────────────
   postgres:
     image: postgres:16-alpine
     container_name: gasagency_db
@@ -13,15 +13,48 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
+    command: postgres -c config_file=/etc/postgresql/postgresql.conf
     networks:
-      - gasagency_net
+      - gasagency_internal          # fully isolated — no public or nginx access
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
       retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 512M
 
-  # ─── Next.js Application ────────────────────────────────────────────────────
+  # ─── PgBouncer — connection pooler ────────────────────────────────────────
+  pgbouncer:
+    image: edoburu/pgbouncer:latest
+    container_name: gasagency_pgbouncer
+    restart: unless-stopped
+    env_file: .env.production
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      POOL_MODE: transaction          # best for Prisma (stateless requests)
+      MAX_CLIENT_CONN: 200            # max simultaneous app→PgBouncer connections
+      DEFAULT_POOL_SIZE: 20           # server connections PgBouncer→Postgres
+      MIN_POOL_SIZE: 5
+      SERVER_IDLE_TIMEOUT: 600
+      CLIENT_IDLE_TIMEOUT: 0
+      LOG_CONNECTIONS: 0
+      LOG_DISCONNECTIONS: 0
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - gasagency_internal            # can reach postgres
+      - gasagency_net                 # app can reach pgbouncer
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+
+  # ─── Next.js Application ──────────────────────────────────────────────────
   app:
     build:
       context: .
@@ -31,16 +64,33 @@ services:
     env_file: .env.production
     environment:
       NODE_ENV: production
-      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public
-    ports:
-      - "3000:3000"
+      # Points to PgBouncer — connection_limit=1 so each Prisma instance uses 1 slot
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@pgbouncer:5432/${POSTGRES_DB}?schema=public&connection_limit=1&pool_timeout=20
+      DB_POOL_MAX: "10"
+      LOG_DIR: /app/logs
+    # NO ports: — app is internal only, Nginx is the only entry point
     depends_on:
-      postgres:
-        condition: service_healthy
+      pgbouncer:
+        condition: service_started
     networks:
       - gasagency_net
+    volumes:
+      - app_logs:/app/logs            # persistent rotating log files
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    logging:
+      driver: json-file
+      options:
+        max-size: "100m"              # Docker stdout chunks at 100 MB
+        max-file: "3"                 # keep 3 rotated Docker log chunks
 
-  # ─── Nginx Reverse Proxy ────────────────────────────────────────────────────
+  # ─── Nginx — only public-facing container ─────────────────────────────────
   nginx:
     image: nginx:alpine
     container_name: gasagency_nginx
@@ -50,19 +100,34 @@ services:
       - "443:443"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./nginx/certs:/etc/nginx/certs:ro
-      - nginx_logs:/var/log/nginx
+      - ./nginx/dhparam.pem:/etc/nginx/dhparam.pem:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      - /var/www/certbot:/var/www/certbot:ro
+      - nginx_logs:/var/log/nginx     # host-mounted for logrotate access
     depends_on:
       - app
     networks:
       - gasagency_net
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+    logging:
+      driver: json-file
+      options:
+        max-size: "100m"
+        max-file: "3"
 
-# ─── Volumes ─────────────────────────────────────────────────────────────────
+# ─── Volumes ──────────────────────────────────────────────────────────────────
 volumes:
   postgres_data:
   nginx_logs:
+  app_logs:                           # Next.js rotating log files
 
 # ─── Networks ─────────────────────────────────────────────────────────────────
 networks:
   gasagency_net:
+    driver: bridge                    # Nginx ↔ App ↔ PgBouncer
+  gasagency_internal:
     driver: bridge
+    internal: true                    # PgBouncer ↔ Postgres — no external routing
