@@ -20,14 +20,22 @@ import {
   Search,
   ChevronDown,
   ChevronUp,
+  ChevronLeft,
+  ChevronRight,
   Calendar,
   Clock,
   FileText,
   AlertCircle,
   HelpCircle,
   Check,
+  Navigation,
+  MapPin,
+  Edit,
 } from "lucide-react";
-import { createGodownEntry, recordGodownExit, approveGodownRecord, addCylinderType } from "@/app/actions/godown";
+import { createGodownEntry, recordGodownExit, approveGodownRecord, addCylinderType, rejectGodownRecord, updateGodownEntry } from "@/app/actions/godown";
+import { useEffect } from "react";
+import { useGodownGps } from "@/hooks/useGodownGps";
+import { GpsStatusBox } from "@/components/ui/GpsStatusBox";
 
 /* â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
@@ -50,8 +58,16 @@ interface GodownRecord {
   emptyCylindersReturned: number;
   items: unknown;
   notes: string | null;
+  ervNo?: string | null;
+  ervDate?: Date | string | null;
   status: string;
   submittedBy: { name: string };
+  entryLat?: number | null;
+  entryLng?: number | null;
+  entryAccuracy?: number | null;
+  exitLat?: number | null;
+  exitLng?: number | null;
+  exitAccuracy?: number | null;
 }
 
 interface GodownClientProps {
@@ -169,8 +185,8 @@ function CylinderRows({
           <p className="text-[11px] text-slate-400 mt-0.5">Click the "Add Cylinder Type" button to register cylinders to this vehicle.</p>
         </div>
       ) : (
-        <div className="border border-slate-200 rounded-xl overflow-hidden shadow-xs bg-white">
-          <div className="overflow-x-auto">
+        <div className="border border-slate-200 rounded-xl overflow-visible shadow-xs bg-white">
+          <div className="overflow-visible">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-slate-50 border-b" style={{ borderColor: "#E2E8F0" }}>
@@ -361,26 +377,70 @@ export function GodownClient({
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState("");
 
-  // Filters & Search
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"ALL" | "PENDING" | "APPROVED" | "PENDING_EXIT">("ALL");
   const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({});
 
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+
+  // Reset page when filtering or searching
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, statusFilter]);
+
   // Modals state
   const [entryOpen, setEntryOpen] = useState(false);
+  const [modifyRecordId, setModifyRecordId] = useState<string | null>(null);
   const [entryVehicleNo, setEntryVehicleNo] = useState("");
-  const [entryDate, setEntryDate] = useState(new Date().toISOString().slice(0, 16));
+  const [entryDate, setEntryDate] = useState("");
   const [entryItems, setEntryItems] = useState<CylinderItem[]>([]);
   const [entryNotes, setEntryNotes] = useState("");
+  const [entryErvNo, setEntryErvNo] = useState("");
+  const [entryErvDate, setEntryErvDate] = useState("");
 
   const [exitOpen, setExitOpen] = useState(false);
   const [exitRecordId, setExitRecordId] = useState("");
-  const [exitDate, setExitDate] = useState(new Date().toISOString().slice(0, 16));
+  const [exitDate, setExitDate] = useState("");
   const [exitItems, setExitItems] = useState<CylinderItem[]>([]);
   const [exitNotes, setExitNotes] = useState("");
+  const [exitErvNo, setExitErvNo] = useState("");
+  const [exitErvDate, setExitErvDate] = useState("");
 
   const [addTypeOpen, setAddTypeOpen] = useState(false);
   const [addTypeCallback, setAddTypeCallback] = useState<((p: Product) => void) | null>(null);
+
+  const entryGps = useGodownGps();
+  const exitGps = useGodownGps();
+
+  useEffect(() => {
+    if (entryOpen) {
+      if (!modifyRecordId) {
+        setEntryDate(new Date().toISOString().slice(0, 16)); // capture real-time when modal opens
+      }
+      entryGps.captureGps();
+    } else {
+      entryGps.resetGps();
+    }
+  }, [entryOpen, modifyRecordId, entryGps.captureGps, entryGps.resetGps]);
+
+  const isEditingExit = useMemo(() => {
+    if (!exitRecordId) return false;
+    const rec = records.find((r) => r.id === exitRecordId);
+    return rec ? hasExited(rec) : false;
+  }, [records, exitRecordId]);
+
+  useEffect(() => {
+    if (exitOpen) {
+      if (!isEditingExit) {
+        setExitDate(new Date().toISOString().slice(0, 16)); // capture real-time when modal opens
+      }
+      exitGps.captureGps();
+    } else {
+      exitGps.resetGps();
+    }
+  }, [exitOpen, isEditingExit, exitGps.captureGps, exitGps.resetGps]);
 
   // Toggle row expansion
   const toggleRow = (id: string) => {
@@ -395,7 +455,7 @@ export function GodownClient({
     return records.find((r) => r.id === exitRecordId);
   }, [records, exitRecordId]);
 
-  // â”€â”€ Entry submit â”€â”€
+  // ── Entry submit ──
   function handleEntrySubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
@@ -423,22 +483,102 @@ export function GodownClient({
     );
     fd.append("notes", entryNotes);
     fd.append("submittedById", userId);
+    fd.append("ervNo", entryErvNo);
+    fd.append("ervDate", entryErvDate);
+
+    if (entryGps.gps.lat !== null) fd.append("entryLat", String(entryGps.gps.lat));
+    if (entryGps.gps.lng !== null) fd.append("entryLng", String(entryGps.gps.lng));
+    if (entryGps.gps.accuracy !== null) fd.append("entryAccuracy", String(entryGps.gps.accuracy));
 
     startTransition(async () => {
-      const res = await createGodownEntry(fd);
+      const res = modifyRecordId
+        ? await updateGodownEntry(modifyRecordId, fd)
+        : await createGodownEntry(fd);
       if (res.error) {
         setError(res.error);
         return;
       }
       if (res.record) {
-        setRecords((prev) => [res.record!, ...prev]);
+        setRecords((prev) =>
+          modifyRecordId
+            ? prev.map((r) => (r.id === modifyRecordId ? res.record! : r))
+            : [res.record!, ...prev]
+        );
         setEntryOpen(false);
+        setModifyRecordId(null);
         setEntryVehicleNo("");
         setEntryDate(new Date().toISOString().slice(0, 16));
         setEntryItems([]);
         setEntryNotes("");
+        setEntryErvNo("");
+        setEntryErvDate("");
       }
     });
+  }
+
+  // ── Reject ──
+  function handleReject(id: string) {
+    if (!confirm("Are you sure you want to reject this entry record?")) return;
+    startTransition(async () => {
+      const res = await rejectGodownRecord(id);
+      if (res.success) {
+        setRecords((prev) => prev.map((r) => (r.id === id ? { ...r, status: "REJECTED" } : r)));
+      } else {
+        alert(res.error || "Failed to reject record");
+      }
+    });
+  }
+
+  // ── Open Modify Modal ──
+  function openModifyEntry(r: GodownRecord) {
+    setError("");
+    setModifyRecordId(r.id);
+    setEntryVehicleNo(r.vehicleNo);
+    
+    // Parse Date correctly (datetime-local format: YYYY-MM-DDTHH:mm)
+    const localDt = new Date(r.entryDate);
+    const year = localDt.getFullYear();
+    const month = String(localDt.getMonth() + 1).padStart(2, "0");
+    const day = String(localDt.getDate()).padStart(2, "0");
+    const hours = String(localDt.getHours()).padStart(2, "0");
+    const minutes = String(localDt.getMinutes()).padStart(2, "0");
+    setEntryDate(`${year}-${month}-${day}T${hours}:${minutes}`);
+
+    // Load items
+    const items = getEntryItems(r);
+    setEntryItems(items.map((it) => ({ id: makeId(), productId: it.productId, productName: it.productName, qty: it.qty })));
+    setEntryNotes(r.notes || "");
+    setEntryErvNo(r.ervNo || "");
+    setEntryErvDate(r.ervDate ? new Date(r.ervDate).toISOString().slice(0, 10) : "");
+    setEntryOpen(true);
+  }
+
+  // ── Open Modify Exit Modal ──
+  function openModifyExit(r: GodownRecord) {
+    setError("");
+    setExitRecordId(r.id);
+    
+    // Parse exitDate correctly (datetime-local format: YYYY-MM-DDTHH:mm)
+    const exitDtStr = getExitDate(r);
+    if (exitDtStr) {
+      const localDt = new Date(exitDtStr);
+      const year = localDt.getFullYear();
+      const month = String(localDt.getMonth() + 1).padStart(2, "0");
+      const day = String(localDt.getDate()).padStart(2, "0");
+      const hours = String(localDt.getHours()).padStart(2, "0");
+      const minutes = String(localDt.getMinutes()).padStart(2, "0");
+      setExitDate(`${year}-${month}-${day}T${hours}:${minutes}`);
+    } else {
+      setExitDate(new Date().toISOString().slice(0, 16));
+    }
+
+    // Load exit items
+    const items = getExitItems(r);
+    setExitItems(items.map((it) => ({ id: makeId(), productId: it.productId, productName: it.productName, qty: it.qty })));
+    setExitNotes(getExitNotes(r) || "");
+    setExitErvNo(r.ervNo || "");
+    setExitErvDate(r.ervDate ? new Date(r.ervDate).toISOString().slice(0, 10) : "");
+    setExitOpen(true);
   }
 
   // â”€â”€ Exit submit â”€â”€
@@ -468,6 +608,12 @@ export function GodownClient({
       )
     );
     fd.append("exitNotes", exitNotes);
+    fd.append("ervNo", exitErvNo);
+    fd.append("ervDate", exitErvDate);
+
+    if (exitGps.gps.lat !== null) fd.append("exitLat", String(exitGps.gps.lat));
+    if (exitGps.gps.lng !== null) fd.append("exitLng", String(exitGps.gps.lng));
+    if (exitGps.gps.accuracy !== null) fd.append("exitAccuracy", String(exitGps.gps.accuracy));
 
     startTransition(async () => {
       const res = await recordGodownExit(fd);
@@ -482,6 +628,8 @@ export function GodownClient({
         setExitDate(new Date().toISOString().slice(0, 16));
         setExitItems([]);
         setExitNotes("");
+        setExitErvNo("");
+        setExitErvDate("");
       }
     });
   }
@@ -536,6 +684,13 @@ export function GodownClient({
     });
   }, [records, searchQuery, statusFilter]);
 
+  const paginatedRecords = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return filteredRecords.slice(start, start + itemsPerPage);
+  }, [filteredRecords, currentPage]);
+
+  const totalPages = Math.ceil(filteredRecords.length / itemsPerPage);
+
   const todayCount = records.filter(
     (r) => new Date(r.entryDate).toDateString() === new Date().toDateString()
   ).length;
@@ -572,7 +727,7 @@ export function GodownClient({
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={() => { setError(""); if (products.length > 0) setEntryItems([newRow(products)]); setEntryOpen(true); }} className="btn btn-primary py-2 px-4 shadow-sm">
+          <button onClick={() => { setError(""); setModifyRecordId(null); setEntryVehicleNo(""); setEntryDate(new Date().toISOString().slice(0, 16)); setEntryNotes(""); setEntryErvNo(""); setEntryErvDate(""); if (products.length > 0) setEntryItems([newRow(products)]); setEntryOpen(true); }} className="btn btn-primary py-2 px-4 shadow-sm">
             <LogIn className="w-4 h-4" /> Record Entry
           </button>
           <button onClick={() => { setError(""); if (products.length > 0) setExitItems([newRow(products)]); setExitOpen(true); }} className="btn py-2 px-4 shadow-sm hover:opacity-95 font-semibold text-[13px]" style={{ background: "#F59E0B", color: "#FFFFFF" }}>
@@ -595,20 +750,21 @@ export function GodownClient({
                 <th className="text-center">Empty Out</th>
                 <th>Submitted By</th>
                 <th>Status</th>
+                <th className="text-center">GPS</th>
                 <th className="text-center">Action</th>
               </tr>
             </thead>
             <tbody>
               {filteredRecords.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="py-16 text-center">
+                  <td colSpan={10} className="py-16 text-center">
                     <Truck className="w-12 h-12 mx-auto mb-3 text-slate-300" />
-                    <p className="text-[14px] font-semibold text-slate-700">No records found</p>
+                    <p className="font-semibold text-slate-700 text-[14px]">No records found</p>
                     <p className="text-[12px] text-slate-400 mt-1">Try adjusting your filters or search terms.</p>
                   </td>
                 </tr>
               ) : (
-                filteredRecords.map((r) => {
+                paginatedRecords.map((r) => {
                   const exited = hasExited(r);
                   const exitDt = getExitDate(r);
                   const isExpanded = !!expandedRows[r.id];
@@ -638,13 +794,60 @@ export function GodownClient({
                         <td className="text-slate-600 font-medium text-[13px]">{r.submittedBy.name}</td>
                         <td className="py-4"><StatusBadge status={r.status} /></td>
                         <td className="text-center py-4" onClick={(e) => e.stopPropagation()}>
-                          {r.status === "PENDING" && isAdmin && (
-                            <button onClick={() => handleApprove(r.id)} disabled={isPending} className="btn btn-secondary text-[12px] py-1 px-3 border-emerald-200 text-emerald-700 hover:bg-emerald-50 hover:border-emerald-400 font-bold">
-                              Approve
-                            </button>
-                          )}
-                          {r.status === "PENDING" && !isAdmin && (
-                            <span className="text-[12px] text-slate-400 italic">Awaiting Approval</span>
+                          <div className="flex flex-col gap-1 items-center justify-center">
+                            {r.entryLat && r.entryLng ? (
+                              <a
+                                href={`https://www.google.com/maps/search/?api=1&query=${r.entryLat},${r.entryLng}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-[10px] font-bold text-blue-600 bg-blue-50 border border-blue-200 rounded px-1.5 py-0.5 hover:bg-blue-100 transition-all inline-flex items-center gap-0.5 whitespace-nowrap"
+                                title="Entry Geolocation"
+                              >
+                                Entry <Navigation className="w-2.5 h-2.5" />
+                              </a>
+                            ) : null}
+                            {r.exitLat && r.exitLng ? (
+                              <a
+                                href={`https://www.google.com/maps/search/?api=1&query=${r.exitLat},${r.exitLng}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-[10px] font-bold text-amber-600 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5 hover:bg-amber-100 transition-all inline-flex items-center gap-0.5 whitespace-nowrap"
+                                title="Exit Geolocation"
+                              >
+                                Exit <Navigation className="w-2.5 h-2.5" />
+                              </a>
+                            ) : null}
+                            {!r.entryLat && !r.exitLat && <span className="text-[11px] text-slate-400 italic">—</span>}
+                          </div>
+                        </td>
+                        <td className="text-center py-4" onClick={(e) => e.stopPropagation()}>
+                          {r.status === "PENDING" && (
+                            <div className="flex flex-col sm:flex-row items-center justify-center gap-1">
+                              <button
+                                onClick={() => handleApprove(r.id)}
+                                disabled={isPending}
+                                className="btn text-[11px] py-1 px-2 border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 font-bold inline-flex items-center gap-0.5 shadow-2xs whitespace-nowrap"
+                                title="Approve Entry"
+                              >
+                                <Check className="w-3 h-3" /> Approve
+                              </button>
+                              <button
+                                onClick={() => openModifyEntry(r)}
+                                disabled={isPending}
+                                className="btn text-[11px] py-1 px-2 border border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100 font-bold inline-flex items-center gap-0.5 shadow-2xs whitespace-nowrap"
+                                title="Modify Entry"
+                              >
+                                <Edit className="w-3 h-3" /> Modify
+                              </button>
+                              <button
+                                onClick={() => handleReject(r.id)}
+                                disabled={isPending}
+                                className="btn text-[11px] py-1 px-2 border border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100 font-bold inline-flex items-center gap-0.5 shadow-2xs whitespace-nowrap"
+                                title="Reject Entry"
+                              >
+                                <X className="w-3 h-3" /> Reject
+                              </button>
+                            </div>
                           )}
                           {r.status === "APPROVED" && !exited && (
                             <button
@@ -657,18 +860,40 @@ export function GodownClient({
                                 } else if (products.length > 0) {
                                   setExitItems([newRow(products)]);
                                 }
+                                setExitErvNo(r.ervNo || "");
+                                setExitErvDate(r.ervDate ? new Date(r.ervDate).toISOString().slice(0, 10) : "");
                                 setExitOpen(true);
                               }}
-                              className="btn text-[12px] py-1 px-3 font-bold text-white shadow-xs hover:opacity-95"
+                              className="btn text-[12px] py-1 px-3 font-bold text-white shadow-xs hover:opacity-95 transition-all"
                               style={{ background: "#F59E0B" }}
                             >
                               Record Exit
                             </button>
                           )}
-                          {r.status === "APPROVED" && exited && (
-                            <span className="text-[12px] font-semibold text-slate-400 flex items-center justify-center gap-1">
-                              <Check className="w-3.5 h-3.5 text-emerald-500" /> Completed
-                            </span>
+                           {r.status === "APPROVED" && exited && (
+                            <div className="flex flex-col sm:flex-row items-center justify-center gap-2">
+                              <span className="text-[12px] font-semibold text-slate-400 flex items-center gap-1">
+                                <Check className="w-3.5 h-3.5 text-emerald-500" /> Completed
+                              </span>
+                              <div className="flex flex-col sm:flex-row gap-1">
+                                <button
+                                  onClick={() => openModifyEntry(r)}
+                                  disabled={isPending}
+                                  className="btn text-[11px] py-1 px-2 border border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100 font-bold inline-flex items-center gap-0.5 shadow-2xs whitespace-nowrap"
+                                  title="Modify Entry details"
+                                >
+                                  <Edit className="w-3 h-3" /> Edit Entry
+                                </button>
+                                <button
+                                  onClick={() => openModifyExit(r)}
+                                  disabled={isPending}
+                                  className="btn text-[11px] py-1 px-2 border border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100 font-bold inline-flex items-center gap-0.5 shadow-2xs whitespace-nowrap"
+                                  title="Modify Exit details"
+                                >
+                                  <Edit className="w-3 h-3" /> Edit Exit
+                                </button>
+                              </div>
+                            </div>
                           )}
                         </td>
                       </tr>
@@ -676,7 +901,7 @@ export function GodownClient({
                       {/* Expandable row */}
                       {isExpanded && (
                         <tr className="bg-slate-50/30">
-                          <td colSpan={9} className="p-4 border-t">
+                          <td colSpan={10} className="p-4 border-t">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-fade-in">
                               {/* Entry details */}
                               <div className="bg-white p-4 rounded-xl border">
@@ -698,6 +923,18 @@ export function GodownClient({
                                       <span>Total Received</span>
                                       <span>{r.filledCylindersReceived} units</span>
                                     </div>
+                                    {r.ervNo && (
+                                      <div className="mt-3 pt-3 border-t border-slate-100 flex flex-col gap-1 text-[12px] text-slate-600">
+                                        <div>
+                                          <span className="font-semibold text-slate-700">ERV Number:</span> <span className="font-mono bg-slate-100 px-1.5 py-0.5 rounded border">{r.ervNo}</span>
+                                        </div>
+                                        {r.ervDate && (
+                                          <div>
+                                            <span className="font-semibold text-slate-700">ERV Date:</span> <span>{new Date(r.ervDate).toLocaleDateString()}</span>
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
                                   </div>
                                 )}
                                 {r.notes && (
@@ -757,20 +994,90 @@ export function GodownClient({
             </tbody>
           </table>
         </div>
+
+        {/* Pagination Panel */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between px-6 py-4 bg-slate-50/50 border-t border-slate-100">
+            <div className="flex-1 flex justify-between sm:hidden">
+              <button
+                type="button"
+                onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
+                disabled={currentPage === 1}
+                className="relative inline-flex items-center px-4 py-2 border border-slate-300 text-xs font-semibold rounded-lg text-slate-700 bg-white hover:bg-slate-50 disabled:opacity-50 transition-colors"
+              >
+                Previous
+              </button>
+              <button
+                type="button"
+                onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
+                disabled={currentPage === totalPages}
+                className="ml-3 relative inline-flex items-center px-4 py-2 border border-slate-300 text-xs font-semibold rounded-lg text-slate-700 bg-white hover:bg-slate-50 disabled:opacity-50 transition-colors"
+              >
+                Next
+              </button>
+            </div>
+            <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+              <div>
+                <p className="text-xs text-slate-500 font-medium">
+                  Showing <span className="font-semibold text-slate-800">{Math.min((currentPage - 1) * itemsPerPage + 1, filteredRecords.length)}</span> to{" "}
+                  <span className="font-semibold text-slate-800">{Math.min(currentPage * itemsPerPage, filteredRecords.length)}</span> of{" "}
+                  <span className="font-semibold text-slate-800">{filteredRecords.length}</span> entries
+                </p>
+              </div>
+              <div>
+                <nav className="relative z-0 inline-flex rounded-lg shadow-2xs gap-1" aria-label="Pagination">
+                  <button
+                    type="button"
+                    onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
+                    disabled={currentPage === 1}
+                    className="relative inline-flex items-center px-2 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-bold text-slate-500 hover:bg-slate-50 disabled:opacity-40 transition-colors"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </button>
+                  {Array.from({ length: totalPages }).map((_, idx) => {
+                    const pageNum = idx + 1;
+                    return (
+                      <button
+                        type="button"
+                        key={pageNum}
+                        onClick={() => setCurrentPage(pageNum)}
+                        className={`relative inline-flex items-center px-3 py-1.5 rounded-lg border text-xs font-bold transition-all duration-150 ${
+                          currentPage === pageNum
+                            ? "z-10 bg-blue-600 border-blue-600 text-white shadow-xs"
+                            : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300"
+                        }`}
+                      >
+                        {pageNum}
+                      </button>
+                    );
+                  })}
+                  <button
+                    type="button"
+                    onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
+                    disabled={currentPage === totalPages}
+                    className="relative inline-flex items-center px-2 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-bold text-slate-500 hover:bg-slate-50 disabled:opacity-40 transition-colors"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
+                </nav>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* â”€â”€ Entry Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ── Entry Modal ─────────────────────────────────────────────────────────── */}
       <Modal
         open={entryOpen}
-        onClose={() => setEntryOpen(false)}
-        title="Record Vehicle Entry"
-        subtitle="Log a new company supply vehicle arrival"
+        onClose={() => { setEntryOpen(false); setModifyRecordId(null); }}
+        title={modifyRecordId ? "Modify Vehicle Entry" : "Record Vehicle Entry"}
+        subtitle={modifyRecordId ? "Update details for this company supply vehicle arrival" : "Log a new company supply vehicle arrival"}
         size="lg"
         footer={
           <>
-            <button type="button" onClick={() => setEntryOpen(false)} className="btn btn-secondary">Cancel</button>
+            <button type="button" onClick={() => { setEntryOpen(false); setModifyRecordId(null); }} className="btn btn-secondary">Cancel</button>
             <button form="entry-form" type="submit" disabled={isPending} className="btn btn-primary shadow-sm px-5">
-              {isPending ? "Submitting..." : "Record Entry"}
+              {isPending ? "Submitting..." : modifyRecordId ? "Update Entry" : "Record Entry"}
             </button>
           </>
         }
@@ -782,6 +1089,8 @@ export function GodownClient({
               <span className="font-medium">{error}</span>
             </div>
           )}
+
+          <GpsStatusBox gps={entryGps.gps} onRetry={entryGps.captureGps} titleText="Acquiring entry coordinates..." />
           <div className="rounded-xl border border-slate-200 overflow-hidden">
             <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-200">
               <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Vehicle &amp; Schedule</p>
@@ -793,7 +1102,7 @@ export function GodownClient({
                   <input value={entryVehicleNo} onChange={(e) => setEntryVehicleNo(e.target.value.toUpperCase())} placeholder="MH12AB1234" className="input font-mono text-[13px] font-bold tracking-widest" style={{ textTransform: "uppercase" }} />
                   {entryVehicleNo && (
                     <span className="absolute inset-y-0 right-2 flex items-center">
-                      <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 rounded px-1.5 py-0.5">âœ“ OK</span>
+                      <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 rounded px-1.5 py-0.5">✓ OK</span>
                     </span>
                   )}
                 </div>
@@ -801,6 +1110,14 @@ export function GodownClient({
               <div>
                 <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1.5">Entry Date &amp; Time *</label>
                 <input type="datetime-local" value={entryDate} onChange={(e) => setEntryDate(e.target.value)} className="input text-[13px]" />
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1.5">ERV Number</label>
+                <input value={entryErvNo} onChange={(e) => setEntryErvNo(e.target.value)} placeholder="e.g. ERV-12345" className="input text-[13px]" />
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1.5">ERV Issue Date</label>
+                <input type="date" value={entryErvDate} onChange={(e) => setEntryErvDate(e.target.value)} className="input text-[13px]" />
               </div>
             </div>
           </div>
@@ -823,18 +1140,18 @@ export function GodownClient({
         </form>
       </Modal>
 
-      {/* â”€â”€ Exit Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ── Exit Modal ────────────────────────────────────────────────────────── */}
       <Modal
         open={exitOpen}
-        onClose={() => setExitOpen(false)}
-        title="Record Vehicle Exit"
-        subtitle="Log empty cylinder returns for an in-godown vehicle"
+        onClose={() => { setExitOpen(false); setExitRecordId(""); }}
+        title={isEditingExit ? "Modify Vehicle Exit" : "Record Vehicle Exit"}
+        subtitle={isEditingExit ? "Update empty cylinder returns for this vehicle" : "Log empty cylinder returns for an in-godown vehicle"}
         size="lg"
         footer={
           <>
-            <button type="button" onClick={() => setExitOpen(false)} className="btn btn-secondary">Cancel</button>
+            <button type="button" onClick={() => { setExitOpen(false); setExitRecordId(""); }} className="btn btn-secondary">Cancel</button>
             <button form="exit-form" type="submit" disabled={isPending || !exitRecordId} className="btn font-semibold text-[13px] px-5 shadow-sm" style={{ background: "#F59E0B", color: "#FFFFFF" }}>
-              {isPending ? "Saving..." : "Record Exit"}
+              {isPending ? "Saving..." : isEditingExit ? "Update Exit" : "Record Exit"}
             </button>
           </>
         }
@@ -846,39 +1163,63 @@ export function GodownClient({
               <span className="font-medium">{error}</span>
             </div>
           )}
-          <div className="rounded-xl border border-slate-200 overflow-visible">
-            <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-200 rounded-t-xl">
-              <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Select Active Vehicle</p>
-            </div>
-            <div className="p-4">
-              {pendingExitRecords.length === 0 ? (
-                <div className="p-4 rounded-xl border flex flex-col items-center text-center" style={{ background: "#FFFBEB", borderColor: "#FDE68A" }}>
-                  <Truck className="w-7 h-7 text-amber-500 mb-2" />
-                  <p className="text-[13px] font-bold text-amber-800">No vehicles currently in Godown</p>
-                  <p className="text-[11px] text-amber-600 mt-0.5">Record a vehicle entry first, then approve it to log an exit.</p>
+
+          <GpsStatusBox gps={exitGps.gps} onRetry={exitGps.captureGps} titleText="Acquiring exit coordinates..." />
+          
+          {isEditingExit ? (
+            <div className="rounded-xl border border-slate-200 overflow-hidden">
+              <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-200">
+                <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Vehicle Under Review</p>
+              </div>
+              <div className="p-4 bg-slate-50/50">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
+                    <Truck className="w-4 h-4 text-blue-600" />
+                  </div>
+                  <div>
+                    <p className="text-[13px] font-bold font-mono text-blue-800">{selectedRecord?.vehicleNo}</p>
+                    <p className="text-[11px] text-blue-600">Entered: {selectedRecord ? formatDateTime(selectedRecord.entryDate) : ""}</p>
+                  </div>
                 </div>
-              ) : (
-                <CustomSelect
-                  value={exitRecordId}
-                  onChange={(val) => {
-                    setExitRecordId(val);
-                    const rec = records.find((r) => r.id === val);
-                    if (rec) {
-                      const eItems = getEntryItems(rec);
-                      if (eItems.length > 0) {
-                        setExitItems(eItems.map((it) => ({ id: makeId(), productId: it.productId, productName: it.productName, qty: it.qty })));
-                      }
-                    }
-                  }}
-                  options={pendingExitRecords.map((r) => ({
-                    value: r.id,
-                    label: `${r.vehicleNo} - Entered ${formatDateTime(r.entryDate)}`
-                  }))}
-                  placeholder="- Choose a vehicle -"
-                />
-              )}
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="rounded-xl border border-slate-200 overflow-visible">
+              <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-200 rounded-t-xl">
+                <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Select Active Vehicle</p>
+              </div>
+              <div className="p-4">
+                {pendingExitRecords.length === 0 ? (
+                  <div className="p-4 rounded-xl border flex flex-col items-center text-center" style={{ background: "#FFFBEB", borderColor: "#FDE68A" }}>
+                    <Truck className="w-7 h-7 text-amber-500 mb-2" />
+                    <p className="text-[13px] font-bold text-amber-800">No vehicles currently in Godown</p>
+                    <p className="text-[11px] text-amber-600 mt-0.5">Record a vehicle entry first, then approve it to log an exit.</p>
+                  </div>
+                ) : (
+                  <CustomSelect
+                    value={exitRecordId}
+                    onChange={(val) => {
+                      setExitRecordId(val);
+                      const rec = records.find((r) => r.id === val);
+                      if (rec) {
+                        const eItems = getEntryItems(rec);
+                        if (eItems.length > 0) {
+                          setExitItems(eItems.map((it) => ({ id: makeId(), productId: it.productId, productName: it.productName, qty: it.qty })));
+                        }
+                        setExitErvNo(rec.ervNo || "");
+                        setExitErvDate(rec.ervDate ? new Date(rec.ervDate).toISOString().slice(0, 10) : "");
+                      }
+                    }}
+                    options={pendingExitRecords.map((r) => ({
+                      value: r.id,
+                      label: `${r.vehicleNo} - Entered ${formatDateTime(r.entryDate)}`
+                    }))}
+                    placeholder="- Choose a vehicle -"
+                  />
+                )}
+              </div>
+            </div>
+          )}
           {selectedRecord && (
             <div className="px-4 py-3 rounded-xl border flex items-center justify-between" style={{ background: "#F0FDF4", borderColor: "#BBF7D0" }}>
               <div className="flex items-center gap-2.5">
@@ -900,10 +1241,21 @@ export function GodownClient({
             <>
               <div className="rounded-xl border border-slate-200 overflow-hidden">
                 <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-200">
-                  <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Exit Date &amp; Time</p>
+                  <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Exit Details &amp; ERV Info</p>
                 </div>
-                <div className="p-4">
-                  <input type="datetime-local" value={exitDate} onChange={(e) => setExitDate(e.target.value)} className="input text-[13px]" />
+                <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="sm:col-span-2">
+                    <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1.5">Exit Date &amp; Time *</label>
+                    <input type="datetime-local" value={exitDate} onChange={(e) => setExitDate(e.target.value)} className="input text-[13px]" />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1.5">ERV Number</label>
+                    <input value={exitErvNo} onChange={(e) => setExitErvNo(e.target.value)} placeholder="e.g. ERV-12345" className="input text-[13px]" />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1.5">ERV Issue Date</label>
+                    <input type="date" value={exitErvDate} onChange={(e) => setExitErvDate(e.target.value)} className="input text-[13px]" />
+                  </div>
                 </div>
               </div>
               <div className="rounded-xl border border-slate-200 overflow-visible">

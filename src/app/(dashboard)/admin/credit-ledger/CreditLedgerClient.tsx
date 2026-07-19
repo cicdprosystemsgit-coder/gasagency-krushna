@@ -41,8 +41,26 @@ interface Entry {
   addedBy: { name: string };
 }
 
+interface CustomerWithDeliveries {
+  id: string;
+  name: string;
+  phone: string;
+  address: string | null;
+  type: string;
+  customerCode: string | null;
+  contactPerson?: string | null;
+  isActive: boolean;
+  deliveries?: {
+    id: string;
+    date: Date | string;
+    deliveredQty: number;
+    returnedQty: number;
+    pendingQty: number;
+  }[];
+}
+
 interface CreditLedgerClientProps {
-  customers: Customer[];
+  customers: CustomerWithDeliveries[];
   initialEntries: Entry[];
   canEdit: boolean;
   userId: string;
@@ -53,8 +71,8 @@ type TxFilter = "ALL" | "CREDIT" | "PAYMENT";
 
 export function CreditLedgerClient({ customers, initialEntries, canEdit, userId }: CreditLedgerClientProps) {
   const [entries, setEntries] = useState(initialEntries);
-  const [allCustomers, setAllCustomers] = useState(customers);
-  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [allCustomers, setAllCustomers] = useState<CustomerWithDeliveries[]>(customers);
+  const [selectedCustomer, setSelectedCustomer] = useState<CustomerWithDeliveries | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [addCustomerModal, setAddCustomerModal] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -148,6 +166,39 @@ export function CreditLedgerClient({ customers, initialEntries, canEdit, userId 
       count: customerEntries.length,
     };
   }, [selectedCustomer, entries]);
+
+  // Selected customer cylinder statistics filtered by date range
+  const cylinderStats = useMemo(() => {
+    if (!selectedCustomer || !selectedCustomer.deliveries) {
+      return { totalDelivered: 0, totalReturned: 0, totalPending: 0 };
+    }
+
+    let list = selectedCustomer.deliveries;
+
+    if (dateFrom) {
+      const fromTime = new Date(dateFrom).getTime();
+      list = list.filter((d) => new Date(d.date).getTime() >= fromTime);
+    }
+
+    if (dateTo) {
+      const toTime = new Date(dateTo).getTime() + 86400000; // include full day
+      list = list.filter((d) => new Date(d.date).getTime() <= toTime);
+    }
+
+    let totalDelivered = 0;
+    let totalReturned = 0;
+
+    list.forEach((d) => {
+      totalDelivered += d.deliveredQty;
+      totalReturned += d.returnedQty;
+    });
+
+    return {
+      totalDelivered,
+      totalReturned,
+      totalPending: Math.max(0, totalDelivered - totalReturned),
+    };
+  }, [selectedCustomer, dateFrom, dateTo]);
 
   const filteredCustomerEntries = useMemo(() => {
     if (!selectedCustomer) return [];
@@ -376,7 +427,11 @@ export function CreditLedgerClient({ customers, initialEntries, canEdit, userId 
         return;
       }
       if (result.customer) {
-        setAllCustomers((prev) => [...prev, result.customer!]);
+        const newCust: CustomerWithDeliveries = {
+          ...result.customer,
+          deliveries: [],
+        };
+        setAllCustomers((prev) => [...prev, newCust]);
         setAddCustomerModal(false);
         setCustomerForm({ name: "", phone: "", address: "", type: "COMMERCIAL", customerCode: "" });
       }
@@ -388,17 +443,17 @@ export function CreditLedgerClient({ customers, initialEntries, canEdit, userId 
   return (
     <div className="grid lg:grid-cols-3 gap-6 p-1">
       {/* Left Column: Customer Directory */}
-      <div className="bg-white rounded-3xl border border-slate-100 shadow-sm flex flex-col overflow-hidden">
+      <div className="bg-white rounded-3xl border border-slate-100 shadow-sm flex flex-col overflow-hidden transition-all duration-300 hover:shadow-md">
         {/* Header and Controls */}
-        <div className="p-5 border-b border-slate-100 bg-slate-50/50">
+        <div className="p-6 border-b border-slate-100 bg-slate-50/40 backdrop-blur-md">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h3 className="font-bold text-slate-800 text-lg flex items-center gap-2">
+              <h3 className="font-extrabold text-slate-800 text-lg flex items-center gap-2 tracking-tight">
                 <BookOpen className="w-5 h-5 text-blue-600" />
-                Directory
+                Customer Directory
               </h3>
-              <p className="text-xs text-slate-500 mt-0.5">
-                {filteredCustomers.length} active customers
+              <p className="text-xs text-slate-500 mt-0.5 font-medium">
+                {filteredCustomers.length} active commercial accounts
               </p>
             </div>
             {canEdit && (
@@ -407,7 +462,7 @@ export function CreditLedgerClient({ customers, initialEntries, canEdit, userId 
                   setError("");
                   setAddCustomerModal(true);
                 }}
-                className="flex items-center gap-1.5 text-xs bg-blue-600 text-white px-3.5 py-2 rounded-xl font-bold hover:bg-blue-700 shadow-sm hover:shadow-md transition-all active:scale-95 duration-200"
+                className="flex items-center gap-1.5 text-xs bg-blue-600 text-white px-4 py-2.5 rounded-xl font-bold hover:bg-blue-700 shadow-sm hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200"
               >
                 <UserPlus className="w-4 h-4" />
                 Add New
@@ -416,12 +471,12 @@ export function CreditLedgerClient({ customers, initialEntries, canEdit, userId 
           </div>
 
           {/* Search Type Filter pills */}
-          <div className="flex gap-1.5 mb-3 bg-slate-100 p-1 rounded-xl">
+          <div className="flex gap-1 bg-slate-100/80 p-1 rounded-xl mb-3 border border-slate-200/50">
             {(["ALL", "CODE", "NAME", "PHONE"] as SearchMode[]).map((mode) => (
               <button
                 key={mode}
                 onClick={() => setSearchMode(mode)}
-                className={`flex-1 py-1 px-2 rounded-lg text-[11px] font-semibold transition ${
+                className={`flex-1 py-1.5 px-2 rounded-lg text-[10px] font-bold tracking-wide uppercase transition-all duration-200 ${
                   searchMode === mode
                     ? "bg-white text-slate-800 shadow-sm"
                     : "text-slate-500 hover:text-slate-800"
@@ -437,29 +492,30 @@ export function CreditLedgerClient({ customers, initialEntries, canEdit, userId 
 
           {/* Search Box */}
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder={
                 searchMode === "ALL"
-                  ? "Search by code, name, or phone..."
+                  ? "Search by connection code, name, or phone..."
                   : searchMode === "CODE"
                   ? "Search by consumer connection code..."
                   : searchMode === "NAME"
                   ? "Search by name..."
                   : "Search by 10-digit mobile..."
               }
-              className="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white placeholder:text-slate-400 transition"
+              className="w-full pl-10 pr-4 py-3 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 bg-white placeholder:text-slate-400/80 transition-all duration-200 shadow-inner"
             />
           </div>
         </div>
 
         {/* Customer Scrolling List */}
-        <div className="overflow-y-auto max-h-[calc(100vh-310px)] min-h-[400px]">
+        <div className="overflow-y-auto max-h-[calc(100vh-310px)] min-h-[400px] divide-y divide-slate-100/60 pr-1 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-slate-200 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-slate-300">
           {filteredCustomers.map((c) => {
             const balance = customerBalances[c.id] ?? 0;
             const isCommercial = c.type === "COMMERCIAL";
+            const isSelected = selectedCustomer?.id === c.id;
 
             return (
               <button
@@ -470,23 +526,27 @@ export function CreditLedgerClient({ customers, initialEntries, canEdit, userId 
                   setDateFrom("");
                   setDateTo("");
                 }}
-                className={`w-full px-4 py-3.5 flex items-center justify-between border-b border-slate-50 last:border-0 hover:bg-slate-50/80 transition-all text-left ${
-                  selectedCustomer?.id === c.id ? "bg-blue-50/60 border-l-4 border-l-blue-600" : ""
+                className={`w-full px-5 py-4 flex items-center justify-between transition-all duration-200 text-left border-l-4 ${
+                  isSelected
+                    ? "bg-blue-50/40 border-l-blue-600 shadow-sm"
+                    : "border-l-transparent hover:bg-slate-50/80 hover:translate-x-0.5"
                 }`}
               >
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3.5 min-w-0">
                   <div
-                    className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0 shadow-sm ${
-                      isCommercial ? "bg-blue-100 text-blue-700" : "bg-emerald-100 text-emerald-700"
+                    className={`w-11 h-11 rounded-2xl flex items-center justify-center font-extrabold text-sm flex-shrink-0 shadow-sm ${
+                      isCommercial
+                        ? "bg-gradient-to-tr from-blue-600 to-indigo-500 text-white"
+                        : "bg-gradient-to-tr from-emerald-600 to-teal-500 text-white"
                     }`}
                   >
                     {c.name.charAt(0).toUpperCase()}
                   </div>
                   <div className="overflow-hidden">
-                    <p className="text-sm font-bold text-slate-800 truncate">{c.name}</p>
-                    <div className="flex items-center gap-2 mt-0.5 text-xs text-slate-500">
+                    <p className="text-sm font-extrabold text-slate-800 truncate tracking-tight">{c.name}</p>
+                    <div className="flex items-center gap-2 mt-1 text-xs text-slate-500 font-medium">
                       {c.customerCode && (
-                        <span className="bg-slate-100 px-1.5 py-0.5 rounded font-mono font-bold text-[10px] text-slate-600">
+                        <span className="bg-slate-100 px-1.5 py-0.5 rounded font-mono font-bold text-[9px] text-slate-600 border border-slate-200/40">
                           #{c.customerCode}
                         </span>
                       )}
@@ -497,19 +557,19 @@ export function CreditLedgerClient({ customers, initialEntries, canEdit, userId 
 
                 <div className="text-right flex-shrink-0 pl-2">
                   <p
-                    className={`text-sm font-bold ${
+                    className={`text-sm font-extrabold tracking-tight ${
                       balance > 0 ? "text-rose-600" : balance < 0 ? "text-emerald-600" : "text-slate-400"
                     }`}
                   >
                     {formatCurrency(Math.abs(balance))}
                   </p>
                   <span
-                    className={`inline-block px-1.5 py-0.5 rounded-full text-[9px] font-bold ${
+                    className={`inline-flex px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider mt-1 border ${
                       balance > 0
-                        ? "bg-rose-50 text-rose-600 border border-rose-100"
+                        ? "bg-rose-50 text-rose-600 border-rose-100"
                         : balance < 0
-                        ? "bg-emerald-50 text-emerald-600 border border-emerald-100"
-                        : "bg-slate-50 text-slate-400"
+                        ? "bg-emerald-50 text-emerald-600 border-emerald-100"
+                        : "bg-slate-50 text-slate-400 border-slate-200/50"
                     }`}
                   >
                     {balance > 0 ? "Due" : balance < 0 ? "Advance" : "Settled"}
@@ -520,68 +580,63 @@ export function CreditLedgerClient({ customers, initialEntries, canEdit, userId 
           })}
 
           {filteredCustomers.length === 0 && (
-            <div className="px-4 py-16 text-center text-slate-400 text-sm">
-              <User className="w-12 h-12 mx-auto mb-3 opacity-20" />
-              <p className="font-semibold text-slate-600">No customers matched</p>
-              <p className="text-xs text-slate-400 mt-1">Try tweaking your search keywords or pill filter</p>
+            <div className="px-4 py-20 text-center text-slate-400">
+              <div className="w-16 h-16 mx-auto bg-slate-50 rounded-full flex items-center justify-center mb-4 border border-slate-100 shadow-inner">
+                <User className="w-7 h-7 text-slate-300" />
+              </div>
+              <p className="font-extrabold text-slate-700">No Customers Matched</p>
+              <p className="text-xs text-slate-400 mt-1 max-w-[200px] mx-auto leading-relaxed">
+                Try tweaking your search keywords or Connections filter tab.
+              </p>
             </div>
           )}
         </div>
       </div>
 
       {/* Right 2 Columns: Detailed view / Ledger statement */}
-      <div className="lg:col-span-2 bg-white rounded-3xl border border-slate-100 shadow-sm flex flex-col overflow-hidden min-h-[500px]">
+      <div className="lg:col-span-2 bg-white rounded-3xl border border-slate-100 shadow-sm flex flex-col overflow-hidden min-h-[500px] transition-all duration-300 hover:shadow-md">
         {!selectedCustomer ? (
-          <div className="flex flex-col items-center justify-center flex-1 py-32 text-slate-400">
-            <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4 border border-slate-100 shadow-inner">
-              <CreditCard className="w-8 h-8 text-slate-400 opacity-60" />
+          <div className="flex flex-col items-center justify-center flex-1 py-36 px-6 text-center">
+            <div className="relative mb-6">
+              <div className="absolute inset-0 bg-blue-500/10 blur-2xl rounded-full scale-150 animate-pulse"></div>
+              <div className="relative w-20 h-20 bg-gradient-to-tr from-slate-50 to-blue-50/50 rounded-3xl flex items-center justify-center border border-slate-100 shadow-md">
+                <CreditCard className="w-10 h-10 text-blue-500" />
+              </div>
             </div>
-            <h4 className="font-bold text-slate-700 text-base">Select Customer Profile</h4>
-            <p className="text-xs text-slate-400 mt-1 max-w-sm text-center">
-              Please choose a customer from the left directory to track balances, log transactions, and download account statements.
+            <h4 className="font-extrabold text-slate-800 text-lg tracking-tight">Select Customer Profile</h4>
+            <p className="text-xs text-slate-400 mt-2 max-w-sm leading-relaxed">
+              Please choose a customer from the directory to view outstanding invoices, logs, record ledger credits, and download account statement reports.
             </p>
           </div>
         ) : (
           <div className="flex flex-col flex-1">
             {/* Customer Header Panel */}
-            <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="p-6 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-blue-50/10 flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div className="flex items-center gap-4">
-                <div
-                  className={`w-12 h-12 rounded-2xl flex items-center justify-center font-bold text-lg shadow-sm ${
-                    selectedCustomer.type === "COMMERCIAL"
-                      ? "bg-blue-600 text-white"
-                      : "bg-emerald-600 text-white"
-                  }`}
-                >
+                <div className="w-14 h-14 rounded-2xl flex items-center justify-center font-black text-xl shadow-md bg-gradient-to-tr from-slate-900 to-slate-800 text-white">
                   {selectedCustomer.name.charAt(0).toUpperCase()}
                 </div>
                 <div>
-                  <div className="flex items-center gap-2.5">
-                    <h3 className="font-bold text-slate-800 text-lg">{selectedCustomer.name}</h3>
-                    <span
-                      className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                        selectedCustomer.type === "COMMERCIAL"
-                          ? "bg-blue-50 text-blue-600 border border-blue-100"
-                          : "bg-emerald-50 text-emerald-600 border border-emerald-100"
-                      }`}
-                    >
+                  <div className="flex items-center gap-2.5 flex-wrap">
+                    <h3 className="font-black text-slate-800 text-xl tracking-tight">{selectedCustomer.name}</h3>
+                    <span className="px-2.5 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wider bg-blue-50 text-blue-600 border border-blue-100 shadow-sm">
                       {selectedCustomer.type}
                     </span>
                   </div>
-                  <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 mt-1">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-semibold text-slate-500 mt-1.5">
                     <span className="flex items-center gap-1">
                       <Hash className="w-3.5 h-3.5 text-slate-400" />
                       {selectedCustomer.customerCode ?? "No Consumer Code"}
                     </span>
-                    <span>•</span>
+                    <span className="text-slate-300">•</span>
                     <span className="flex items-center gap-1">
                       <Phone className="w-3.5 h-3.5 text-slate-400" />
                       {selectedCustomer.phone}
                     </span>
                     {selectedCustomer.address && (
                       <>
-                        <span>•</span>
-                        <span className="flex items-center gap-1 truncate max-w-[200px]">
+                        <span className="text-slate-300">•</span>
+                        <span className="flex items-center gap-1 truncate max-w-[220px]">
                           <MapPin className="w-3.5 h-3.5 text-slate-400" />
                           {selectedCustomer.address}
                         </span>
@@ -592,10 +647,10 @@ export function CreditLedgerClient({ customers, initialEntries, canEdit, userId 
               </div>
 
               {/* Action Buttons */}
-              <div className="flex items-center gap-2 flex-wrap">
+              <div className="flex items-center gap-2.5 flex-wrap">
                 <button
                   onClick={handleExportPDF}
-                  className="flex items-center gap-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 px-3.5 py-2 rounded-xl text-xs font-semibold shadow-sm hover:shadow transition"
+                  className="flex items-center gap-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 px-4 py-2.5 rounded-xl text-xs font-bold shadow-sm hover:shadow transition-all active:scale-95 duration-150"
                 >
                   <Download className="w-4 h-4 text-slate-500" />
                   Statement PDF
@@ -613,55 +668,90 @@ export function CreditLedgerClient({ customers, initialEntries, canEdit, userId 
                       setError("");
                       setModalOpen(true);
                     }}
-                    className="flex items-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-slate-800 shadow-sm transition active:scale-95 duration-150"
+                    className="flex items-center gap-2 bg-slate-900 text-white px-4.5 py-2.5 rounded-xl text-xs font-black hover:bg-slate-800 shadow-md hover:shadow-lg transition-all hover:-translate-y-0.5 active:translate-y-0 duration-150"
                   >
                     <Plus className="w-4 h-4" />
-                    Log Credit / Payment
+                    Log Transaction
                   </button>
                 )}
               </div>
             </div>
 
             {/* Dashboard Mini-KPI Stats cards */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-6 border-b border-slate-100 bg-slate-50/20">
-              <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col">
-                <span className="text-[10px] uppercase tracking-wider font-bold text-slate-400">Total Credit</span>
-                <span className="text-base font-bold text-slate-800 mt-1 flex items-center gap-1">
-                  <TrendingUp className="w-4 h-4 text-rose-500 flex-shrink-0" />
-                  {formatCurrency(customerStats.totalCredit)}
-                </span>
+            <div className="p-6 border-b border-slate-100 bg-slate-50/20">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="bg-white p-4.5 rounded-2xl border border-slate-100 shadow-sm flex flex-col hover:shadow-md transition duration-200 bg-gradient-to-br from-rose-50/10 to-white">
+                  <span className="text-[10px] uppercase tracking-wider font-extrabold text-slate-400">Total Credit Given</span>
+                  <span className="text-lg font-black text-slate-800 mt-1.5 flex items-center gap-1.5">
+                    <TrendingUp className="w-5 h-5 text-rose-500 flex-shrink-0" />
+                    {formatCurrency(customerStats.totalCredit)}
+                  </span>
+                  <span className="text-[10px] text-slate-400 font-semibold mt-1">Outstanding dues invoiced</span>
+                </div>
+                <div className="bg-white p-4.5 rounded-2xl border border-slate-100 shadow-sm flex flex-col hover:shadow-md transition duration-200 bg-gradient-to-br from-emerald-50/10 to-white">
+                  <span className="text-[10px] uppercase tracking-wider font-extrabold text-slate-400">Total Payments Recd</span>
+                  <span className="text-lg font-black text-slate-800 mt-1.5 flex items-center gap-1.5">
+                    <TrendingDown className="w-5 h-5 text-emerald-500 flex-shrink-0" />
+                    {formatCurrency(customerStats.totalPayment)}
+                  </span>
+                  <span className="text-[10px] text-slate-400 font-semibold mt-1">Total revenue collected</span>
+                </div>
+                <div className={`p-4.5 rounded-2xl border shadow-sm flex flex-col hover:shadow-md transition duration-200 ${
+                  customerStats.netBalance > 0
+                    ? "bg-rose-50/30 border-rose-100"
+                    : "bg-emerald-50/30 border-emerald-100"
+                }`}>
+                  <span className="text-[10px] uppercase tracking-wider font-extrabold text-slate-400">Current Balance</span>
+                  <span
+                    className={`text-lg font-black mt-1.5 flex items-center gap-1.5 ${
+                      customerStats.netBalance > 0 ? "text-rose-600" : "text-emerald-600"
+                    }`}
+                  >
+                    {customerStats.netBalance > 0 ? (
+                      <AlertCircle className="w-5 h-5 text-rose-500 flex-shrink-0 animate-pulse" />
+                    ) : (
+                      <CheckCircle className="w-5 h-5 text-emerald-500 flex-shrink-0" />
+                    )}
+                    {formatCurrency(Math.abs(customerStats.netBalance))}
+                  </span>
+                  <span className={`text-[10px] font-bold mt-1 ${
+                    customerStats.netBalance > 0 ? "text-rose-500/80" : "text-emerald-500/80"
+                  }`}>
+                    {customerStats.netBalance > 0 ? "Due amount to collect" : "Advance deposit balance"}
+                  </span>
+                </div>
               </div>
-              <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col">
-                <span className="text-[10px] uppercase tracking-wider font-bold text-slate-400">Total Payments</span>
-                <span className="text-base font-bold text-slate-800 mt-1 flex items-center gap-1">
-                  <TrendingDown className="w-4 h-4 text-emerald-500 flex-shrink-0" />
-                  {formatCurrency(customerStats.totalPayment)}
+            </div>
+
+            {/* Cylinder Statistics Cards */}
+            <div className="grid grid-cols-3 gap-4 px-6 pb-6 pt-0 border-b border-slate-100 bg-slate-50/20">
+              <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col hover:shadow-md transition duration-200">
+                <span className="text-[10px] uppercase tracking-wider font-extrabold text-slate-400">Total Refills</span>
+                <span className="text-base font-extrabold text-blue-600 mt-1.5 flex items-center gap-1">
+                  <ArrowUpCircle className="w-4 h-4 text-blue-500 flex-shrink-0" />
+                  {cylinderStats.totalDelivered} <span className="text-xs font-semibold text-slate-500 ml-0.5">pcs</span>
                 </span>
+                <span className="text-[9px] text-slate-400 font-medium mt-1">Delivered cylinders</span>
               </div>
-              <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col col-span-2 md:col-span-1">
-                <span className="text-[10px] uppercase tracking-wider font-bold text-slate-400">Current Balance</span>
+              <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col hover:shadow-md transition duration-200">
+                <span className="text-[10px] uppercase tracking-wider font-extrabold text-slate-400">Empty Returned</span>
+                <span className="text-base font-extrabold text-emerald-600 mt-1.5 flex items-center gap-1">
+                  <ArrowDownCircle className="w-4 h-4 text-emerald-500 flex-shrink-0" />
+                  {cylinderStats.totalReturned} <span className="text-xs font-semibold text-slate-500 ml-0.5">pcs</span>
+                </span>
+                <span className="text-[9px] text-slate-400 font-medium mt-1">Empties collected back</span>
+              </div>
+              <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col hover:shadow-md transition duration-200">
+                <span className="text-[10px] uppercase tracking-wider font-extrabold text-slate-400">Empty Pending</span>
                 <span
-                  className={`text-base font-extrabold mt-1 flex items-center gap-1 ${
-                    customerStats.netBalance > 0
-                      ? "text-rose-600"
-                      : customerStats.netBalance < 0
-                      ? "text-emerald-600"
-                      : "text-slate-600"
+                  className={`text-base font-extrabold mt-1.5 flex items-center gap-1 ${
+                    cylinderStats.totalPending > 0 ? "text-purple-600" : "text-slate-500"
                   }`}
                 >
-                  {customerStats.netBalance > 0 ? (
-                    <AlertCircle className="w-4 h-4 text-rose-500 flex-shrink-0" />
-                  ) : customerStats.netBalance < 0 ? (
-                    <CheckCircle className="w-4 h-4 text-emerald-500 flex-shrink-0" />
-                  ) : null}
-                  {formatCurrency(Math.abs(customerStats.netBalance))}
+                  <AlertCircle className={`w-4 h-4 flex-shrink-0 ${cylinderStats.totalPending > 0 ? "text-purple-500" : "text-slate-400"}`} />
+                  {cylinderStats.totalPending} <span className="text-xs font-semibold text-slate-500 ml-0.5">pcs</span>
                 </span>
-              </div>
-              <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col">
-                <span className="text-[10px] uppercase tracking-wider font-bold text-slate-400">Transactions</span>
-                <span className="text-base font-bold text-slate-800 mt-1">
-                  {customerStats.count} entries
-                </span>
+                <span className="text-[9px] text-slate-400 font-medium mt-1">Yet to collect back</span>
               </div>
             </div>
 
@@ -669,13 +759,13 @@ export function CreditLedgerClient({ customers, initialEntries, canEdit, userId 
             <div className="px-6 py-4 border-b border-slate-100 bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div className="flex items-center gap-2">
                 <Filter className="w-4 h-4 text-slate-400" />
-                <span className="text-xs font-bold text-slate-500">Filter:</span>
-                <div className="flex bg-slate-100 p-0.5 rounded-lg border border-slate-200">
+                <span className="text-xs font-extrabold text-slate-500 uppercase tracking-wider">Type:</span>
+                <div className="flex bg-slate-100/80 p-0.5 rounded-lg border border-slate-200/60">
                   {(["ALL", "CREDIT", "PAYMENT"] as TxFilter[]).map((f) => (
                     <button
                       key={f}
                       onClick={() => setTxFilter(f)}
-                      className={`px-3 py-1 rounded-md text-[10px] font-bold transition ${
+                      className={`px-3 py-1 rounded-md text-[10px] font-bold uppercase transition-all duration-200 ${
                         txFilter === f
                           ? "bg-white text-slate-800 shadow-sm"
                           : "text-slate-500 hover:text-slate-800"
@@ -694,14 +784,14 @@ export function CreditLedgerClient({ customers, initialEntries, canEdit, userId 
                   type="date"
                   value={dateFrom}
                   onChange={(e) => setDateFrom(e.target.value)}
-                  className="px-2 py-1 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className="px-2.5 py-1.5 text-xs font-semibold border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 bg-slate-50/50"
                 />
-                <span className="text-slate-400 text-xs">to</span>
+                <span className="text-slate-400 text-xs font-medium">to</span>
                 <input
                   type="date"
                   value={dateTo}
                   onChange={(e) => setDateTo(e.target.value)}
-                  className="px-2 py-1 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className="px-2.5 py-1.5 text-xs font-semibold border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 bg-slate-50/50"
                 />
                 {(dateFrom || dateTo) && (
                   <button
@@ -709,24 +799,28 @@ export function CreditLedgerClient({ customers, initialEntries, canEdit, userId 
                       setDateFrom("");
                       setDateTo("");
                     }}
-                    className="text-[10px] text-blue-600 hover:text-blue-800 font-bold"
+                    className="text-[10px] text-blue-600 hover:text-blue-800 font-extrabold uppercase tracking-wide ml-1 transition"
                   >
-                    Clear Dates
+                    Reset Date
                   </button>
                 )}
               </div>
             </div>
 
             {/* Timeline Transactions Area */}
-            <div className="overflow-y-auto max-h-[calc(100vh-390px)] min-h-[300px] p-6 bg-slate-50/30">
+            <div className="overflow-y-auto max-h-[calc(100vh-390px)] min-h-[300px] p-6 bg-slate-50/30 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-slate-200 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-slate-300">
               {filteredCustomerEntries.length === 0 ? (
-                <div className="text-center py-16 text-slate-400">
-                  <FileText className="w-10 h-10 mx-auto mb-2 opacity-20" />
-                  <p className="font-semibold text-slate-600">No transaction logs match filters</p>
-                  <p className="text-xs text-slate-400 mt-1">Try resetting the date bounds or selecting "All" tab</p>
+                <div className="text-center py-20 text-slate-400">
+                  <div className="w-14 h-14 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-3 border border-slate-100">
+                    <FileText className="w-6 h-6 text-slate-300" />
+                  </div>
+                  <p className="font-extrabold text-slate-600">No Transaction Records Found</p>
+                  <p className="text-xs text-slate-400 mt-1 max-w-[280px] mx-auto leading-relaxed">
+                    Try adjusting the transaction category filters or calendar date bounds.
+                  </p>
                 </div>
               ) : (
-                <div className="relative border-l border-slate-200 ml-4 pl-6 space-y-6">
+                <div className="relative border-l-2 border-slate-200/80 ml-4 pl-6 space-y-6">
                   {filteredCustomerEntries.map((entry) => {
                     const isCredit = entry.type === "CREDIT";
 
@@ -734,7 +828,7 @@ export function CreditLedgerClient({ customers, initialEntries, canEdit, userId 
                       <div key={entry.id} className="relative group">
                         {/* Circle Indicator on timeline */}
                         <span
-                          className={`absolute -left-[31px] top-1.5 w-4 h-4 rounded-full border-2 border-white shadow-sm flex items-center justify-center ${
+                          className={`absolute -left-[32.5px] top-1.5 w-4 h-4 rounded-full border-2 border-white shadow flex items-center justify-center transition-transform group-hover:scale-110 duration-200 ${
                             isCredit ? "bg-rose-500" : "bg-emerald-500"
                           }`}
                         >
@@ -742,11 +836,11 @@ export function CreditLedgerClient({ customers, initialEntries, canEdit, userId 
                         </span>
 
                         {/* Transaction Card */}
-                        <div className="bg-white border border-slate-100 rounded-2xl p-4 shadow-sm hover:shadow-md transition duration-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                          <div className="flex items-start gap-3">
+                        <div className="bg-white border border-slate-100 rounded-2xl p-4 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                          <div className="flex items-start gap-3.5">
                             <div
-                              className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${
-                                isCredit ? "bg-rose-50 text-rose-600" : "bg-emerald-50 text-emerald-600"
+                              className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm ${
+                                isCredit ? "bg-rose-50 text-rose-600 border border-rose-100/50" : "bg-emerald-50 text-emerald-600 border border-emerald-100/50"
                               }`}
                             >
                               {isCredit ? (
@@ -757,18 +851,22 @@ export function CreditLedgerClient({ customers, initialEntries, canEdit, userId 
                             </div>
                             <div>
                               <div className="flex items-center gap-2">
-                                <span className={`text-xs font-bold ${isCredit ? "text-rose-600" : "text-emerald-600"}`}>
-                                  {isCredit ? "Credit Extended" : "Payment Acknowledged"}
+                                <span className={`text-[10px] font-extrabold uppercase tracking-wide px-2 py-0.5 rounded-full border ${
+                                  isCredit
+                                    ? "bg-rose-50 text-rose-600 border-rose-100/40"
+                                    : "bg-emerald-50 text-emerald-600 border-emerald-100/40"
+                                }`}>
+                                  {isCredit ? "Credit Given" : "Payment Recd"}
                                 </span>
-                                <span className="text-[10px] text-slate-400">
+                                <span className="text-[11px] text-slate-400 font-bold">
                                   {formatDate(entry.date)}
                                 </span>
                               </div>
-                              <p className="text-slate-700 text-sm font-semibold mt-1">
+                              <p className="text-slate-800 text-sm font-extrabold mt-2 tracking-tight">
                                 {entry.description || (isCredit ? "Credit given" : "Payment received")}
                               </p>
-                              <div className="flex items-center gap-2 mt-1">
-                                <span className="inline-block text-[10px] text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">
+                              <div className="flex items-center gap-2.5 mt-1.5 flex-wrap">
+                                <span className="inline-flex text-[10px] font-bold text-slate-500 bg-slate-100/80 px-2 py-0.5 rounded border border-slate-200/50">
                                   Recorded by {entry.addedBy.name}
                                 </span>
                                 {canEdit && (
@@ -785,7 +883,7 @@ export function CreditLedgerClient({ customers, initialEntries, canEdit, userId 
                                       setError("");
                                       setModalOpen(true);
                                     }}
-                                    className="text-[10px] text-blue-600 hover:text-blue-800 font-bold transition flex items-center gap-1 cursor-pointer"
+                                    className="text-[10px] text-blue-600 hover:text-blue-800 font-bold transition flex items-center gap-1 cursor-pointer hover:underline"
                                   >
                                     <Pencil className="w-3 h-3" />
                                     Edit
@@ -795,11 +893,11 @@ export function CreditLedgerClient({ customers, initialEntries, canEdit, userId 
                             </div>
                           </div>
 
-                          <div className="text-right border-t md:border-t-0 pt-2 md:pt-0 flex flex-row md:flex-col items-center md:items-end justify-between md:justify-center">
+                          <div className="text-right border-t md:border-t-0 pt-2.5 md:pt-0 flex flex-row md:flex-col items-center md:items-end justify-between md:justify-center">
                             <div>
-                              <p className="text-xs text-slate-400 md:hidden">Amount</p>
+                              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide md:hidden">Amount</p>
                               <p
-                                className={`text-base font-extrabold ${
+                                className={`text-base font-black tracking-tight ${
                                   isCredit ? "text-rose-600" : "text-emerald-600"
                                 }`}
                               >
@@ -807,8 +905,8 @@ export function CreditLedgerClient({ customers, initialEntries, canEdit, userId 
                               </p>
                             </div>
                             <div className="md:mt-1">
-                              <p className="text-xs text-slate-400 md:hidden">Running Balance</p>
-                              <p className="text-xs text-slate-500 font-mono">
+                              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide md:hidden">Running Bal</p>
+                              <p className="text-[11px] font-extrabold text-slate-500 font-mono bg-slate-50 px-2 py-0.5 rounded border border-slate-200/30">
                                 Bal: {formatCurrency((entry as any).runningBalance)}
                               </p>
                             </div>
@@ -831,29 +929,29 @@ export function CreditLedgerClient({ customers, initialEntries, canEdit, userId 
           setModalOpen(false);
           setEditingEntry(null);
         }}
-        title={editingEntry ? "Edit Credit / Payment Entry" : "New Credit / Payment Entry"}
+        title={editingEntry ? "Edit Transaction Record" : "New Transaction Entry"}
         size="sm"
       >
-        <form onSubmit={handleEntry} className="space-y-4">
+        <form onSubmit={handleEntry} className="space-y-4 p-1">
           {error && (
-            <div className="bg-rose-50 border border-rose-200 text-rose-700 px-3.5 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2">
+            <div className="bg-rose-50 border border-rose-200 text-rose-700 px-4 py-3 rounded-xl text-xs font-semibold flex items-center gap-2 shadow-sm animate-shake">
               <AlertCircle className="w-4 h-4 text-rose-500 flex-shrink-0" />
               {error}
             </div>
           )}
 
           <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Entry Type</label>
-            <div className="grid grid-cols-2 gap-2.5">
+            <label className="block text-xs font-extrabold text-slate-500 uppercase tracking-wider mb-2">Entry Category</label>
+            <div className="grid grid-cols-2 gap-3">
               {[
-                { type: "CREDIT", label: "Credit Given", color: "border-rose-300 bg-rose-50 text-rose-700" },
-                { type: "PAYMENT", label: "Payment Received", color: "border-emerald-300 bg-emerald-50 text-emerald-700" },
+                { type: "CREDIT", label: "Credit Extended", color: "border-rose-400 bg-rose-50/70 text-rose-700 ring-2 ring-rose-500/10" },
+                { type: "PAYMENT", label: "Payment Received", color: "border-emerald-400 bg-emerald-50/70 text-emerald-700 ring-2 ring-emerald-500/10" },
               ].map((t) => (
                 <button
                   key={t.type}
                   type="button"
                   onClick={() => setForm({ ...form, type: t.type })}
-                  className={`py-2.5 rounded-xl text-sm font-bold border-2 transition active:scale-95 duration-100 ${
+                  className={`py-3 rounded-xl text-xs font-extrabold border-2 uppercase tracking-wider transition-all duration-150 active:scale-95 ${
                     form.type === t.type
                       ? t.color
                       : "border-slate-200 text-slate-500 hover:border-slate-300 hover:bg-slate-50"
@@ -866,7 +964,7 @@ export function CreditLedgerClient({ customers, initialEntries, canEdit, userId 
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Amount (₹)</label>
+            <label className="block text-xs font-extrabold text-slate-500 uppercase tracking-wider mb-1.5">Amount (₹)</label>
             <input
               type="number"
               min="0.01"
@@ -874,18 +972,18 @@ export function CreditLedgerClient({ customers, initialEntries, canEdit, userId 
               value={form.amount}
               onChange={(e) => setForm({ ...form, amount: e.target.value })}
               placeholder="0.00"
-              className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white transition"
+              className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 bg-white transition-all shadow-inner font-extrabold"
               required
             />
 
             {/* Quick Fill Buttons */}
-            <div className="flex flex-wrap gap-1.5 mt-2">
+            <div className="flex flex-wrap gap-1.5 mt-2.5">
               {quickAmounts.map((amt) => (
                 <button
                   key={amt}
                   type="button"
                   onClick={() => setForm({ ...form, amount: String(amt) })}
-                  className="bg-slate-100 hover:bg-slate-200 text-slate-600 px-2.5 py-1 rounded-lg text-xs font-bold transition active:scale-95"
+                  className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg text-xs font-extrabold transition active:scale-95 border border-slate-200/30"
                 >
                   +₹{amt}
                 </button>
@@ -894,44 +992,44 @@ export function CreditLedgerClient({ customers, initialEntries, canEdit, userId 
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Date</label>
+            <label className="block text-xs font-extrabold text-slate-500 uppercase tracking-wider mb-1.5">Date</label>
             <input
               type="date"
               value={form.date}
               onChange={(e) => setForm({ ...form, date: e.target.value })}
-              className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white transition"
+              className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 bg-white transition-all shadow-inner font-semibold"
               required
             />
           </div>
 
           <div>
             <div className="flex justify-between items-center mb-1.5">
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider">Description</label>
-              <span className="text-[10px] text-slate-400">{form.description.length}/100</span>
+              <label className="block text-xs font-extrabold text-slate-500 uppercase tracking-wider">Description</label>
+              <span className="text-[10px] text-slate-400 font-bold">{form.description.length}/100</span>
             </div>
             <input
               value={form.description}
               onChange={(e) => setForm({ ...form, description: e.target.value.slice(0, 100) })}
-              placeholder="e.g., Cylinder loading credit, bank transfer receipt"
-              className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white transition"
+              placeholder="e.g., Bank transfer, monthly settlement, etc."
+              className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 bg-white transition-all shadow-inner font-medium"
             />
           </div>
 
-          <div className="flex justify-end gap-3 pt-2">
+          <div className="flex justify-end gap-3 pt-3">
             <button
               type="button"
               onClick={() => {
                 setModalOpen(false);
                 setEditingEntry(null);
               }}
-              className="px-5 py-2.5 rounded-xl text-sm font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 transition active:scale-95"
+              className="px-5 py-3 rounded-xl text-xs font-extrabold uppercase tracking-wider text-slate-600 bg-slate-100 hover:bg-slate-200 transition active:scale-95"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={isPending}
-              className="px-6 py-2.5 rounded-xl text-sm font-bold text-white bg-slate-900 hover:bg-slate-800 disabled:opacity-60 transition active:scale-95 duration-100"
+              className="px-6 py-3 rounded-xl text-xs font-black uppercase tracking-widest text-white bg-slate-900 hover:bg-slate-800 disabled:opacity-60 transition active:scale-95 duration-100 shadow-md"
             >
               {isPending ? "Saving..." : "Save Entry"}
             </button>
@@ -940,10 +1038,10 @@ export function CreditLedgerClient({ customers, initialEntries, canEdit, userId 
       </Modal>
 
       {/* Add Customer Modal */}
-      <Modal open={addCustomerModal} onClose={() => setAddCustomerModal(false)} title="Enroll New Customer Profile" size="md">
-        <form onSubmit={handleAddCustomer} className="space-y-4">
+      <Modal open={addCustomerModal} onClose={() => setAddCustomerModal(false)} title="Enroll Commercial Profile" size="md">
+        <form onSubmit={handleAddCustomer} className="space-y-4 p-1">
           {error && (
-            <div className="bg-rose-50 border border-rose-200 text-rose-700 px-3.5 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2">
+            <div className="bg-rose-50 border border-rose-200 text-rose-700 px-4 py-3 rounded-xl text-xs font-semibold flex items-center gap-2 shadow-sm animate-shake">
               <AlertCircle className="w-4 h-4 text-rose-500 flex-shrink-0" />
               {error}
             </div>
@@ -951,78 +1049,65 @@ export function CreditLedgerClient({ customers, initialEntries, canEdit, userId 
 
           <div className="grid md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Customer Name *</label>
+              <label className="block text-xs font-extrabold text-slate-500 uppercase tracking-wider mb-1.5">Business Name *</label>
               <input
                 value={customerForm.name}
                 onChange={(e) => setCustomerForm({ ...customerForm, name: e.target.value })}
                 placeholder="e.g., Sharma Restaurant"
-                className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white transition"
+                className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 bg-white transition-all shadow-inner font-semibold"
                 required
               />
             </div>
             <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Consumer Code / connection No</label>
+              <label className="block text-xs font-extrabold text-slate-500 uppercase tracking-wider mb-1.5">Consumer Code / connection No</label>
               <input
                 value={customerForm.customerCode}
                 onChange={(e) => setCustomerForm({ ...customerForm, customerCode: e.target.value })}
                 placeholder="e.g., INDANE-2384"
-                className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white transition"
+                className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 bg-white transition-all shadow-inner font-semibold"
               />
-            </div>
-          </div>
-
-          <div className="grid md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Phone Number *</label>
-              <input
-                type="tel"
-                value={customerForm.phone}
-                onChange={(e) =>
-                  setCustomerForm({ ...customerForm, phone: e.target.value.replace(/\D/g, "").slice(0, 10) })
-                }
-                placeholder="9876543210"
-                maxLength={10}
-                className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white transition"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Customer Category</label>
-              <select
-                value={customerForm.type}
-                onChange={(e) => setCustomerForm({ ...customerForm, type: e.target.value })}
-                className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white transition"
-              >
-                <option value="COMMERCIAL">Commercial (Hotel/Restaurant/Agency)</option>
-                <option value="DOMESTIC">Domestic (Household Customer)</option>
-              </select>
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Address</label>
+            <label className="block text-xs font-extrabold text-slate-500 uppercase tracking-wider mb-1.5">Phone Number *</label>
+            <input
+              type="tel"
+              value={customerForm.phone}
+              onChange={(e) =>
+                setCustomerForm({ ...customerForm, phone: e.target.value.replace(/\D/g, "").slice(0, 10) })
+              }
+              placeholder="9876543210"
+              maxLength={10}
+              className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 bg-white transition-all shadow-inner font-semibold"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-extrabold text-slate-500 uppercase tracking-wider mb-1.5">Address</label>
             <input
               value={customerForm.address}
               onChange={(e) => setCustomerForm({ ...customerForm, address: e.target.value })}
               placeholder="e.g., Shop No. 12, Market Square"
-              className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white transition"
+              className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 bg-white transition-all shadow-inner font-medium"
             />
           </div>
 
-          <div className="flex justify-end gap-3 pt-2">
+          <div className="flex justify-end gap-3 pt-3">
             <button
               type="button"
               onClick={() => setAddCustomerModal(false)}
-              className="px-5 py-2.5 rounded-xl text-sm font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 transition active:scale-95"
+              className="px-5 py-3 rounded-xl text-xs font-extrabold uppercase tracking-wider text-slate-600 bg-slate-100 hover:bg-slate-200 transition active:scale-95"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={isPending}
-              className="px-6 py-2.5 rounded-xl text-sm font-bold text-white bg-slate-900 hover:bg-slate-800 disabled:opacity-60 transition active:scale-95 duration-100"
+              className="px-6 py-3 rounded-xl text-xs font-black uppercase tracking-widest text-white bg-slate-900 hover:bg-slate-800 disabled:opacity-60 transition active:scale-95 duration-100 shadow-md"
             >
-              {isPending ? "Adding..." : "Add Customer"}
+              {isPending ? "Adding..." : "Add Profile"}
             </button>
           </div>
         </form>

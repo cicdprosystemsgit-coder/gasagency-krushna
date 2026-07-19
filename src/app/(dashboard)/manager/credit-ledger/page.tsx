@@ -15,8 +15,23 @@ export default async function ManagerCreditLedgerPage() {
   if (!isAllowed) redirect("/manager");
 
   const [customers, entries] = await Promise.all([
-    prisma.customer.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
+    prisma.customer.findMany({
+      where: { isActive: true, agencyId: session.agencyId!, type: "COMMERCIAL" },
+      orderBy: { name: "asc" },
+      include: {
+        deliveries: {
+          select: {
+            id: true,
+            date: true,
+            deliveredQty: true,
+            returnedQty: true,
+            pendingQty: true,
+          }
+        }
+      }
+    }),
     prisma.creditLedgerEntry.findMany({
+      where: { agencyId: session.agencyId!, customer: { type: "COMMERCIAL" } },
       orderBy: [
         { date: "desc" },
         { createdAt: "desc" }

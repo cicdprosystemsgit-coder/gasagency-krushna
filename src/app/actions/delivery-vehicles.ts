@@ -137,6 +137,10 @@ export async function createVehicleTripLog(formData: FormData) {
       }
     }
 
+    const departureLat = formData.get("departureLat") ? Number(formData.get("departureLat")) : null;
+    const departureLng = formData.get("departureLng") ? Number(formData.get("departureLng")) : null;
+    const departureAccuracy = formData.get("departureAccuracy") ? Number(formData.get("departureAccuracy")) : null;
+
     const tripLog = await prisma.vehicleTripLog.create({
       data: {
         vehicleId,
@@ -151,6 +155,9 @@ export async function createVehicleTripLog(formData: FormData) {
         notes: (formData.get("notes") as string) || null,
         recordedById: session.userId,
         agencyId: session.agencyId,
+        departureLat,
+        departureLng,
+        departureAccuracy,
       },
       include: {
         vehicle: { select: { vehicleNo: true, vehicleName: true, assignedTo: { select: { name: true } } } },
@@ -206,6 +213,10 @@ export async function updateTripStatus(id: string, formData: FormData) {
       }
     }
 
+    const returnLat = formData.get("returnLat") ? Number(formData.get("returnLat")) : null;
+    const returnLng = formData.get("returnLng") ? Number(formData.get("returnLng")) : null;
+    const returnAccuracy = formData.get("returnAccuracy") ? Number(formData.get("returnAccuracy")) : null;
+
     const updated = await prisma.vehicleTripLog.update({
       where: { id },
       data: {
@@ -215,6 +226,9 @@ export async function updateTripStatus(id: string, formData: FormData) {
         cylindersDelivered,
         items: items || undefined,
         notes: notesStr !== null ? notesStr : undefined,
+        returnLat,
+        returnLng,
+        returnAccuracy,
       },
       include: {
         vehicle: { select: { vehicleNo: true, vehicleName: true, assignedTo: { select: { name: true } } } },
@@ -240,6 +254,95 @@ export async function updateTripStatus(id: string, formData: FormData) {
   } catch (e) {
     console.error("[updateTripStatus]", e);
     return { error: "Failed to update trip status." };
+  }
+}
+
+export async function updateTripLog(id: string, formData: FormData) {
+  try {
+    const session = await getSession();
+    if (!session || !["ADMIN", "MANAGER", "GODOWN_KEEPER"].includes(session.role) || !session.agencyId)
+      return { error: "Unauthorized" };
+
+    const vehicleId = formData.get("vehicleId") as string;
+    const dateStr = formData.get("date") as string;
+    const departureStr = formData.get("departureTime") as string;
+    const returnStr = formData.get("returnTime") as string;
+    const notesStr = formData.get("notes") as string;
+    const tripStatus = formData.get("tripStatus") as string;
+    const itemsStr = formData.get("items") as string;
+
+    let cylindersLoaded: number | undefined = undefined;
+    let cylindersReturned: number | undefined = undefined;
+    let cylindersDelivered: number | undefined = undefined;
+    let items: any[] | undefined = undefined;
+
+    if (itemsStr) {
+      try {
+        items = JSON.parse(itemsStr);
+        if (Array.isArray(items)) {
+          cylindersLoaded = items.reduce((sum, item) => sum + (Number(item.loaded) || 0), 0);
+          cylindersReturned = items.reduce((sum, item) => sum + (Number(item.unsoldReturned) || 0), 0);
+          cylindersDelivered = items.reduce((sum, item) => sum + (Number(item.emptyReturned) || 0), 0);
+        }
+      } catch (parseErr) {
+        console.error("[updateTripLog] JSON parse error on items:", parseErr);
+      }
+    }
+
+    const updateData: any = {
+      vehicleId: vehicleId || undefined,
+      date: dateStr ? new Date(dateStr) : undefined,
+      notes: notesStr !== null ? notesStr : undefined,
+      tripStatus: tripStatus || undefined,
+    };
+
+    if (departureStr !== undefined) {
+      updateData.departureTime = departureStr ? new Date(departureStr) : null;
+    }
+    if (returnStr !== undefined) {
+      updateData.returnTime = returnStr ? new Date(returnStr) : null;
+    }
+    if (items !== undefined) {
+      updateData.items = items;
+    }
+    if (cylindersLoaded !== undefined) {
+      updateData.cylindersLoaded = cylindersLoaded;
+    }
+    if (cylindersReturned !== undefined) {
+      updateData.cylindersReturned = cylindersReturned;
+    }
+    if (cylindersDelivered !== undefined) {
+      updateData.cylindersDelivered = cylindersDelivered;
+    }
+
+    const updated = await prisma.vehicleTripLog.update({
+      where: { id },
+      data: updateData,
+      include: {
+        vehicle: { select: { vehicleNo: true, vehicleName: true, assignedTo: { select: { name: true } } } },
+        recordedBy: { select: { name: true } },
+      },
+    });
+
+    revalidatePath("/godown-keeper");
+    revalidatePath("/godown-keeper/godown");
+    revalidatePath("/admin/godown");
+    revalidatePath("/admin/vehicle-management");
+    revalidatePath("/manager/vehicle-management");
+
+    return {
+      tripLog: {
+        ...updated,
+        date:          (updated.date          as Date).toISOString(),
+        departureTime: updated.departureTime ? (updated.departureTime as Date).toISOString() : null,
+        returnTime:    updated.returnTime    ? (updated.returnTime    as Date).toISOString() : null,
+        createdAt:     (updated.createdAt    as Date).toISOString(),
+        updatedAt:     (updated.updatedAt    as Date).toISOString(),
+      },
+    };
+  } catch (e) {
+    console.error("[updateTripLog]", e);
+    return { error: "Failed to update trip log." };
   }
 }
 

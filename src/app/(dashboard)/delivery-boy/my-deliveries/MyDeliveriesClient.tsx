@@ -44,9 +44,11 @@ export interface DeliveryRecord {
   paymentMode: string;
   creditAmount: number;
   status: string;
-  notes: string | null;
   customer: { name: string; phone: string; address: string | null; type: string; customerCode: string | null };
   product: { name: string; saleRate: number };
+  deliveryLat?: number | null;
+  deliveryLng?: number | null;
+  deliveryAccuracy?: number | null;
 }
 
 interface AssignedVehicle {
@@ -55,12 +57,19 @@ interface AssignedVehicle {
   vehicleType: string;
 }
 
+export interface TodayTrip {
+  departureTime: string | null;
+  returnTime: string | null;
+  tripStatus: string;
+}
+
 interface Props {
   initialDeliveries: DeliveryRecord[];
   customers: CustomerRecord[];
   products: ProductRecord[];
   userId: string;
   assignedVehicle?: AssignedVehicle | null;
+  todayTrip?: TodayTrip | null;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -216,20 +225,20 @@ function Step1FindCustomer({
 
   const connResults: CustomerRecord[] = connNo.trim()
     ? customers.filter((c) =>
-        c.customerCode != null &&
-        c.customerCode.toLowerCase().includes(connNo.trim().toLowerCase())
-      )
+      c.customerCode != null &&
+      c.customerCode.toLowerCase().includes(connNo.trim().toLowerCase())
+    )
     : [];
 
   const nameResults: CustomerRecord[] = nameQuery.trim().length >= 2
     ? customers.filter((c) => {
-        const q = nameQuery.toLowerCase();
-        return (
-          c.name.toLowerCase().includes(q) ||
-          c.phone.includes(q) ||
-          (c.contactPerson ?? "").toLowerCase().includes(q)
-        );
-      }).slice(0, 8)
+      const q = nameQuery.toLowerCase();
+      return (
+        c.name.toLowerCase().includes(q) ||
+        c.phone.includes(q) ||
+        (c.contactPerson ?? "").toLowerCase().includes(q)
+      );
+    }).slice(0, 8)
     : [];
 
   return (
@@ -441,6 +450,8 @@ interface DeliveryForm {
   deliveredQty: string;
   returnedQty: string;
   pendingQty: string;
+  emptyPending: string;            // Empty cylinders not yet returned by commercial customer
+  bookingQty: string;              // Number of cylinders booked (default 1)
   cashCollected: string;
   creditAmount: string;
   paymentMode: string;
@@ -475,38 +486,40 @@ function Step2DeliveryDetails({
   // DOMESTIC: no Credit/Udhari; COMMERCIAL: full set including Credit/Udhari
   const mainModes = isDomestic
     ? [
-        { val: "CASH",    label: "Cash",           icon: "💵" },
-        { val: "PhonePe", label: "PhonePe",        icon: "📱" },
-        { val: "GPay",    label: "GPay",           icon: "🔵" },
-        { val: "Paytm",   label: "Paytm",          icon: "💙" },
-        { val: "Others",  label: "Others",          icon: "➕" },
-        { val: "PARTIAL", label: "Partial Payment", icon: "💳" },
-      ]
+      { val: "CASH", label: "Cash", icon: "💵" },
+      { val: "PhonePe", label: "PhonePe", icon: "📱" },
+      { val: "GPay", label: "GPay", icon: "🔵" },
+      { val: "Paytm", label: "Paytm", icon: "💙" },
+      { val: "Paybook", label: "Paybook", icon: "📖" },
+      { val: "Others", label: "Others", icon: "➕" },
+      { val: "PARTIAL", label: "Partial Payment", icon: "💳" },
+    ]
     : [
-        { val: "CASH",    label: "Cash",            icon: "💵" },
-        { val: "PhonePe", label: "PhonePe",         icon: "📱" },
-        { val: "GPay",    label: "GPay",            icon: "🔵" },
-        { val: "Paytm",   label: "Paytm",           icon: "💙" },
-        { val: "PARTIAL", label: "Partial Payment", icon: "💳" },
-        { val: "CREDIT",  label: "Credit / Udhari", icon: "📒" },
-        { val: "Others",  label: "Others",           icon: "➕" },
-      ];
+      { val: "CASH", label: "Cash", icon: "💵" },
+      { val: "PhonePe", label: "PhonePe", icon: "📱" },
+      { val: "GPay", label: "GPay", icon: "🔵" },
+      { val: "Paytm", label: "Paytm", icon: "💙" },
+      { val: "Paybook", label: "Paybook", icon: "📖" },
+      { val: "PARTIAL", label: "Partial Payment", icon: "💳" },
+      { val: "CREDIT", label: "Credit / Udhari", icon: "📒" },
+      { val: "Others", label: "Others", icon: "➕" },
+    ];
 
   // For DOMESTIC partial: online modes (PhonePe/GPay/Paytm/Others) for the second portion
   const onlineModes = [
     { val: "PhonePe", label: "PhonePe" },
-    { val: "GPay",    label: "GPay" },
-    { val: "Paytm",   label: "Paytm" },
-    { val: "Others",  label: "Others" },
+    { val: "GPay", label: "GPay" },
+    { val: "Paytm", label: "Paytm" },
+    { val: "Others", label: "Others" },
   ];
 
   // For COMMERCIAL partial: cash collection modes (how cash was received)
   const collectionModes = [
-    { val: "CASH",    label: "Cash" },
+    { val: "CASH", label: "Cash" },
     { val: "PhonePe", label: "PhonePe" },
-    { val: "GPay",    label: "GPay" },
-    { val: "Paytm",   label: "Paytm" },
-    { val: "Others",  label: "Others" },
+    { val: "GPay", label: "GPay" },
+    { val: "Paytm", label: "Paytm" },
+    { val: "Others", label: "Others" },
   ];
 
   return (
@@ -575,26 +588,155 @@ function Step2DeliveryDetails({
         {/* ── STEP C: Cylinder Count ────────────────────────────────────── */}
         <div className="rounded-xl p-4 space-y-3" style={{ background: "#F8F8F8", border: "1px solid #E4E4E7" }}>
           <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "#71717A" }}>③ Cylinder Count</p>
-          <div className="grid grid-cols-3 gap-3">
-            {[
-              { label: "Delivered",     key: "deliveredQty" as const, color: "#2563EB", hint: "Full cylinders given" },
-              { label: "Empty Returned",key: "returnedQty"  as const, color: "#16A34A", hint: "Empty cylinders collected" },
-              { label: "Pending",       key: "pendingQty"   as const, color: "#D97706", hint: "Not delivered (absent etc.)" },
-            ].map(({ label, key, color, hint }) => (
-              <div key={key}>
-                <label className="block text-[11px] font-medium mb-1" style={{ color }}>{label}</label>
+
+          {/* COMMERCIAL: 5-column layout */}
+          {!isDomestic ? (
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+              {/* 1. Booking Cylinder */}
+              <div>
+                <label className="block text-[11px] font-medium mb-1" style={{ color: "#4F46E5" }}>Booking Cylinder</label>
                 <input
-                  type="number"
-                  min="0"
-                  value={form[key]}
-                  onChange={(e) => onChange({ [key]: e.target.value })}
-                  className="w-full px-3 py-2 rounded-lg text-[15px] font-bold text-center border outline-none transition-colors focus:border-blue-500"
-                  style={{ borderColor: "#D4D4D8", background: "#FFFFFF", color }}
+                  type="number" min="0"
+                  value={form.bookingQty || "1"}
+                  onChange={(e) => {
+                    const bVal = Number(e.target.value) || 0;
+                    const dVal = Number(form.deliveredQty) || 0;
+                    const pVal = Math.max(0, bVal - dVal);
+                    onChange({ bookingQty: e.target.value, pendingQty: pVal.toString() });
+                  }}
+                  className="w-full px-3 py-2 rounded-lg text-[15px] font-bold text-center border outline-none transition-colors focus:border-indigo-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  style={{ borderColor: "#D4D4D8", background: "#FFFFFF", color: "#4F46E5" }}
                 />
-                <p className="text-[10px] mt-1 text-center" style={{ color: "#A1A1AA" }}>{hint}</p>
+                <p className="text-[10px] mt-1 text-center" style={{ color: "#A1A1AA" }}>Cylinders ordered</p>
               </div>
-            ))}
-          </div>
+
+              {/* 2. Delivered */}
+              <div>
+                <label className="block text-[11px] font-medium mb-1" style={{ color: "#2563EB" }}>Delivered</label>
+                <input
+                  type="number" min="0"
+                  value={form.deliveredQty}
+                  onChange={(e) => {
+                    const dVal = Number(e.target.value) || 0;
+                    const rVal = Number(form.returnedQty) || 0;
+                    const bVal = Number(form.bookingQty) || 0;
+                    const ep   = Math.max(0, dVal - rVal);
+                    const pVal = Math.max(0, bVal - dVal);
+                    onChange({ deliveredQty: e.target.value, emptyPending: ep.toString(), pendingQty: pVal.toString() });
+                  }}
+                  className="w-full px-3 py-2 rounded-lg text-[15px] font-bold text-center border outline-none transition-colors focus:border-blue-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  style={{ borderColor: "#D4D4D8", background: "#FFFFFF", color: "#2563EB" }}
+                />
+                <p className="text-[10px] mt-1 text-center" style={{ color: "#A1A1AA" }}>Full cylinders given</p>
+              </div>
+
+              {/* 3. Empty Returned */}
+              <div>
+                <label className="block text-[11px] font-medium mb-1" style={{ color: "#16A34A" }}>Empty Returned</label>
+                <input
+                  type="number" min="0"
+                  value={form.returnedQty}
+                  onChange={(e) => {
+                    const rVal = Number(e.target.value) || 0;
+                    const dVal = Number(form.deliveredQty) || 0;
+                    const ep   = Math.max(0, dVal - rVal);
+                    onChange({ returnedQty: e.target.value, emptyPending: ep.toString() });
+                  }}
+                  className="w-full px-2 py-2 rounded-lg text-[15px] font-bold text-center border outline-none transition-colors focus:border-green-500"
+                  style={{ borderColor: "#16A34A", background: "#FFFFFF", color: "#16A34A" }}
+                />
+                <p className="text-[10px] mt-1 text-center" style={{ color: "#A1A1AA" }}>Empty cylinders collected</p>
+              </div>
+
+              {/* 4. Empty Pending */}
+              <div>
+                <label className="block text-[11px] font-medium mb-1" style={{ color: "#7C3AED" }}>Empty Pending</label>
+                <input
+                  type="number" disabled readOnly
+                  value={form.emptyPending}
+                  className="w-full px-3 py-2 rounded-lg text-[15px] font-bold text-center border outline-none select-none cursor-not-allowed opacity-80 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  style={{ borderColor: "#D4D4D8", background: "#EDE9FE", color: "#7C3AED" }}
+                />
+                <p className="text-[10px] mt-1 text-center" style={{ color: "#A1A1AA" }}>Not returned (auto)</p>
+              </div>
+
+              {/* 5. Not Delivered (Cancelled) */}
+              <div>
+                <label className="block text-[11px] font-medium mb-1" style={{ color: "#D97706" }}>Not Delivered</label>
+                <input
+                  type="number" disabled readOnly
+                  value={form.pendingQty}
+                  className="w-full px-3 py-2 rounded-lg text-[15px] font-bold text-center border outline-none select-none cursor-not-allowed opacity-80 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  style={{ borderColor: "#D4D4D8", background: "#FFFBEB", color: "#D97706" }}
+                />
+                <p className="text-[10px] mt-1 text-center" style={{ color: "#A1A1AA" }}>Cancelled (auto)</p>
+              </div>
+            </div>
+          ) : (
+            /* DOMESTIC: 4-column layout */
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {/* 1. Booking Cylinder */}
+              <div>
+                <label className="block text-[11px] font-medium mb-1" style={{ color: "#4F46E5" }}>Booking Cylinder</label>
+                <input
+                  type="number" min="0"
+                  value={form.bookingQty || "1"}
+                  onChange={(e) => {
+                    const bVal = Number(e.target.value) || 0;
+                    const dVal = Number(form.deliveredQty) || 0;
+                    const pVal = Math.max(0, bVal - dVal);
+                    onChange({ bookingQty: e.target.value, pendingQty: pVal.toString() });
+                  }}
+                  className="w-full px-3 py-2 rounded-lg text-[15px] font-bold text-center border outline-none transition-colors focus:border-indigo-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  style={{ borderColor: "#D4D4D8", background: "#FFFFFF", color: "#4F46E5" }}
+                />
+                <p className="text-[10px] mt-1 text-center" style={{ color: "#A1A1AA" }}>Cylinders ordered</p>
+              </div>
+
+              {/* 2. Delivered */}
+              <div>
+                <label className="block text-[11px] font-medium mb-1" style={{ color: "#2563EB" }}>Delivered</label>
+                <input
+                  type="number" min="0"
+                  value={form.deliveredQty}
+                  onChange={(e) => {
+                    const dVal = Number(e.target.value) || 0;
+                    const bVal = Number(form.bookingQty) || 0;
+                    const pVal = Math.max(0, bVal - dVal);
+                    onChange({ deliveredQty: e.target.value, pendingQty: pVal.toString() });
+                  }}
+                  className="w-full px-3 py-2 rounded-lg text-[15px] font-bold text-center border outline-none transition-colors focus:border-blue-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  style={{ borderColor: "#D4D4D8", background: "#FFFFFF", color: "#2563EB" }}
+                />
+                <p className="text-[10px] mt-1 text-center" style={{ color: "#A1A1AA" }}>Full cylinders given</p>
+              </div>
+
+              {/* 3. Empty Returned */}
+              <div>
+                <label className="block text-[11px] font-medium mb-1" style={{ color: "#16A34A" }}>Empty Returned</label>
+                <input
+                  type="number" min="0"
+                  value={form.returnedQty}
+                  onChange={(e) => onChange({ returnedQty: e.target.value })}
+                  className="w-full px-2 py-2 rounded-lg text-[15px] font-bold text-center border outline-none transition-colors focus:border-green-500"
+                  style={{ borderColor: "#16A34A", background: "#FFFFFF", color: "#16A34A" }}
+                />
+                <p className="text-[10px] mt-1 text-center" style={{ color: "#A1A1AA" }}>Empty cylinders collected</p>
+              </div>
+
+              {/* 4. Not Delivered (Cancelled) */}
+              <div>
+                <label className="block text-[11px] font-medium mb-1" style={{ color: "#D97706" }}>Not Delivered</label>
+                <input
+                  type="number" disabled readOnly
+                  value={form.pendingQty}
+                  className="w-full px-3 py-2 rounded-lg text-[15px] font-bold text-center border outline-none select-none cursor-not-allowed opacity-80 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  style={{ borderColor: "#D4D4D8", background: "#FFFBEB", color: "#D97706" }}
+                />
+                <p className="text-[10px] mt-1 text-center" style={{ color: "#A1A1AA" }}>Cancelled (auto)</p>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* ── STEP D: Payment Method ────────────────────────────────────── */}
@@ -686,10 +828,12 @@ function Step2DeliveryDetails({
               </>
             )}
 
-            {/* ── CASH / PhonePe / GPay / Paytm / Others — single amount ── */}
-            {["CASH", "PhonePe", "GPay", "Paytm", "Others"].includes(form.paymentMode) && (
+            {/* ── CASH / PhonePe / GPay / Paytm / Paybook / Others — single amount ── */}
+            {["CASH", "PhonePe", "GPay", "Paytm", "Paybook", "Others"].includes(form.paymentMode) && (
               <div>
-                <label className={labelCls} style={labelSty}>Amount Collected (₹)</label>
+                <label className={labelCls} style={labelSty}>
+                  {form.paymentMode === "Paybook" ? "Amount Paid with Booking (₹)" : "Amount Collected (₹)"}
+                </label>
                 <div className="relative">
                   <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5" style={{ color: "#A1A1AA" }} />
                   <input
@@ -727,7 +871,11 @@ function Step2DeliveryDetails({
                     <input
                       type="number" min="0" step="0.01"
                       value={form.cashCollected}
-                      onChange={(e) => onChange({ cashCollected: e.target.value })}
+                      onChange={(e) => {
+                        const cashVal = Number(e.target.value) || 0;
+                        const onlineAuto = totalValue > 0 ? Math.max(0, totalValue - cashVal).toFixed(2) : "";
+                        onChange({ cashCollected: e.target.value, creditAmount: onlineAuto });
+                      }}
                       placeholder="Cash amount received"
                       className={inputCls}
                       style={{ ...inputSty, paddingLeft: "2.25rem", borderColor: "#BBF7D0", background: "#F0FDF4" }}
@@ -858,7 +1006,11 @@ function Step2DeliveryDetails({
                     <input
                       type="number" min="0" step="0.01"
                       value={form.cashCollected}
-                      onChange={(e) => onChange({ cashCollected: e.target.value })}
+                      onChange={(e) => {
+                        const cashVal = Number(e.target.value) || 0;
+                        const udhariAuto = totalValue > 0 ? Math.max(0, totalValue - cashVal).toFixed(2) : "";
+                        onChange({ cashCollected: e.target.value, creditAmount: udhariAuto });
+                      }}
                       placeholder="Amount received now"
                       className={inputCls}
                       style={{ ...inputSty, paddingLeft: "2.25rem", borderColor: "#BBF7D0", background: "#F0FDF4" }}
@@ -934,10 +1086,11 @@ function Step3Review({
     : (form.partialCollectionMode || "Cash");
   const paymentLabel =
     form.paymentMode === "CASH" ? "Cash"
-    : form.paymentMode === "CREDIT" ? "Credit / Udhari (Full)"
-    : form.paymentMode === "PARTIAL" ? `Partial (via ${collectionLabel} + Udhari)`
-    : form.paymentMode === "Others" ? (form.otherPaymentApp || "Others")
-    : form.paymentMode;
+      : form.paymentMode === "CREDIT" ? "Credit / Udhari (Full)"
+        : form.paymentMode === "PARTIAL" ? `Partial (via ${collectionLabel} + Udhari)`
+          : form.paymentMode === "Paybook" ? "Paybook (Already Paid)"
+            : form.paymentMode === "Others" ? (form.otherPaymentApp || "Others")
+              : form.paymentMode;
 
   const rows = [
     { label: "Customer", value: customer.name },
@@ -950,12 +1103,14 @@ function Step3Review({
     !isDomestic && customer.contactPerson ? { label: "Contact Person", value: customer.contactPerson } : null,
     { label: "Product", value: product?.name ?? "—" },
     { label: "Date", value: new Date(form.date).toLocaleDateString("en-IN", { day: "2-digit", month: "long", year: "numeric" }) },
+    { label: "Booking Cylinder", value: `${form.bookingQty} cylinder${Number(form.bookingQty) !== 1 ? "s" : ""}` },
     { label: "Delivered", value: `${form.deliveredQty} cylinder${Number(form.deliveredQty) !== 1 ? "s" : ""}`, highlight: true },
     Number(form.returnedQty) > 0 ? { label: "Empty Returned", value: `${form.returnedQty} empty cylinder${Number(form.returnedQty) !== 1 ? "s" : ""}` } : null,
-    Number(form.pendingQty) > 0 ? { label: "Pending", value: `${form.pendingQty} not delivered`, warn: true } : null,
+    !isDomestic && Number(form.emptyPending) > 0 ? { label: "Empty Pending", value: `${form.emptyPending} empty not returned`, warn: true } : null,
+    Number(form.pendingQty) > 0 ? { label: "Not Delivered", value: `${form.pendingQty} cylinder${Number(form.pendingQty) !== 1 ? "s" : ""}`, warn: true } : null,
     { label: "Payment Mode", value: paymentLabel },
     form.paymentMode !== "CREDIT"
-      ? { label: form.paymentMode === "PARTIAL" ? "Cash Received" : "Amount Collected", value: `₹${Number(form.cashCollected || 0).toFixed(2)}`, highlight: true }
+      ? { label: form.paymentMode === "PARTIAL" ? "Cash Received" : form.paymentMode === "Paybook" ? "Prepaid Amount" : "Amount Collected", value: `₹${Number(form.cashCollected || 0).toFixed(2)}`, highlight: true }
       : { label: "Credit Amount", value: `₹${Number(form.cashCollected || 0).toFixed(2)}`, warn: true },
     form.paymentMode === "PARTIAL" && Number(form.creditAmount) > 0
       ? { label: "Udhari (Credit)", value: `₹${Number(form.creditAmount).toFixed(2)}`, warn: true }
@@ -1004,6 +1159,65 @@ function Step3Review({
   );
 }
 
+// [ignoring loop detection]
+function GpsStatusBox({
+  gps,
+  onRetry,
+}: {
+  gps: { lat: number | null; lng: number | null; accuracy: number | null; loading: boolean; error: string | null };
+  onRetry: () => void;
+}) {
+  return (
+    <div className="mb-4 rounded-xl p-3 border text-xs" style={{
+      background: gps.loading ? "#F8F8F8" : gps.lat ? "#ECFDF5" : "#FEF2F2",
+      borderColor: gps.loading ? "#E4E4E7" : gps.lat ? "#A7F3D0" : "#FCA5A5",
+      color: gps.loading ? "#52525B" : gps.lat ? "#065F46" : "#991B1B"
+    }}>
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex items-center gap-2">
+          {gps.loading ? (
+            <>
+              <div className="w-3.5 h-3.5 border-2 border-zinc-500 border-t-transparent rounded-full animate-spin" />
+              <span className="font-semibold">Acquiring mandatory GPS coordinates...</span>
+            </>
+          ) : gps.lat ? (
+            <>
+              <span className="text-[14px]">📍</span>
+              <div>
+                <span className="font-bold">GPS Location Captured</span>
+                <span className="block text-[10px] opacity-75 font-mono">
+                  Lat: {gps.lat.toFixed(5)}, Lng: {gps.lng!.toFixed(5)} (±{gps.accuracy?.toFixed(0)}m)
+                </span>
+              </div>
+            </>
+          ) : (
+            <>
+              <span className="text-[14px]">⚠️</span>
+              <div>
+                <span className="font-bold">Location Required: </span>
+                <span>{gps.error || "Please allow location access to record this delivery."}</span>
+              </div>
+            </>
+          )}
+        </div>
+        {!gps.loading && (
+          <button
+            type="button"
+            onClick={onRetry}
+            className="px-2 py-1 rounded bg-white border font-bold text-[10px] uppercase shadow-sm transition hover:bg-zinc-50"
+            style={{
+              borderColor: gps.lat ? "#D1FAE5" : "#FCA5A5",
+              color: gps.lat ? "#047857" : "#DC2626"
+            }}
+          >
+            {gps.lat ? "Recapture" : "Retry GPS"}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Client Component ────────────────────────────────────────────────────
 
 export function MyDeliveriesClient({
@@ -1012,16 +1226,23 @@ export function MyDeliveriesClient({
   products,
   userId,
   assignedVehicle,
+  todayTrip,
 }: Props) {
   const [deliveries, setDeliveries] = useState<DeliveryRecord[]>(initialDeliveries);
+  
+  const hasVehicleAssigned = !!assignedVehicle;
+  const hasDeparted = !!todayTrip && !!todayTrip.departureTime;
+  const isDeparted = hasVehicleAssigned && hasDeparted;
   const [wizardOpen, setWizardOpen] = useState(false);
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerRecord | null>(null);
   const [form, setForm] = useState<DeliveryForm>({
     productId: "",
-    deliveredQty: "1",
+    deliveredQty: "0",
     returnedQty: "0",
-    pendingQty: "0",
+    pendingQty: "1",
+    emptyPending: "0",
+    bookingQty: "1",
     cashCollected: "",
     creditAmount: "",
     paymentMode: "CASH",
@@ -1036,6 +1257,45 @@ export function MyDeliveriesClient({
   const [, startTransition] = useTransition();
   const [historyExpanded, setHistoryExpanded] = useState(false);
 
+  const [gps, setGps] = useState<{
+    lat: number | null;
+    lng: number | null;
+    accuracy: number | null;
+    loading: boolean;
+    error: string | null;
+  }>({ lat: null, lng: null, accuracy: null, loading: false, error: null });
+
+  const captureGps = () => {
+    if (typeof window === "undefined" || !navigator.geolocation) {
+      setGps((prev) => ({ ...prev, error: "Geolocation not supported by browser.", loading: false }));
+      return;
+    }
+    setGps((prev) => ({ ...prev, loading: true, error: null }));
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setGps({
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+          accuracy: pos.coords.accuracy,
+          loading: false,
+          error: null,
+        });
+      },
+      (err) => {
+        let msg = "Unable to retrieve location.";
+        if (err.code === err.PERMISSION_DENIED) {
+          msg = "Location permission denied. Please allow location access in your browser.";
+        } else if (err.code === err.POSITION_UNAVAILABLE) {
+          msg = "Location information unavailable. Verify GPS is active.";
+        } else if (err.code === err.TIMEOUT) {
+          msg = "Location request timed out.";
+        }
+        setGps((prev) => ({ ...prev, error: msg, loading: false }));
+      },
+      { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
+    );
+  };
+
   const todayDeliveries = deliveries.filter((d) => isToday(d.date));
   const pastDeliveries = deliveries.filter((d) => !isToday(d.date));
 
@@ -1046,6 +1306,7 @@ export function MyDeliveriesClient({
       const isPartial = d.paymentMode === "PARTIAL";
       const isCredit = d.paymentMode === "CREDIT";
       const isCash = d.paymentMode === "CASH";
+      const isOnline = ["PhonePe", "GPay", "Paytm", "Paybook", "Others"].includes(d.paymentMode);
 
       let cashVal = 0;
       let onlineVal = 0;
@@ -1062,7 +1323,7 @@ export function MyDeliveriesClient({
         } else {
           creditVal = d.creditAmount || 0;
         }
-      } else {
+      } else if (isOnline) {
         onlineVal = d.cashCollected;
       }
 
@@ -1079,8 +1340,9 @@ export function MyDeliveriesClient({
   function openWizard() {
     setStep(1);
     setSelectedCustomer(null);
-    setForm({ productId: "", deliveredQty: "1", returnedQty: "0", pendingQty: "0", cashCollected: "", creditAmount: "", paymentMode: "CASH", partialCollectionMode: "CASH", partialCollectionOther: "", notes: "", date: todayStr(), otherPaymentApp: "" });
+    setForm({ productId: "", deliveredQty: "0", returnedQty: "0", pendingQty: "1", emptyPending: "0", bookingQty: "1", cashCollected: "", creditAmount: "", paymentMode: "CASH", partialCollectionMode: "CASH", partialCollectionOther: "", notes: "", date: todayStr(), otherPaymentApp: "" });
     setFormError("");
+    setGps({ lat: null, lng: null, accuracy: null, loading: false, error: null });
     setWizardOpen(true);
   }
 
@@ -1088,6 +1350,7 @@ export function MyDeliveriesClient({
     if (!selectedCustomer) { setFormError("Please find and select a customer first."); return; }
     setFormError("");
     setStep(2);
+    captureGps();
   }
 
   function goStep3() {
@@ -1096,6 +1359,10 @@ export function MyDeliveriesClient({
     if (Number(form.deliveredQty) === 0 && Number(form.pendingQty) === 0) { setFormError("Enter cylinders delivered or mark as pending."); return; }
     if (form.paymentMode === "Others" && !(form.otherPaymentApp || "").trim()) {
       setFormError("Please specify the payment app name.");
+      return;
+    }
+    if (form.paymentMode === "Paybook" && (!form.cashCollected || Number(form.cashCollected) <= 0)) {
+      setFormError("Please enter the amount paid with booking.");
       return;
     }
     if (form.paymentMode === "PARTIAL") {
@@ -1108,12 +1375,31 @@ export function MyDeliveriesClient({
         return;
       }
     }
+    // Location check: Warn if GPS not captured yet
+    if (!gps.lat && !gps.loading) {
+      setFormError("Mandatory: We need to capture your GPS location. Click retry below.");
+      captureGps();
+      return;
+    }
+    if (gps.loading) {
+      setFormError("Acquiring GPS location lock... Please wait.");
+      return;
+    }
     setFormError("");
     setStep(3);
   }
 
   function handleSubmit() {
     if (!selectedCustomer) return;
+    if (!gps.lat && !gps.loading) {
+      setFormError("GPS location is mandatory to submit delivery records. Attempting to capture...");
+      captureGps();
+      return;
+    }
+    if (gps.loading) {
+      setFormError("Please wait for GPS coordinates to load.");
+      return;
+    }
     setSubmitting(true);
     const fd = new FormData();
     fd.append("customerId", selectedCustomer.id);
@@ -1128,6 +1414,10 @@ export function MyDeliveriesClient({
     fd.append("notes", form.notes || "");
     fd.append("date", form.date);
     fd.append("deliveredById", userId);
+    if (gps.lat) fd.append("deliveryLat", gps.lat.toString());
+    if (gps.lng) fd.append("deliveryLng", gps.lng.toString());
+    if (gps.accuracy) fd.append("deliveryAccuracy", gps.accuracy.toString());
+
     startTransition(async () => {
       const res = await createDeliveryRecord(fd);
       setSubmitting(false);
@@ -1205,6 +1495,22 @@ export function MyDeliveriesClient({
         />
       </div>
 
+      {/* Warning banner if not departed or vehicle not assigned */}
+      {!isDeparted && (
+        <div className="flex items-start gap-3 p-4 rounded-xl mb-5"
+          style={{ background: "#FEF3C7", border: "1px solid #FDE68A", color: "#92400E" }}>
+          <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5 text-amber-600" />
+          <div className="text-[13px]">
+            <p className="font-semibold">Delivery Feature Locked</p>
+            <p className="mt-0.5 opacity-90">
+              {!hasVehicleAssigned 
+                ? "No vehicle is assigned to you today. Please contact your manager or godown keeper to assign a vehicle."
+                : `Your assigned vehicle (${assignedVehicle.vehicleNo}) has not departed yet. Please ensure the godown keeper records the vehicle departure.`}
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Today header + Add button */}
       <div className="flex items-center justify-between mb-4">
         <div>
@@ -1217,7 +1523,8 @@ export function MyDeliveriesClient({
         </div>
         <button
           onClick={openWizard}
-          className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-[13px] font-medium text-white transition-opacity hover:opacity-90"
+          disabled={!isDeparted}
+          className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-[13px] font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
           style={{ background: "#2563EB" }}
         >
           <Plus className="w-4 h-4" /> Add Delivery
@@ -1233,9 +1540,12 @@ export function MyDeliveriesClient({
           <p className="text-[12px] mt-1 mb-4" style={{ color: "#A1A1AA" }}>
             Tap &apos;Add Delivery&apos; and use the connection number to find a customer
           </p>
-          <button onClick={openWizard}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-[13px] font-medium text-white"
-            style={{ background: "#2563EB" }}>
+          <button 
+            onClick={openWizard}
+            disabled={!isDeparted}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-[13px] font-medium text-white disabled:opacity-50 disabled:cursor-not-allowed"
+            style={{ background: "#2563EB" }}
+          >
             <Plus className="w-4 h-4" /> Add First Delivery
           </button>
         </div>
@@ -1332,6 +1642,7 @@ export function MyDeliveriesClient({
 
           {step === 2 && selectedCustomer && (
             <>
+              <GpsStatusBox gps={gps} onRetry={captureGps} />
               <Step2DeliveryDetails
                 customer={selectedCustomer}
                 products={products}
@@ -1356,6 +1667,7 @@ export function MyDeliveriesClient({
 
           {step === 3 && selectedCustomer && (
             <>
+              <GpsStatusBox gps={gps} onRetry={captureGps} />
               <Step3Review customer={selectedCustomer} form={form} product={selectedProduct} />
               {formError && (
                 <div className="mt-3 flex items-center gap-2 px-3 py-2 rounded-lg"
@@ -1401,12 +1713,13 @@ export function MyDeliveriesClient({
 
 function PaymentBadge({ mode }: { mode: string }) {
   const cfg: Record<string, { label: string; bg: string; color: string }> = {
-    CASH:    { label: "Cash",    bg: "#F0FDF4", color: "#16A34A" },
-    CREDIT:  { label: "Udhari", bg: "#FEF3C7", color: "#B45309" },
-    PARTIAL: { label: "Partial",bg: "#EFF6FF", color: "#1D4ED8" },
-    PhonePe: { label: "PhonePe",bg: "#F5F3FF", color: "#7C3AED" },
-    GPay:    { label: "GPay",   bg: "#F0FDF4", color: "#059669" },
-    Paytm:   { label: "Paytm",  bg: "#EFF6FF", color: "#2563EB" },
+    CASH: { label: "Cash", bg: "#F0FDF4", color: "#16A34A" },
+    CREDIT: { label: "Udhari", bg: "#FEF3C7", color: "#B45309" },
+    PARTIAL: { label: "Partial", bg: "#EFF6FF", color: "#1D4ED8" },
+    PhonePe: { label: "PhonePe", bg: "#F5F3FF", color: "#7C3AED" },
+    GPay: { label: "GPay", bg: "#F0FDF4", color: "#059669" },
+    Paytm: { label: "Paytm", bg: "#EFF6FF", color: "#2563EB" },
+    Paybook: { label: "Paybook", bg: "#ECFDF5", color: "#047857" },
   };
   const c = cfg[mode] ?? { label: mode, bg: "#F4F4F5", color: "#52525B" };
   return (
@@ -1446,6 +1759,7 @@ function DeliveryTable({ deliveries, compact = false }: { deliveries: DeliveryRe
               const isPartial = d.paymentMode === "PARTIAL";
               const isCredit = d.paymentMode === "CREDIT";
               const isCash = d.paymentMode === "CASH";
+              const isOnline = ["PhonePe", "GPay", "Paytm", "Paybook", "Others"].includes(d.paymentMode);
 
               let cashVal = 0;
               let onlineVal = 0;
@@ -1462,7 +1776,7 @@ function DeliveryTable({ deliveries, compact = false }: { deliveries: DeliveryRe
                 } else {
                   creditVal = d.creditAmount || 0;
                 }
-              } else {
+              } else if (isOnline) {
                 onlineVal = d.cashCollected;
               }
 
@@ -1524,6 +1838,7 @@ function DeliveryTable({ deliveries, compact = false }: { deliveries: DeliveryRe
                   const isPartial = d.paymentMode === "PARTIAL";
                   const isCredit = d.paymentMode === "CREDIT";
                   const isCash = d.paymentMode === "CASH";
+                  const isOnline = ["PhonePe", "GPay", "Paytm", "Paybook", "Others"].includes(d.paymentMode);
 
                   let cashVal = 0;
                   let onlineVal = 0;
@@ -1540,7 +1855,7 @@ function DeliveryTable({ deliveries, compact = false }: { deliveries: DeliveryRe
                     } else {
                       creditVal = d.creditAmount || 0;
                     }
-                  } else {
+                  } else if (isOnline) {
                     onlineVal = d.cashCollected;
                   }
 

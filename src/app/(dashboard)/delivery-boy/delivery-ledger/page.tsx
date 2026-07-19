@@ -7,12 +7,12 @@ import { Package } from "lucide-react";
 
 function PaymentBadge({ mode }: { mode: string }) {
   const cfg: Record<string, { label: string; bg: string; color: string }> = {
-    CASH:    { label: "Cash",    bg: "#F0FDF4", color: "#16A34A" },
-    CREDIT:  { label: "Udhari", bg: "#FEF3C7", color: "#B45309" },
+    CASH: { label: "Cash", bg: "#F0FDF4", color: "#16A34A" },
+    CREDIT: { label: "Udhari", bg: "#FEF3C7", color: "#B45309" },
     PARTIAL: { label: "Partial", bg: "#EFF6FF", color: "#1D4ED8" },
     PhonePe: { label: "PhonePe", bg: "#F5F3FF", color: "#7C3AED" },
-    GPay:    { label: "GPay",   bg: "#F0FDF4", color: "#059669" },
-    Paytm:   { label: "Paytm",  bg: "#EFF6FF", color: "#2563EB" },
+    GPay: { label: "GPay", bg: "#F0FDF4", color: "#059669" },
+    Paytm: { label: "Paytm", bg: "#EFF6FF", color: "#2563EB" },
   };
   const c = cfg[mode] ?? { label: mode, bg: "#F4F4F5", color: "#52525B" };
   return (
@@ -50,6 +50,7 @@ export default async function DeliveryLedgerPage() {
       const isPartial = d.paymentMode === "PARTIAL";
       const isCredit = d.paymentMode === "CREDIT";
       const isCash = d.paymentMode === "CASH";
+      const isOnline = ["PhonePe", "GPay", "Paytm", "Paybook", "Others"].includes(d.paymentMode);
 
       let cashVal = 0;
       let onlineVal = 0;
@@ -66,7 +67,7 @@ export default async function DeliveryLedgerPage() {
         } else {
           creditVal = d.creditAmount || 0;
         }
-      } else {
+      } else if (isOnline) {
         onlineVal = d.cashCollected;
       }
 
@@ -123,6 +124,7 @@ export default async function DeliveryLedgerPage() {
                 const isPartial = d.paymentMode === "PARTIAL";
                 const isCredit = d.paymentMode === "CREDIT";
                 const isCash = d.paymentMode === "CASH";
+                const isOnline = ["PhonePe", "GPay", "Paytm", "Paybook", "Others"].includes(d.paymentMode);
 
                 let cashVal = 0;
                 let onlineVal = 0;
@@ -139,7 +141,7 @@ export default async function DeliveryLedgerPage() {
                   } else {
                     creditVal = d.creditAmount || 0;
                   }
-                } else {
+                } else if (isOnline) {
                   onlineVal = d.cashCollected;
                 }
 

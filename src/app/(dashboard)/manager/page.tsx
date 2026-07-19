@@ -8,6 +8,7 @@ import { ClipboardCheck, Users, Package, ChevronRight, ArrowRight, ShieldAlert }
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import { checkPermission } from "@/lib/rbac";
+import { PunchWidget } from "@/components/ui/PunchWidget";
 
 export default async function ManagerDashboard() {
   const session = await getSession();
@@ -118,30 +119,34 @@ export default async function ManagerDashboard() {
           </div>
         )}
 
-        <div className="rounded-lg overflow-hidden flex flex-col" style={{ background: "#fff", border: "1px solid #E4E4E7", boxShadow: "0 1px 2px rgba(0,0,0,0.04)" }}>
-          <div className="px-5 py-3.5" style={{ borderBottom: "1px solid #E4E4E7" }}>
-            <p className="text-[13px] font-semibold" style={{ color: "#18181B" }}>{t("modules")}</p>
-          </div>
-          {allowedModules.length > 0 ? (
-            <div className="p-3 space-y-1 flex-1">
-              {allowedModules.map((a) => (
-                <Link key={a.href} href={a.href} className="flex items-center justify-between px-3 py-2 rounded-md text-[13px] transition-colors hover:bg-zinc-50 group" style={{ color: "#52525B" }}>
-                  {a.label}
-                  <div className="flex items-center gap-1.5">
-                    {a.badge !== undefined && a.badge > 0 && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full text-white" style={{ background: "#DC2626" }}>{a.badge}</span>}
-                    <ChevronRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity" style={{ color: "#A1A1AA" }} />
-                  </div>
-                </Link>
-              ))}
+        <div className="space-y-4">
+          <PunchWidget />
+          
+          <div className="rounded-lg overflow-hidden flex flex-col" style={{ background: "#fff", border: "1px solid #E4E4E7", boxShadow: "0 1px 2px rgba(0,0,0,0.04)" }}>
+            <div className="px-5 py-3.5" style={{ borderBottom: "1px solid #E4E4E7" }}>
+              <p className="text-[13px] font-semibold" style={{ color: "#18181B" }}>{t("modules")}</p>
             </div>
-          ) : (
-            <div className="p-6 flex-1 flex flex-col justify-center items-center gap-2.5 bg-zinc-50">
-              <ShieldAlert className="w-5 h-5 text-zinc-400" />
-              <div className="text-[12px] text-zinc-500 text-center">
-                No accessible modules found.
+            {allowedModules.length > 0 ? (
+              <div className="p-3 space-y-1 flex-1">
+                {allowedModules.map((a) => (
+                  <Link key={a.href} href={a.href} className="flex items-center justify-between px-3 py-2 rounded-md text-[13px] transition-colors hover:bg-zinc-50 group" style={{ color: "#52525B" }}>
+                    {a.label}
+                    <div className="flex items-center gap-1.5">
+                      {a.badge !== undefined && a.badge > 0 && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full text-white" style={{ background: "#DC2626" }}>{a.badge}</span>}
+                      <ChevronRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity" style={{ color: "#A1A1AA" }} />
+                    </div>
+                  </Link>
+                ))}
               </div>
-            </div>
-          )}
+            ) : (
+              <div className="p-6 flex-1 flex flex-col justify-center items-center gap-2.5 bg-zinc-50">
+                <ShieldAlert className="w-5 h-5 text-zinc-400" />
+                <div className="text-[12px] text-zinc-500 text-center">
+                  No accessible modules found.
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

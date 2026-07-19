@@ -16,7 +16,7 @@ export default async function DeliveryBoyMySalaryPage() {
   const isAllowed = await checkPermission(session.userId, "salaries", "read");
   if (!isAllowed) redirect("/delivery-boy");
 
-  const { profile, drawings, advances, bonuses, agency } = await fetchMySalaryData(session.userId, session.agencyId);
+  const { profile, drawings, advances, bonuses, requests, agency } = await fetchMySalaryData(session.userId, session.agencyId);
 
   return (
     <div>
@@ -30,6 +30,8 @@ export default async function DeliveryBoyMySalaryPage() {
         drawings={drawings}
         advances={advances}
         bonuses={bonuses}
+        requests={requests}
+        employeeId={session.userId}
         employeeName={session.name ?? ""}
         agencyName={agency?.name ?? ""}
         agencyAddress={[agency?.address, agency?.city, agency?.state].filter(Boolean).join(", ")}

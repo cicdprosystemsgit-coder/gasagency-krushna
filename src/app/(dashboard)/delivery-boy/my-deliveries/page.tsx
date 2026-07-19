@@ -15,13 +15,20 @@ export default async function MyDeliveriesPage() {
   if (!isAllowed) redirect("/delivery-boy");
 
   const now = new Date();
-  const todayStart = new Date(now); todayStart.setHours(0, 0, 0, 0);
-  const todayEnd = new Date(now); todayEnd.setHours(23, 59, 59, 999);
-  const last7Start = new Date(now); last7Start.setDate(last7Start.getDate() - 6); last7Start.setHours(0, 0, 0, 0);
+  
+  // Align todayStart and todayEnd with India Standard Time (IST, UTC+5:30)
+  const localTime = new Date(now.getTime() + 5.5 * 60 * 60 * 1000);
+  const localDateStr = localTime.toISOString().slice(0, 10);
+  const todayStart = new Date(`${localDateStr}T00:00:00.000Z`);
+  const todayEnd = new Date(`${localDateStr}T23:59:59.999Z`);
+  
+  // Set last7Start to cover the last 8 days to avoid any edge timezone cases
+  const last7Start = new Date(todayStart);
+  last7Start.setDate(last7Start.getDate() - 7);
 
   const [deliveries, customers, products, assignedVehicle] = await Promise.all([
     prisma.deliveryRecord.findMany({
-      where: { deliveredById: session.userId, date: { gte: last7Start, lte: todayEnd } },
+      where: { deliveredById: session.userId, date: { gte: last7Start } },
       include: {
         customer: { select: { name: true, phone: true, address: true, type: true, customerCode: true } },
         product: { select: { name: true, saleRate: true } },
@@ -43,9 +50,20 @@ export default async function MyDeliveriesPage() {
     }),
     prisma.deliveryVehicle.findUnique({
       where: { assignedToId: session.userId },
-      select: { vehicleNo: true, vehicleName: true, vehicleType: true },
+      select: { id: true, vehicleNo: true, vehicleName: true, vehicleType: true },
     }),
   ]);
+
+  let todayTrip = null;
+  if (assignedVehicle) {
+    todayTrip = await prisma.vehicleTripLog.findFirst({
+      where: {
+        vehicleId: assignedVehicle.id,
+        date: { gte: todayStart, lte: todayEnd },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+  }
 
   const serializedDeliveries = deliveries.map((d) => ({
     ...d,
@@ -55,6 +73,12 @@ export default async function MyDeliveriesPage() {
     creditAmount: d.creditAmount ?? 0,
     updatedAt: undefined,
   }));
+
+  const serializedTrip = todayTrip ? {
+    departureTime: todayTrip.departureTime ? todayTrip.departureTime.toISOString() : null,
+    returnTime: todayTrip.returnTime ? todayTrip.returnTime.toISOString() : null,
+    tripStatus: todayTrip.tripStatus,
+  } : null;
 
   return (
     <div>
@@ -69,6 +93,7 @@ export default async function MyDeliveriesPage() {
         products={products}
         userId={session.userId}
         assignedVehicle={assignedVehicle}
+        todayTrip={serializedTrip}
       />
     </div>
   );

@@ -13,11 +13,24 @@ interface ModalProps {
   footer?: React.ReactNode;
   size?: "sm" | "md" | "lg" | "xl";
   centerFooter?: boolean;
+  className?: string;
+  style?: React.CSSProperties;
 }
 
 const widths = { sm: 400, md: 520, lg: 640, xl: 820 };
 
-export function Modal({ open, onClose, title, subtitle, children, footer, size = "md", centerFooter = false }: ModalProps) {
+export function Modal({
+  open,
+  onClose,
+  title,
+  subtitle,
+  children,
+  footer,
+  size = "md",
+  centerFooter = false,
+  className,
+  style,
+}: ModalProps) {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -58,13 +71,14 @@ export function Modal({ open, onClose, title, subtitle, children, footer, size =
 
       {/* Dialog — flex column so header + footer never scroll, only body does */}
       <div
-        className="relative w-full flex flex-col animate-fade-up rounded-t-2xl sm:rounded-2xl border overflow-hidden shadow-2xl bg-white"
+        className={`relative w-full flex flex-col animate-fade-up rounded-t-2xl sm:rounded-2xl border overflow-hidden shadow-2xl bg-white ${className || ""}`}
         style={{
           maxWidth: widths[size],
           maxHeight: "calc(100vh - 2rem)",
           borderColor: "var(--color-border)",
           boxShadow:
             "0 25px 50px -12px rgba(15, 23, 42, 0.25), 0 0 0 1px rgba(15, 23, 42, 0.04)",
+          ...style,
         }}
       >
         {/* ── Sticky Header ──────────────────────────────────────────────── */}

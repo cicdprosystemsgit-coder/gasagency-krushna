@@ -10,6 +10,7 @@ import {
   BarChart3, PanelLeftClose, PanelLeft, Flame, Boxes, CreditCard,
   Banknote, CalendarDays, Car, TrendingUp, Clock, FolderOpen, MessageSquarePlus,
   ShieldCheck, Building2, KeyRound, FileDown, Palette, BadgeDollarSign, PieChart,
+  Activity, ArrowRightLeft, Layers, Percent,
 } from "lucide-react";
 
 
@@ -122,8 +123,22 @@ function getNavSections(
   }
 
   if (role === "ADMIN" || role === "MANAGER") {
+    const adminOnlySections = role === "ADMIN" ? [
+      {
+        label: "Personal Finance",
+        items: [
+          { label: "Finance Dashboard", href: `${base}/accounts/dashboard`, icon: <LayoutDashboard className="w-4 h-4" /> },
+          { label: "Personal Accounts", href: `${base}/accounts`,          icon: <Wallet className="w-4 h-4" /> },
+          { label: "Agency Account",    href: `${base}/accounts/agency-account`, icon: <Activity className="w-4 h-4" /> },
+          { label: "Fund Transfer",     href: `${base}/accounts/transfer`,       icon: <ArrowRightLeft className="w-4 h-4" /> },
+          { label: "Tax & ITR Summary", href: `${base}/accounts/tax-summary`, icon: <Percent className="w-4 h-4" /> },
+        ]
+      }
+    ] : [];
+
     return [
       { items: [dashboard] },
+      ...adminOnlySections,
       {
         label: "Operations",
         items: [
@@ -203,6 +218,7 @@ function getNavSections(
         label: "My Account",
         items: [
           { label: "My Salary",       href: `${base}/my-salary`,       icon: <Banknote className="w-4 h-4" />    },
+          { label: "My Attendance",   href: `${base}/my-attendance`,   icon: <Clock className="w-4 h-4" />       },
           { label: "Leave Management",href: `${base}/leave-management`, icon: <CalendarDays className="w-4 h-4" />, featureKey: "leave_management" },
         ],
       },
@@ -227,6 +243,7 @@ function getNavSections(
         label: "My Account",
         items: [
           { label: "My Salary",        href: `${base}/my-salary`,        icon: <Banknote className="w-4 h-4" />  },
+          { label: "My Attendance",    href: `${base}/my-attendance`,    icon: <Clock className="w-4 h-4" />     },
           { label: "Leave Management", href: `${base}/leave-management`, icon: <CalendarDays className="w-4 h-4" />, featureKey: "leave_management" },
           { label: "Payment Receipts", href: `${base}/payment-receipts`, icon: <Receipt className="w-4 h-4" />,     featureKey: "payment_receipts" },
         ],
@@ -242,6 +259,7 @@ function getNavSections(
         items: [
           { label: "My Deliveries",  href: `${base}/my-deliveries`,  icon: <Truck className="w-4 h-4" />   },
           { label: "Delivery Ledger",href: `${base}/delivery-ledger`,icon: <Package className="w-4 h-4" /> },
+          { label: "Daily Closing",  href: `${base}/daily-closing`,  icon: <ClipboardCheck className="w-4 h-4" /> },
           { label: "Credit Ledger",  href: `${base}/credit-ledger`,  icon: <CreditCard className="w-4 h-4" />, featureKey: "credit_ledger" },
         ],
       },
@@ -249,6 +267,7 @@ function getNavSections(
         label: "My Account",
         items: [
           { label: "My Salary",       href: `${base}/my-salary`,       icon: <Banknote className="w-4 h-4" />    },
+          { label: "My Attendance",   href: `${base}/my-attendance`,   icon: <Clock className="w-4 h-4" />       },
           { label: "Leave Management",href: `${base}/leave-management`, icon: <CalendarDays className="w-4 h-4" />, featureKey: "leave_management" },
         ],
       },
@@ -315,6 +334,7 @@ export function Sidebar({
       "GST Invoicing": "gst_invoicing",
       "Salaries & Drawings": "salaries",
       "My Salary": "my_salary",
+      "My Attendance": "my_attendance",
       "Expenses & Vehicles": "expenses",
       "Company Payments": "company_payments",
       "Assets Management": "assets_management",
@@ -346,6 +366,11 @@ export function Sidebar({
       "Deliveries": "deliveries",
       "My Account": "myAccount",
       "Modules": "modules",
+      "Personal Finance": "personal_finance",
+      "Finance Dashboard": "finance_dashboard",
+      "Personal Accounts": "personal_accounts",
+      "Agency Account": "agency_account",
+      "Fund Transfer": "fund_transfer",
     };
     return map[label] || label;
   };

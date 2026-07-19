@@ -50,8 +50,9 @@ export default async function ManagerSalariesPage() {
       take: 200,
       include: {
         employee: { select: { name: true, role: true } },
-        requestedBy: { select: { name: true } },
+        requestedBy: { select: { name: true, role: true } },
         reviewedBy: { select: { name: true } },
+        managerReviewedBy: { select: { name: true } },
       },
     }),
   ]);

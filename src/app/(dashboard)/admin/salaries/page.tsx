@@ -16,7 +16,7 @@ export default async function SalariesPage() {
   const currentMonth = today.getMonth() + 1;
   const currentYear = today.getFullYear();
 
-  const [drawings, staff, profiles, advances, bonuses, requests] = await Promise.all([
+  const [drawings, staff, profiles, advances, bonuses, requests, attendance] = await Promise.all([
     prisma.salaryDrawing.findMany({
       where: { agencyId: session.agencyId! },
       orderBy: { date: "desc" },
@@ -52,8 +52,18 @@ export default async function SalariesPage() {
       take: 200,
       include: {
         employee: { select: { name: true, role: true } },
-        requestedBy: { select: { name: true } },
+        requestedBy: { select: { name: true, role: true } },
         reviewedBy: { select: { name: true } },
+        managerReviewedBy: { select: { name: true } },
+      },
+    }),
+    prisma.attendance.findMany({
+      where: { agencyId: session.agencyId! },
+      select: {
+        id: true,
+        employeeId: true,
+        date: true,
+        status: true,
       },
     }),
   ]);
@@ -70,6 +80,7 @@ export default async function SalariesPage() {
       currentYear={currentYear}
       userRole={session.role}
       userId={session.userId}
+      attendance={JSON.parse(JSON.stringify(attendance))}
     />
   );
 }

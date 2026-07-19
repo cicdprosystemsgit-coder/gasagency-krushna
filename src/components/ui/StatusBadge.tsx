@@ -5,6 +5,7 @@ interface StatusBadgeProps {
 
 const config: Record<string, { label: string; style: React.CSSProperties }> = {
   PENDING:          { label: "Pending",          style: { background: "#FEF9C3", color: "#854D0E", border: "1px solid #FEF08A" } },
+  MANAGER_APPROVED: { label: "Awaiting Admin Approval", style: { background: "#DBEAFE", color: "#1D4ED8", border: "1px solid #93C5FD" } },
   APPROVED:         { label: "Approved",         style: { background: "#DCFCE7", color: "#15803D", border: "1px solid #86EFAC" } },
   REJECTED:         { label: "Rejected",         style: { background: "#FEE2E2", color: "#B91C1C", border: "1px solid #FCA5A5" } },
   CORRECTION_NEEDED:{ label: "Correction Needed",style: { background: "#FED7AA", color: "#9A3412", border: "1px solid #FDBA74" } },

@@ -12,6 +12,9 @@ import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 
 
+import { getAdminDashboardAttendanceSnapshot } from "@/app/actions/attendance";
+import { AdminAttendanceDashboardWidget } from "@/components/attendance/AdminAttendanceDashboardWidget";
+
 export default async function AdminDashboard() {
   const session = await getSession();
   if (!session || session.role !== "ADMIN" || !session.agencyId) redirect("/login");
@@ -23,7 +26,7 @@ export default async function AdminDashboard() {
   const todayStart = new Date(today.setHours(0, 0, 0, 0));
   const todayEnd = new Date(today.setHours(23, 59, 59, 999));
 
-  const [totalStaff, pendingApprovals, todayDeliveries, assets, recentSummaries, products] =
+  const [totalStaff, pendingApprovals, todayDeliveries, assets, recentSummaries, products, attendanceSnapshot] =
     await Promise.all([
       prisma.user.count({ where: { isActive: true, agencyId, role: { not: "SYSTEM_ADMIN" } } }),
       prisma.dailySummary.count({ where: { status: "PENDING", agencyId } }),
@@ -39,6 +42,7 @@ export default async function AdminDashboard() {
         include: { submittedBy: { select: { name: true, role: true } } },
       }),
       prisma.product.findMany({ where: { isActive: true, agencyId }, take: 5 }),
+      getAdminDashboardAttendanceSnapshot(),
     ]);
 
   const totalDelivered = todayDeliveries.reduce((s, d) => s + d.deliveredQty, 0);
@@ -230,6 +234,8 @@ export default async function AdminDashboard() {
 
         {/* Right column */}
         <div className="flex flex-col gap-4">
+
+          <AdminAttendanceDashboardWidget snapshot={attendanceSnapshot} />
 
           {/* Quick actions */}
           <div

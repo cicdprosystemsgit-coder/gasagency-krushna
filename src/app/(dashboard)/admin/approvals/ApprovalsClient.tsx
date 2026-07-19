@@ -9,7 +9,7 @@ import {
   Wallet, ShieldCheck, Clock, Send, CalendarDays, AlertTriangle,
 } from "lucide-react";
 import { approveOrRejectSummary } from "@/app/actions/approvals";
-import { approveSalaryRequest, rejectSalaryRequest } from "@/app/actions/salary-requests";
+import { approveSalaryRequest, rejectSalaryRequest, managerApproveSalaryRequest, managerRejectSalaryRequest } from "@/app/actions/salary-requests";
 import { reviewLeave } from "@/app/actions/leave";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -37,11 +37,14 @@ interface SalaryRequest {
   status: string;
   remarks: string | null;
   reviewNote: string | null;
+  managerReviewNote: string | null;
+  managerReviewedAt: Date | string | null;
   requestData: Record<string, unknown>;
   employeeId: string;
   employee: { name: string; role: string };
   requestedBy: { name: string; role: string };
   reviewedBy: { name: string } | null;
+  managerReviewedBy: { name: string } | null;
   createdAt: Date | string;
 }
 
@@ -63,7 +66,7 @@ interface LeaveRequest {
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
 const SUMMARY_FILTERS = ["PENDING", "APPROVED", "REJECTED", "CORRECTION_NEEDED", "ALL"] as const;
-const SALARY_FILTERS  = ["PENDING", "APPROVED", "REJECTED", "ALL"] as const;
+const SALARY_FILTERS  = ["PENDING", "MANAGER_APPROVED", "APPROVED", "REJECTED", "ALL"] as const;
 const LEAVE_FILTERS   = ["PENDING", "APPROVED", "REJECTED", "ALL"] as const;
 
 const LEAVE_TYPE_META: Record<string, { label: string; color: string }> = {
@@ -86,7 +89,8 @@ const TYPE_COLORS: Record<string, string> = {
 };
 
 const REQUEST_STATUS: Record<string, { label: string; chip: string }> = {
-  PENDING:  { label: "⏳ Pending",  chip: "bg-amber-100 text-amber-700" },
+  PENDING:  { label: "⏳ Pending Manager",  chip: "bg-amber-100 text-amber-700" },
+  MANAGER_APPROVED: { label: "⏳ Manager Approved", chip: "bg-blue-100 text-blue-700" },
   APPROVED: { label: "✓ Approved", chip: "bg-green-100 text-green-700" },
   REJECTED: { label: "✗ Rejected", chip: "bg-red-100 text-red-700" },
 };
@@ -405,16 +409,31 @@ function SalaryRequestsSection({
   const [isPending, startTransition]  = useTransition();
 
   const isAdmin  = role === "ADMIN";
-  const filtered = filter === "ALL" ? requests : requests.filter((r) => r.status === filter);
+  const isManager = role === "MANAGER";
+
+  const filtered = requests.filter((r) => {
+    if (filter === "ALL") return true;
+    if (filter === "PENDING") {
+      if (isAdmin) {
+        return r.status === "MANAGER_APPROVED" || (r.status === "PENDING" && ["MANAGER", "ADMIN"].includes(r.requestedBy.role));
+      } else {
+        return r.status === "PENDING" && !["MANAGER", "ADMIN"].includes(r.requestedBy.role);
+      }
+    }
+    return r.status === filter;
+  });
 
   const pendingTotal = requests
-    .filter((r) => r.status === "PENDING")
+    .filter((r) => r.status === "PENDING" || r.status === "MANAGER_APPROVED")
     .reduce((s, r) => s + r.amount, 0);
 
-  function handleApprove(id: string) {
-    if (!confirm("Approve this payment? This will immediately process the salary/advance/bonus.")) return;
+  function handleApprove(id: string, reqStatus: string) {
+    const actionName = isAdmin ? "final approval" : "manager approval";
+    if (!confirm(`Confirm ${actionName} for this request?`)) return;
     startTransition(async () => {
-      const result = await approveSalaryRequest(id);
+      const result = isAdmin 
+        ? await approveSalaryRequest(id)
+        : await managerApproveSalaryRequest(id);
       if ("error" in result && result.error) { alert(result.error); return; }
       if (result.request) onUpdate(result.request as unknown as SalaryRequest);
     });
@@ -424,7 +443,9 @@ function SalaryRequestsSection({
     if (!rejectModal) return;
     if (!rejectNote.trim()) { alert("Please enter a reason for rejection."); return; }
     startTransition(async () => {
-      const result = await rejectSalaryRequest(rejectModal.id, rejectNote.trim());
+      const result = isAdmin
+        ? await rejectSalaryRequest(rejectModal.id, rejectNote.trim())
+        : await managerRejectSalaryRequest(rejectModal.id, rejectNote.trim());
       if ("error" in result && result.error) { alert(result.error); return; }
       if (result.request) {
         onUpdate(result.request as unknown as SalaryRequest);
@@ -439,7 +460,7 @@ function SalaryRequestsSection({
       {/* Summary strip */}
       <div className="grid grid-cols-4 gap-3 mb-4">
         {[
-          { label: "Pending",  val: requests.filter((r) => r.status === "PENDING").length,  color: "#D97706", bg: "#FFFBEB" },
+          { label: "Pending",  val: requests.filter((r) => r.status === "PENDING" || r.status === "MANAGER_APPROVED").length,  color: "#D97706", bg: "#FFFBEB" },
           { label: "Approved", val: requests.filter((r) => r.status === "APPROVED").length, color: "#16A34A", bg: "#F0FDF4" },
           { label: "Rejected", val: requests.filter((r) => r.status === "REJECTED").length, color: "#DC2626", bg: "#FEF2F2" },
           { label: "Pending ₹", val: formatCurrency(pendingTotal), color: "#2563EB", bg: "#EFF6FF", isMoney: true },
@@ -503,23 +524,23 @@ function SalaryRequestsSection({
                 <th>Period</th>
                 <th className="text-right">Amount</th>
                 <th>Remarks</th>
-                {isAdmin && <th>Requested By</th>}
+                <th>Requested By</th>
                 <th>Status</th>
-                {isAdmin && <th className="text-center">Actions</th>}
+                {(isAdmin || isManager) && <th className="text-center">Actions</th>}
               </tr>
             </thead>
             <tbody>
               {filtered.length === 0 ? (
-                <tr><td colSpan={isAdmin ? 9 : 7} className="py-14 text-center">
+                <tr><td colSpan={isAdmin || isManager ? 9 : 8} className="py-14 text-center">
                   <Wallet className="w-8 h-8 mx-auto mb-2" style={{ color: "#D4D4D8" }} />
                   <p className="text-[13px]" style={{ color: "#A1A1AA" }}>
                     {filter === "PENDING"
-                      ? isAdmin ? "No pending requests — all caught up!" : "No pending requests"
+                      ? "No pending requests — all caught up!"
                       : "No requests found"}
                   </p>
                 </td></tr>
               ) : filtered.map((r) => (
-                <tr key={r.id} style={r.status === "PENDING" ? { background: "#FFFBEB" } : {}}>
+                <tr key={r.id} style={r.status === "PENDING" || r.status === "MANAGER_APPROVED" ? { background: "#FFFBEB" } : {}}>
                   <td className="muted text-[12px]">{formatDateTime(r.createdAt)}</td>
                   <td>
                     <div className="flex items-center gap-2.5">
@@ -553,32 +574,38 @@ function SalaryRequestsSection({
                     <div className="truncate" style={{ color: "#52525B" }}>{r.remarks ?? "—"}</div>
                     {r.status === "REJECTED" && r.reviewNote && (
                       <div className="text-[11px] mt-0.5 font-medium" style={{ color: "#DC2626" }}>
-                        Reason: {r.reviewNote}
+                        Admin Reason: {r.reviewNote}
+                      </div>
+                    )}
+                    {r.status === "REJECTED" && r.managerReviewNote && (
+                      <div className="text-[11px] mt-0.5 font-medium" style={{ color: "#D97706" }}>
+                        Manager Reason: {r.managerReviewNote}
                       </div>
                     )}
                   </td>
-                  {isAdmin && (
-                    <td>
-                      <div className="flex items-center gap-1.5">
-                        <div className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white flex-shrink-0"
-                          style={{ background: "#2563EB" }}>
-                          {r.requestedBy.name.charAt(0)}
-                        </div>
-                        <span className="text-[12px]" style={{ color: "#52525B" }}>{r.requestedBy.name}</span>
+                  <td>
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white flex-shrink-0"
+                        style={{ background: "#2563EB" }}>
+                        {r.requestedBy.name.charAt(0)}
                       </div>
-                    </td>
-                  )}
+                      <span className="text-[12px]" style={{ color: "#52525B" }}>{r.requestedBy.name}</span>
+                    </div>
+                  </td>
                   <td>
                     <div>
                       <span className={`text-[11px] px-2 py-0.5 rounded-full font-semibold ${REQUEST_STATUS[r.status]?.chip ?? "bg-slate-100 text-slate-600"}`}>
                         {REQUEST_STATUS[r.status]?.label ?? r.status}
                       </span>
-                      {r.reviewedBy && r.status !== "PENDING" && (
+                      {r.reviewedBy && r.status === "APPROVED" && (
                         <p className="text-[11px] mt-0.5" style={{ color: "#A1A1AA" }}>by {r.reviewedBy.name}</p>
+                      )}
+                      {r.managerReviewedBy && r.status === "MANAGER_APPROVED" && (
+                        <p className="text-[11px] mt-0.5" style={{ color: "#A1A1AA" }}>by {r.managerReviewedBy.name}</p>
                       )}
                     </div>
                   </td>
-                  {isAdmin && (
+                  {(isAdmin || isManager) && (
                     <td>
                       <div className="flex items-center justify-center gap-1.5">
                         {/* View details */}
@@ -586,15 +613,33 @@ function SalaryRequestsSection({
                           style={{ display:"inline-flex", alignItems:"center", justifyContent:"center", width:30, height:30, borderRadius:6, border:"1px solid #E4E4E7", background:"#fff", color:"#52525B", cursor:"pointer" }}>
                           <Eye className="w-3.5 h-3.5" />
                         </button>
-                        {r.status === "PENDING" && (
+                        
+                        {/* Manager actions */}
+                        {isManager && r.status === "PENDING" && !["MANAGER", "ADMIN"].includes(r.requestedBy.role) && (
                           <>
-                            <button onClick={() => handleApprove(r.id)} disabled={isPending}
-                              title="Approve"
+                            <button onClick={() => handleApprove(r.id, r.status)} disabled={isPending}
+                              title="Approve (Manager)"
                               style={{ display:"inline-flex", alignItems:"center", justifyContent:"center", width:30, height:30, borderRadius:6, border:"1px solid #86EFAC", background:"#F0FDF4", color:"#16A34A", cursor:"pointer" }}>
                               <CheckCircle2 className="w-3.5 h-3.5" />
                             </button>
                             <button onClick={() => { setRejectModal(r); setRejectNote(""); }} disabled={isPending}
-                              title="Reject"
+                              title="Reject (Manager)"
+                              style={{ display:"inline-flex", alignItems:"center", justifyContent:"center", width:30, height:30, borderRadius:6, border:"1px solid #FCA5A5", background:"#FEF2F2", color:"#DC2626", cursor:"pointer" }}>
+                              <XCircle className="w-3.5 h-3.5" />
+                            </button>
+                          </>
+                        )}
+
+                        {/* Admin actions */}
+                        {isAdmin && (r.status === "MANAGER_APPROVED" || (r.status === "PENDING" && ["MANAGER", "ADMIN"].includes(r.requestedBy.role))) && (
+                          <>
+                            <button onClick={() => handleApprove(r.id, r.status)} disabled={isPending}
+                              title="Approve (Admin)"
+                              style={{ display:"inline-flex", alignItems:"center", justifyContent:"center", width:30, height:30, borderRadius:6, border:"1px solid #86EFAC", background:"#F0FDF4", color:"#16A34A", cursor:"pointer" }}>
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                            </button>
+                            <button onClick={() => { setRejectModal(r); setRejectNote(""); }} disabled={isPending}
+                              title="Reject (Admin)"
                               style={{ display:"inline-flex", alignItems:"center", justifyContent:"center", width:30, height:30, borderRadius:6, border:"1px solid #FCA5A5", background:"#FEF2F2", color:"#DC2626", cursor:"pointer" }}>
                               <XCircle className="w-3.5 h-3.5" />
                             </button>
@@ -661,19 +706,34 @@ function SalaryRequestsSection({
               )}
             </div>
 
-            {/* Rejection note */}
-            {viewModal.status === "REJECTED" && viewModal.reviewNote && (
-              <div className="px-3 py-2.5 rounded-md text-[13px]"
-                style={{ background: "#FEF2F2", border: "1px solid #FCA5A5", color: "#DC2626" }}>
-                <strong>Rejection reason:</strong> {viewModal.reviewNote}
+            {/* Manager review details */}
+            {viewModal.managerReviewedBy && (
+              <div className="px-3 py-2 rounded-md text-[13px] border"
+                style={{ background: "#F8FAFC", borderColor: "#E2E8F0", color: "#334155" }}>
+                <p><strong>Manager Reviewer:</strong> {viewModal.managerReviewedBy.name}</p>
+                {viewModal.managerReviewNote && (
+                  <p className="mt-1"><strong>Manager Note:</strong> {viewModal.managerReviewNote}</p>
+                )}
               </div>
             )}
 
-            {/* Actions for pending (in modal) */}
-            {isAdmin && viewModal.status === "PENDING" && (
+            {/* Admin review details */}
+            {viewModal.reviewedBy && (
+              <div className="px-3 py-2 rounded-md text-[13px] border"
+                style={{ background: "#F0FDF4", borderColor: "#DCFCE7", color: "#166534" }}>
+                <p><strong>Admin Reviewer:</strong> {viewModal.reviewedBy.name}</p>
+                {viewModal.reviewNote && (
+                  <p className="mt-1"><strong>Admin Note:</strong> {viewModal.reviewNote}</p>
+                )}
+              </div>
+            )}
+
+            {/* Actions for pending/manager_approved (in modal) */}
+            {((isManager && viewModal.status === "PENDING" && !["MANAGER", "ADMIN"].includes(viewModal.requestedBy.role)) ||
+              (isAdmin && (viewModal.status === "MANAGER_APPROVED" || (viewModal.status === "PENDING" && ["MANAGER", "ADMIN"].includes(viewModal.requestedBy.role))))) && (
               <div className="flex gap-2 pt-1">
                 <button
-                  onClick={() => { handleApprove(viewModal.id); setViewModal(null); }}
+                  onClick={() => { handleApprove(viewModal.id, viewModal.status); setViewModal(null); }}
                   className="btn flex-1 justify-center"
                   style={{ background: "#16A34A", color: "#fff", border: "1px solid #16A34A" }}>
                   <CheckCircle2 className="w-3.5 h-3.5 mr-1.5" /> Approve

@@ -3,12 +3,12 @@
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 
-// ─── Manager: Create a payment request (awaits admin approval) ────────────────
+// ─── Create a payment request ────────────────
 
 export async function createSalaryRequest(formData: FormData) {
   const session = await getSession();
-  if (!session || session.role !== "MANAGER" || !session.agencyId)
-    return { error: "Only managers can submit payment requests" };
+  if (!session || !session.agencyId)
+    return { error: "Unauthorized" };
 
   const type = formData.get("type") as string;
   const employeeId = formData.get("employeeId") as string;
@@ -17,6 +17,19 @@ export async function createSalaryRequest(formData: FormData) {
   if (!type) return { error: "Request type required" };
   if (!employeeId) return { error: "Employee required" };
   if (!amount || amount <= 0) return { error: "Valid amount required" };
+
+  // RBAC checks
+  const isManagerOrAdmin = ["MANAGER", "ADMIN"].includes(session.role);
+  if (!isManagerOrAdmin) {
+    // Regular employees can only request for themselves
+    if (employeeId !== session.userId) {
+      return { error: "You can only submit requests for yourself" };
+    }
+    // Regular employees can only request ADVANCE or BONUS
+    if (type !== "ADVANCE" && type !== "BONUS") {
+      return { error: "You can only request Advance or Bonus" };
+    }
+  }
 
   // Verify employee belongs to same agency
   const employee = await prisma.user.findFirst({
@@ -55,7 +68,162 @@ export async function createSalaryRequest(formData: FormData) {
     },
   });
 
+  // Create notifications for managers / admin
+  try {
+    if (!isManagerOrAdmin) {
+      // Notify managers
+      const managers = await prisma.user.findMany({
+        where: { agencyId: session.agencyId, role: "MANAGER", isActive: true },
+        select: { id: true },
+      });
+      for (const mgr of managers) {
+        await prisma.notification.create({
+          data: {
+            agencyId: session.agencyId,
+            userId: mgr.id,
+            type: "SALARY_REQUEST",
+            title: "New Salary Request",
+            body: `${employee.name} requested a ${type.toLowerCase()} of ₹${amount}`,
+            link: "/manager/approvals",
+          },
+        });
+      }
+    } else {
+      // Manager/Admin requested for someone, notify admin
+      const admins = await prisma.user.findMany({
+        where: { agencyId: session.agencyId, role: "ADMIN", isActive: true },
+        select: { id: true },
+      });
+      for (const adm of admins) {
+        await prisma.notification.create({
+          data: {
+            agencyId: session.agencyId,
+            userId: adm.id,
+            type: "SALARY_REQUEST",
+            title: "New Salary Request",
+            body: `${session.name} requested a ${type.toLowerCase()} of ₹${amount} for ${employee.name}`,
+            link: "/admin/approvals",
+          },
+        });
+      }
+    }
+  } catch (err) {
+    console.error("Failed to create notification:", err);
+  }
+
   return { request };
+}
+
+// ─── Manager: Approve a request (moves to MANAGER_APPROVED) ──────────────────
+
+export async function managerApproveSalaryRequest(requestId: string, reviewNote?: string) {
+  const session = await getSession();
+  if (!session || session.role !== "MANAGER" || !session.agencyId)
+    return { error: "Only managers can approve requests" };
+
+  const req = await prisma.salaryPaymentRequest.findFirst({
+    where: { id: requestId, agencyId: session.agencyId, status: "PENDING" },
+    include: { employee: true },
+  });
+  if (!req) return { error: "Request not found or already processed" };
+
+  const updated = await prisma.salaryPaymentRequest.update({
+    where: { id: requestId },
+    data: {
+      status: "MANAGER_APPROVED",
+      managerReviewedById: session.userId,
+      managerReviewNote: reviewNote || null,
+      managerReviewedAt: new Date(),
+    },
+    include: {
+      employee: { select: { name: true, role: true } },
+      requestedBy: { select: { name: true } },
+      reviewedBy: { select: { name: true } },
+      managerReviewedBy: { select: { name: true } },
+    },
+  });
+
+  // Notify admins
+  try {
+    const admins = await prisma.user.findMany({
+      where: { agencyId: session.agencyId, role: "ADMIN", isActive: true },
+      select: { id: true },
+    });
+    for (const adm of admins) {
+      await prisma.notification.create({
+        data: {
+          agencyId: session.agencyId,
+          userId: adm.id,
+          type: "SALARY_REQUEST",
+          title: "Request Approved by Manager",
+          body: `Manager ${session.name} approved ${updated.employee.name}'s request for ${updated.type.toLowerCase()} of ₹${updated.amount}`,
+          link: "/admin/approvals",
+        },
+      });
+    }
+    // Notify employee
+    await prisma.notification.create({
+      data: {
+        agencyId: session.agencyId,
+        userId: req.employeeId,
+        type: "SALARY_REQUEST",
+        title: "Salary Request Update",
+        body: `Your request for ${updated.type.toLowerCase()} of ₹${updated.amount} was approved by Manager and sent to Admin.`,
+        link: "/my-salary",
+      },
+    });
+  } catch (err) {
+    console.error("Failed to notify:", err);
+  }
+
+  return { request: updated };
+}
+
+// ─── Manager: Reject a request ────────────────────────────────────────────────
+
+export async function managerRejectSalaryRequest(requestId: string, reviewNote: string) {
+  const session = await getSession();
+  if (!session || session.role !== "MANAGER" || !session.agencyId)
+    return { error: "Only managers can reject requests" };
+
+  const req = await prisma.salaryPaymentRequest.findFirst({
+    where: { id: requestId, agencyId: session.agencyId, status: "PENDING" },
+  });
+  if (!req) return { error: "Request not found or already processed" };
+
+  const updated = await prisma.salaryPaymentRequest.update({
+    where: { id: requestId },
+    data: {
+      status: "REJECTED",
+      managerReviewedById: session.userId,
+      managerReviewNote: reviewNote,
+      managerReviewedAt: new Date(),
+    },
+    include: {
+      employee: { select: { name: true, role: true } },
+      requestedBy: { select: { name: true } },
+      reviewedBy: { select: { name: true } },
+      managerReviewedBy: { select: { name: true } },
+    },
+  });
+
+  // Notify employee
+  try {
+    await prisma.notification.create({
+      data: {
+        agencyId: session.agencyId,
+        userId: req.employeeId,
+        type: "SALARY_REQUEST",
+        title: "Salary Request Rejected",
+        body: `Your request for ${updated.type.toLowerCase()} of ₹${updated.amount} was rejected by Manager. Reason: ${reviewNote}`,
+        link: "/my-salary",
+      },
+    });
+  } catch (err) {
+    console.error("Failed to notify:", err);
+  }
+
+  return { request: updated };
 }
 
 // ─── Admin: Approve a request → creates actual records ────────────────────────
@@ -66,9 +234,19 @@ export async function approveSalaryRequest(requestId: string) {
     return { error: "Only admin can approve requests" };
 
   const req = await prisma.salaryPaymentRequest.findFirst({
-    where: { id: requestId, agencyId: session.agencyId, status: "PENDING" },
+    where: {
+      id: requestId,
+      agencyId: session.agencyId,
+      status: { in: ["PENDING", "MANAGER_APPROVED"] },
+    },
+    include: { requestedBy: { select: { role: true } } },
   });
   if (!req) return { error: "Request not found or already processed" };
+
+  // If request is still PENDING and was requested by a non-manager/non-admin, require manager approval first
+  if (req.status === "PENDING" && !["MANAGER", "ADMIN"].includes(req.requestedBy.role)) {
+    return { error: "This request must be approved by a Manager first" };
+  }
 
   const data = req.requestData as Record<string, unknown>;
 
@@ -225,8 +403,37 @@ export async function approveSalaryRequest(requestId: string) {
       employee: { select: { name: true, role: true } },
       requestedBy: { select: { name: true } },
       reviewedBy: { select: { name: true } },
+      managerReviewedBy: { select: { name: true } },
     },
   });
+
+  // Notify employee & manager
+  try {
+    await prisma.notification.create({
+      data: {
+        agencyId: session.agencyId,
+        userId: req.employeeId,
+        type: "SALARY_REQUEST",
+        title: "Salary Request Approved",
+        body: `Your request for ${req.type.toLowerCase()} of ₹${req.amount} has been approved and processed.`,
+        link: "/my-salary",
+      },
+    });
+    if (req.managerReviewedById) {
+      await prisma.notification.create({
+        data: {
+          agencyId: session.agencyId,
+          userId: req.managerReviewedById,
+          type: "SALARY_REQUEST",
+          title: "Salary Request Approved",
+          body: `${updated.employee.name}'s request for ${updated.type.toLowerCase()} of ₹${updated.amount} has been approved and processed.`,
+          link: "/manager/approvals",
+        },
+      });
+    }
+  } catch (err) {
+    console.error("Failed to notify:", err);
+  }
 
   return { request: updated };
 }
@@ -239,7 +446,11 @@ export async function rejectSalaryRequest(requestId: string, reviewNote: string)
     return { error: "Only admin can reject requests" };
 
   const req = await prisma.salaryPaymentRequest.findFirst({
-    where: { id: requestId, agencyId: session.agencyId, status: "PENDING" },
+    where: {
+      id: requestId,
+      agencyId: session.agencyId,
+      status: { in: ["PENDING", "MANAGER_APPROVED"] },
+    },
   });
   if (!req) return { error: "Request not found or already processed" };
 
@@ -250,8 +461,37 @@ export async function rejectSalaryRequest(requestId: string, reviewNote: string)
       employee: { select: { name: true, role: true } },
       requestedBy: { select: { name: true } },
       reviewedBy: { select: { name: true } },
+      managerReviewedBy: { select: { name: true } },
     },
   });
+
+  // Notify employee & manager
+  try {
+    await prisma.notification.create({
+      data: {
+        agencyId: session.agencyId,
+        userId: req.employeeId,
+        type: "SALARY_REQUEST",
+        title: "Salary Request Rejected",
+        body: `Your request for ${updated.type.toLowerCase()} of ₹${updated.amount} was rejected by Admin. Reason: ${reviewNote}`,
+        link: "/my-salary",
+      },
+    });
+    if (req.managerReviewedById) {
+      await prisma.notification.create({
+        data: {
+          agencyId: session.agencyId,
+          userId: req.managerReviewedById,
+          type: "SALARY_REQUEST",
+          title: "Salary Request Rejected",
+          body: `${updated.employee.name}'s request for ${updated.type.toLowerCase()} of ₹${updated.amount} was rejected by Admin. Reason: ${reviewNote}`,
+          link: "/manager/approvals",
+        },
+      });
+    }
+  } catch (err) {
+    console.error("Failed to notify:", err);
+  }
 
   return { request: updated };
 }
@@ -263,8 +503,10 @@ export async function getSalaryRequests() {
   if (!session || !session.agencyId) return { error: "Unauthorized" };
 
   const where: Record<string, unknown> = { agencyId: session.agencyId };
-  // Manager sees only their own requests; admin sees all
-  if (session.role === "MANAGER") where.requestedById = session.userId;
+  // Regular employees see only their own requests
+  if (!["ADMIN", "MANAGER"].includes(session.role)) {
+    where.employeeId = session.userId;
+  }
 
   const requests = await prisma.salaryPaymentRequest.findMany({
     where,
@@ -272,8 +514,9 @@ export async function getSalaryRequests() {
     take: 200,
     include: {
       employee: { select: { name: true, role: true } },
-      requestedBy: { select: { name: true } },
+      requestedBy: { select: { name: true, role: true } },
       reviewedBy: { select: { name: true } },
+      managerReviewedBy: { select: { name: true } },
     },
   });
 

@@ -15,9 +15,23 @@ export default async function DeliveryCreditLedgerPage() {
   if (!isAllowed) redirect("/delivery-boy");
 
   const [customers, entries] = await Promise.all([
-    prisma.customer.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
+    prisma.customer.findMany({
+      where: { isActive: true, agencyId: session.agencyId!, type: "COMMERCIAL" },
+      orderBy: { name: "asc" },
+      include: {
+        deliveries: {
+          select: {
+            id: true,
+            date: true,
+            deliveredQty: true,
+            returnedQty: true,
+            pendingQty: true,
+          }
+        }
+      }
+    }),
     prisma.creditLedgerEntry.findMany({
-      where: { addedById: session.userId },
+      where: { addedById: session.userId, customer: { type: "COMMERCIAL" } },
       orderBy: [
         { date: "desc" },
         { createdAt: "desc" }

@@ -1,18 +1,21 @@
 "use client";
 
-import { useState, useTransition, useCallback } from "react";
+import { useState, useTransition, useCallback, useEffect } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { CustomSelect } from "@/components/ui/CustomSelect";
 import { formatDateTime } from "@/lib/utils";
-import { Plus, Minus, X, HelpCircle, Truck, User, Edit2, Activity, CheckCircle2, RotateCcw, ArrowUpRight, AlertCircle } from "lucide-react";
+import { Plus, Minus, X, HelpCircle, Truck, User, Edit2, Activity, CheckCircle2, RotateCcw, ArrowUpRight, AlertCircle, Navigation } from "lucide-react";
 import {
   createDeliveryVehicle,
   updateDeliveryVehicle,
   createVehicleTripLog,
   updateTripStatus,
+  updateTripLog,
 } from "@/app/actions/delivery-vehicles";
 import { addCylinderType } from "@/app/actions/godown";
+import { useGodownGps } from "@/hooks/useGodownGps";
+import { GpsStatusBox } from "@/components/ui/GpsStatusBox";
 
 interface Product {
   id: string;
@@ -26,6 +29,7 @@ interface CylinderRowItem {
   loaded: number;
   unsoldReturned: number;
   emptyReturned: number;
+  isNewReturnItem?: boolean;
 }
 
 interface DeliveryVehicle {
@@ -41,6 +45,12 @@ interface TripLog {
   vehicle: { vehicleNo: string; vehicleName: string; assignedTo: { name: string } | null };
   recordedBy: { name: string };
   items?: unknown;
+  departureLat?: number | null;
+  departureLng?: number | null;
+  departureAccuracy?: number | null;
+  returnLat?: number | null;
+  returnLng?: number | null;
+  returnAccuracy?: number | null;
 }
 interface DeliveryBoy { id: string; name: string; }
 
@@ -91,6 +101,7 @@ export function InternalVehiclesClient({
   const [tripModal, setTripModal] = useState(false);
   const [updateModal, setUpdateModal] = useState<TripLog | null>(null);
   const [editVehicle, setEditVehicle] = useState<DeliveryVehicle | null>(null);
+  const [editTripLogId, setEditTripLogId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState("");
 
@@ -100,6 +111,25 @@ export function InternalVehiclesClient({
 
   const [addTypeOpen, setAddTypeOpen] = useState(false);
   const [addTypeCallback, setAddTypeCallback] = useState<((p: Product) => void) | null>(null);
+
+  const departureGps = useGodownGps();
+  const returnGps = useGodownGps();
+
+  useEffect(() => {
+    if (tripModal) {
+      departureGps.captureGps();
+    } else {
+      departureGps.resetGps();
+    }
+  }, [tripModal, departureGps.captureGps, departureGps.resetGps]);
+
+  useEffect(() => {
+    if (!!updateModal) {
+      returnGps.captureGps();
+    } else {
+      returnGps.resetGps();
+    }
+  }, [updateModal, returnGps.captureGps, returnGps.resetGps]);
 
   const openAddType = useCallback((cb: (p: Product) => void) => {
     setAddTypeCallback(() => cb);
@@ -121,6 +151,19 @@ export function InternalVehiclesClient({
       loaded: 10,
       unsoldReturned: 0,
       emptyReturned: 0,
+    };
+  }
+
+  function newReturnRow(products: Product[]): CylinderRowItem {
+    const p = products[0];
+    return {
+      id: Math.random().toString(36).substring(2, 9),
+      productId: p?.id ?? "",
+      productName: p?.name ?? "",
+      loaded: 0,
+      unsoldReturned: 0,
+      emptyReturned: 0,
+      isNewReturnItem: true,
     };
   }
 
@@ -191,19 +234,61 @@ export function InternalVehiclesClient({
       productId: item.productId,
       productName: item.productName,
       loaded: item.loaded,
-      unsoldReturned: 0,
-      emptyReturned: 0
+      unsoldReturned: item.unsoldReturned || 0,
+      emptyReturned: item.emptyReturned || 0
     }))));
 
+    if (departureGps.gps.lat !== null) fd.append("departureLat", String(departureGps.gps.lat));
+    if (departureGps.gps.lng !== null) fd.append("departureLng", String(departureGps.gps.lng));
+    if (departureGps.gps.accuracy !== null) fd.append("departureAccuracy", String(departureGps.gps.accuracy));
+
     startTransition(async () => {
-      const result = await createVehicleTripLog(fd);
+      const result = editTripLogId
+        ? await updateTripLog(editTripLogId, fd)
+        : await createVehicleTripLog(fd);
       if (result.error) { setError(result.error); return; }
       if (result.tripLog) {
-        setTripLogs((prev) => [result.tripLog!, ...prev]);
+        setTripLogs((prev) =>
+          editTripLogId
+            ? prev.map((t) => (t.id === result.tripLog!.id ? (result.tripLog! as TripLog) : t))
+            : [result.tripLog!, ...prev]
+        );
         setTripModal(false);
+        setEditTripLogId(null);
         setDepartureItems([]);
       }
     });
+  }
+
+  function openModifyDeparture(t: TripLog) {
+    setEditTripLogId(t.id);
+    let initialDepartureItems: CylinderRowItem[] = [];
+    if (t.items) {
+      try {
+        const parsed = typeof t.items === "string" ? JSON.parse(t.items) : t.items;
+        if (Array.isArray(parsed)) {
+          initialDepartureItems = parsed.map((item: any) => ({
+            id: Math.random().toString(36).substring(2, 9),
+            productId: item.productId || "",
+            productName: item.productName || "",
+            loaded: Number(item.loaded) || 0,
+            unsoldReturned: Number(item.unsoldReturned) || 0,
+            emptyReturned: Number(item.emptyReturned) || 0,
+          }));
+        }
+      } catch (e) {
+        console.error("Failed to parse trip items:", e);
+      }
+    }
+    setDepartureItems(initialDepartureItems);
+    setTForm({
+      vehicleId: t.vehicleId,
+      date: new Date(t.date).toISOString().slice(0, 10),
+      departureTime: t.departureTime ? new Date(t.departureTime).toISOString().slice(0, 16) : "",
+      notes: t.notes ?? "",
+    });
+    setError("");
+    setTripModal(true);
   }
 
   function openUpdateTrip(t: TripLog) {
@@ -241,8 +326,8 @@ export function InternalVehiclesClient({
 
     setReturnItems(initialReturnItems);
     setUForm({
-      tripStatus: "RETURNED",
-      returnTime: getLocalDateTimeString(),
+      tripStatus: t.tripStatus === "LOADED" || t.tripStatus === "OUT_FOR_DELIVERY" ? "RETURNED" : t.tripStatus,
+      returnTime: t.returnTime ? new Date(t.returnTime).toISOString().slice(0, 16) : getLocalDateTimeString(),
       notes: t.notes ?? "",
     });
     setError("");
@@ -271,6 +356,10 @@ export function InternalVehiclesClient({
     const unsoldReturnedTotal = returnItems.reduce((sum, r) => sum + r.unsoldReturned, 0);
     fd.append("cylindersReturned", String(unsoldReturnedTotal));
     fd.append("cylindersDelivered", String(emptyReturnedTotal));
+
+    if (returnGps.gps.lat !== null) fd.append("returnLat", String(returnGps.gps.lat));
+    if (returnGps.gps.lng !== null) fd.append("returnLng", String(returnGps.gps.lng));
+    if (returnGps.gps.accuracy !== null) fd.append("returnAccuracy", String(returnGps.gps.accuracy));
 
     startTransition(async () => {
       const result = await updateTripStatus(updateModal.id, fd);
@@ -339,11 +428,13 @@ export function InternalVehiclesClient({
                 <thead><tr>
                   <th>Vehicle</th><th>Delivery Boy</th><th>Cylinders Loaded</th>
                   <th>Departure</th><th>Return</th><th>Delivered</th><th>Returned</th>
-                  <th className="text-center">Status</th><th className="text-center">Action</th>
+                  <th className="text-center">Status</th>
+                  <th className="text-center">GPS</th>
+                  <th className="text-center">Action</th>
                 </tr></thead>
                 <tbody>
                   {tripLogs.length === 0 ? (
-                    <tr><td colSpan={9} className="py-14 text-center">
+                    <tr><td colSpan={10} className="py-14 text-center">
                       <Truck className="w-8 h-8 mx-auto mb-2" style={{ color: "#D4D4D8" }} />
                       <p className="text-[13px]" style={{ color: "#A1A1AA" }}>No trips recorded yet today</p>
                     </td></tr>
@@ -391,12 +482,69 @@ export function InternalVehiclesClient({
                           {TRIP_STATUS_LABELS[t.tripStatus] ?? t.tripStatus}
                         </span>
                       </td>
-                      <td className="text-center">
-                        {(t.tripStatus === "LOADED" || t.tripStatus === "OUT_FOR_DELIVERY") && (
-                          <button onClick={() => openUpdateTrip(t)} className="btn btn-secondary text-[12px]" style={{ height: 28, padding: "0 10px", color: "#16A34A", borderColor: "#86EFAC" }}>
-                            Update Return
+                      <td className="text-center py-4">
+                        <div className="flex flex-col gap-1 items-center justify-center">
+                          {t.departureLat && t.departureLng ? (
+                            <a
+                              href={`https://www.google.com/maps/search/?api=1&query=${t.departureLat},${t.departureLng}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-[10px] font-bold text-purple-600 bg-purple-50 border border-purple-200 rounded px-1.5 py-0.5 hover:bg-purple-100 transition-all inline-flex items-center gap-0.5 whitespace-nowrap"
+                              title="Departure Geolocation"
+                            >
+                              Dep <Navigation className="w-2.5 h-2.5" />
+                            </a>
+                          ) : null}
+                          {t.returnLat && t.returnLng ? (
+                            <a
+                              href={`https://www.google.com/maps/search/?api=1&query=${t.returnLat},${t.returnLng}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-[10px] font-bold text-pink-600 bg-pink-50 border border-pink-200 rounded px-1.5 py-0.5 hover:bg-pink-100 transition-all inline-flex items-center gap-0.5 whitespace-nowrap"
+                              title="Return Geolocation"
+                            >
+                              Ret <Navigation className="w-2.5 h-2.5" />
+                            </a>
+                          ) : null}
+                          {!t.departureLat && !t.returnLat && <span className="text-[11px] text-slate-400 italic">—</span>}
+                        </div>
+                      </td>
+                      <td className="text-center py-4">
+                        <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                          {/* Edit Departure */}
+                          <button
+                            onClick={() => openModifyDeparture(t)}
+                            disabled={isPending}
+                            className="btn text-[11px] py-1 px-2 border border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100 font-bold inline-flex items-center gap-0.5 shadow-2xs whitespace-nowrap"
+                            title="Modify Departure details"
+                          >
+                            <Edit2 className="w-3 h-3" /> Edit Dep
                           </button>
-                        )}
+
+                          {/* Record Return for incomplete trips */}
+                          {(t.tripStatus === "LOADED" || t.tripStatus === "OUT_FOR_DELIVERY") && (
+                            <button
+                              onClick={() => openUpdateTrip(t)}
+                              disabled={isPending}
+                              className="btn text-[11px] py-1 px-2 border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 font-bold inline-flex items-center gap-0.5 shadow-2xs whitespace-nowrap"
+                              title="Record Return details"
+                            >
+                              <CheckCircle2 className="w-3 h-3" /> Return
+                            </button>
+                          )}
+
+                          {/* Edit Return for completed trips */}
+                          {(t.tripStatus === "RETURNED" || t.tripStatus === "PARTIAL_RETURN") && (
+                            <button
+                              onClick={() => openUpdateTrip(t)}
+                              disabled={isPending}
+                              className="btn text-[11px] py-1 px-2 border border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100 font-bold inline-flex items-center gap-0.5 shadow-2xs whitespace-nowrap"
+                              title="Modify Return details"
+                            >
+                              <RotateCcw className="w-3 h-3" /> Edit Ret
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -550,18 +698,18 @@ export function InternalVehiclesClient({
         </form>
       </Modal>
 
-      {/* Record       {/* Record Trip Modal */}
+      {/* Record Trip Modal */}
       <Modal
         open={tripModal}
-        onClose={() => setTripModal(false)}
-        title="Record Vehicle Departure"
+        onClose={() => { setTripModal(false); setEditTripLogId(null); }}
+        title={editTripLogId ? "Modify Vehicle Departure" : "Record Vehicle Departure"}
         size="lg"
         centerFooter={true}
         footer={
           <>
-            <button type="button" onClick={() => setTripModal(false)} className="btn btn-secondary">Cancel</button>
+            <button type="button" onClick={() => { setTripModal(false); setEditTripLogId(null); }} className="btn btn-secondary">Cancel</button>
             <button form="trip-form" type="submit" disabled={isPending} className="btn btn-primary shadow-sm px-5">
-              {isPending ? "Recording…" : "Record Departure"}
+              {isPending ? "Saving…" : (editTripLogId ? "Update Departure" : "Record Departure")}
             </button>
           </>
         }
@@ -573,6 +721,8 @@ export function InternalVehiclesClient({
               <span className="font-medium">{error}</span>
             </div>
           )}
+
+          <GpsStatusBox gps={departureGps.gps} onRetry={departureGps.captureGps} titleText="Acquiring departure coordinates..." />
           
           <div className="rounded-xl border border-slate-200 overflow-visible">
             <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-200 rounded-t-xl">
@@ -640,8 +790,8 @@ export function InternalVehiclesClient({
                   <p className="text-[10px] text-slate-400 mt-0.5">Click "Add Cylinder Type" to add cylinders to this trip.</p>
                 </div>
               ) : (
-                <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-xs">
-                  <div className="overflow-x-auto">
+                <div className="border border-slate-200 rounded-xl overflow-visible bg-white shadow-xs">
+                  <div className="overflow-visible">
                     <table className="w-full text-left border-collapse">
                       <thead>
                         <tr className="bg-slate-50 border-b border-slate-200">
@@ -759,14 +909,14 @@ export function InternalVehiclesClient({
       <Modal
         open={!!updateModal}
         onClose={() => setUpdateModal(null)}
-        title="Update Vehicle Return"
+        title={updateModal?.tripStatus === "RETURNED" || updateModal?.tripStatus === "PARTIAL_RETURN" ? "Modify Vehicle Return" : "Record Vehicle Return"}
         size="lg"
         centerFooter={true}
         footer={
           <>
             <button type="button" onClick={() => setUpdateModal(null)} className="btn btn-secondary">Cancel</button>
             <button form="update-trip-form" type="submit" disabled={isPending} className="btn btn-primary shadow-sm px-5">
-              {isPending ? "Updating…" : "Update Status"}
+              {isPending ? "Saving…" : (updateModal?.tripStatus === "RETURNED" || updateModal?.tripStatus === "PARTIAL_RETURN" ? "Update Return Details" : "Record Return")}
             </button>
           </>
         }
@@ -778,6 +928,8 @@ export function InternalVehiclesClient({
               <span className="font-medium">{error}</span>
             </div>
           )}
+
+          <GpsStatusBox gps={returnGps.gps} onRetry={returnGps.captureGps} titleText="Acquiring return coordinates..." />
           
           {updateModal && (
             <div className="px-4 py-3 rounded-xl border flex items-center justify-between" style={{ background: "#EFF6FF", borderColor: "#BFDBFE" }}>
@@ -805,7 +957,7 @@ export function InternalVehiclesClient({
                   type="button"
                   onClick={() => {
                     if (productsState.length > 0) {
-                      setReturnItems(prev => [...prev, newDepartureRow(productsState)]);
+                      setReturnItems(prev => [...prev, newReturnRow(productsState)]);
                     }
                   }}
                   className="flex items-center gap-1 text-[11px] font-bold px-2 py-1 rounded-lg border bg-blue-50 text-blue-600 border-blue-200 shadow-sm hover:bg-blue-100 transition-all cursor-pointer"
@@ -830,8 +982,8 @@ export function InternalVehiclesClient({
                   <p className="text-[10px] text-slate-400 mt-0.5">Click "Add Cylinder Type" to start reconciliation.</p>
                 </div>
               ) : (
-                <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-xs">
-                  <div className="overflow-x-auto">
+                <div className="border border-slate-200 rounded-xl overflow-visible bg-white shadow-xs">
+                  <div className="overflow-visible">
                     <table className="w-full text-left border-collapse">
                       <thead>
                         <tr className="bg-slate-50 border-b border-slate-200">
@@ -868,7 +1020,35 @@ export function InternalVehiclesClient({
                               />
                             </td>
                             <td className="p-2 text-center text-[12px] font-semibold text-slate-600">
-                              {row.loaded}
+                              {row.isNewReturnItem ? (
+                                <div className="flex items-center justify-center">
+                                  <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden h-7 bg-white w-14">
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      value={row.loaded}
+                                      onChange={(e) => {
+                                        const val = Math.max(0, parseInt(e.target.value) || 0);
+                                        setReturnItems(prev =>
+                                          prev.map(r => {
+                                            if (r.id !== row.id) return r;
+                                            const newEmpty = Math.min(val, r.emptyReturned);
+                                            return {
+                                              ...r,
+                                              loaded: val,
+                                              emptyReturned: newEmpty,
+                                              unsoldReturned: val - newEmpty
+                                            };
+                                          })
+                                        );
+                                      }}
+                                      className="w-full h-7 text-center font-semibold text-slate-800 text-[12px] focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none border-none"
+                                    />
+                                  </div>
+                                </div>
+                              ) : (
+                                row.loaded
+                              )}
                             </td>
                             <td className="p-2">
                               <div className="flex items-center justify-center">
@@ -877,7 +1057,11 @@ export function InternalVehiclesClient({
                                     type="button"
                                     onClick={() => {
                                       setReturnItems(prev =>
-                                        prev.map(r => r.id === row.id ? { ...r, emptyReturned: Math.max(0, r.emptyReturned - 1) } : r)
+                                        prev.map(r => {
+                                          if (r.id !== row.id) return r;
+                                          const val = Math.max(0, Math.min(r.loaded, r.emptyReturned - 1));
+                                          return { ...r, emptyReturned: val, unsoldReturned: r.loaded - val };
+                                        })
                                       );
                                     }}
                                     className="w-7 h-7 flex items-center justify-center hover:bg-slate-50 transition-colors"
@@ -891,7 +1075,11 @@ export function InternalVehiclesClient({
                                     onChange={(e) => {
                                       const val = Math.max(0, parseInt(e.target.value) || 0);
                                       setReturnItems(prev =>
-                                        prev.map(r => r.id === row.id ? { ...r, emptyReturned: val } : r)
+                                        prev.map(r => {
+                                          if (r.id !== row.id) return r;
+                                          const constrainedVal = Math.min(r.loaded, val);
+                                          return { ...r, emptyReturned: constrainedVal, unsoldReturned: r.loaded - constrainedVal };
+                                        })
                                       );
                                     }}
                                     className="w-10 h-7 text-center font-semibold text-slate-800 text-[12px] focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none border-x border-slate-200"
@@ -900,7 +1088,11 @@ export function InternalVehiclesClient({
                                     type="button"
                                     onClick={() => {
                                       setReturnItems(prev =>
-                                        prev.map(r => r.id === row.id ? { ...r, emptyReturned: r.emptyReturned + 1 } : r)
+                                        prev.map(r => {
+                                          if (r.id !== row.id) return r;
+                                          const val = Math.min(r.loaded, r.emptyReturned + 1);
+                                          return { ...r, emptyReturned: val, unsoldReturned: r.loaded - val };
+                                        })
                                       );
                                     }}
                                     className="w-7 h-7 flex items-center justify-center hover:bg-slate-50 transition-colors"
@@ -917,7 +1109,11 @@ export function InternalVehiclesClient({
                                     type="button"
                                     onClick={() => {
                                       setReturnItems(prev =>
-                                        prev.map(r => r.id === row.id ? { ...r, unsoldReturned: Math.max(0, r.unsoldReturned - 1) } : r)
+                                        prev.map(r => {
+                                          if (r.id !== row.id) return r;
+                                          const val = Math.max(0, Math.min(r.loaded, r.unsoldReturned - 1));
+                                          return { ...r, unsoldReturned: val, emptyReturned: r.loaded - val };
+                                        })
                                       );
                                     }}
                                     className="w-7 h-7 flex items-center justify-center hover:bg-slate-50 transition-colors"
@@ -931,7 +1127,11 @@ export function InternalVehiclesClient({
                                     onChange={(e) => {
                                       const val = Math.max(0, parseInt(e.target.value) || 0);
                                       setReturnItems(prev =>
-                                        prev.map(r => r.id === row.id ? { ...r, unsoldReturned: val } : r)
+                                        prev.map(r => {
+                                          if (r.id !== row.id) return r;
+                                          const constrainedVal = Math.min(r.loaded, val);
+                                          return { ...r, unsoldReturned: constrainedVal, emptyReturned: r.loaded - constrainedVal };
+                                        })
                                       );
                                     }}
                                     className="w-10 h-7 text-center font-semibold text-slate-800 text-[12px] focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none border-x border-slate-200"
@@ -940,7 +1140,11 @@ export function InternalVehiclesClient({
                                     type="button"
                                     onClick={() => {
                                       setReturnItems(prev =>
-                                        prev.map(r => r.id === row.id ? { ...r, unsoldReturned: r.unsoldReturned + 1 } : r)
+                                        prev.map(r => {
+                                          if (r.id !== row.id) return r;
+                                          const val = Math.min(r.loaded, r.unsoldReturned + 1);
+                                          return { ...r, unsoldReturned: val, emptyReturned: r.loaded - val };
+                                        })
                                       );
                                     }}
                                     className="w-7 h-7 flex items-center justify-center hover:bg-slate-50 transition-colors"

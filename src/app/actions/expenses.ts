@@ -2,6 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
+import { syncExpenseToPersonalAccount } from "./agency-account-sync";
 
 export async function createExpense(formData: FormData) {
   const session = await getSession();
@@ -23,6 +24,11 @@ export async function createExpense(formData: FormData) {
     },
     include: { addedBy: { select: { name: true } } },
   });
+
+  if (formData.get("syncToAgencyAccount") === "true") {
+    await syncExpenseToPersonalAccount(expense.id);
+  }
+
   return { expense };
 }
 

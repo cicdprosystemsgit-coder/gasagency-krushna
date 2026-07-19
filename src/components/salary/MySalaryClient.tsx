@@ -4,10 +4,11 @@ import { useState } from "react";
 import {
   Wallet, TrendingUp, Clock, AlertTriangle,
   ChevronDown, ChevronUp, Calendar, Gift, CreditCard, Info,
-  Banknote, Download, Loader2,
+  Banknote, Download, Loader2, CheckCircle2, XCircle, Plus, Coins, Check, FileText
 } from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { generateSalarySlipPDF } from "@/lib/generateSalarySlipPDF";
+import { createSalaryRequest } from "@/app/actions/salary-requests";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -49,11 +50,29 @@ export interface Bonus {
   remarks: string | null;
 }
 
+export interface SalaryPaymentRequest {
+  id: string;
+  type: string;
+  amount: number;
+  month: number | null;
+  year: number | null;
+  status: string;
+  remarks: string | null;
+  managerReviewNote: string | null;
+  reviewNote: string | null;
+  createdAt: Date | string;
+  requestedBy: { name: string };
+  reviewedBy: { name: string } | null;
+  managerReviewedBy: { name: string } | null;
+}
+
 export interface MySalaryClientProps {
   profile: SalaryProfile | null;
   drawings: Drawing[];
   advances: Advance[];
   bonuses: Bonus[];
+  requests?: SalaryPaymentRequest[];
+  employeeId: string;
   employeeName: string;
   agencyName?: string;
   agencyAddress?: string;
@@ -79,12 +98,24 @@ const ADVANCE_STATUS: Record<string, { label: string; color: string; bg: string 
   RECOVERED: { label: "✓ Recovered",  color: "#059669", bg: "#ECFDF5" },
 };
 
-const TABS = ["Overview", "Payslips", "Advances", "Bonuses"] as const;
+const TABS = ["Overview", "Payslips", "Advances", "Bonuses", "My Requests"] as const;
 type Tab = typeof TABS[number];
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function MySalaryClient({ profile, drawings, advances, bonuses, employeeName, agencyName = "", agencyAddress = "", agencyPhone = "", agencyGstin = "" }: MySalaryClientProps) {
+export function MySalaryClient({
+  profile,
+  drawings,
+  advances,
+  bonuses,
+  requests = [],
+  employeeId,
+  employeeName,
+  agencyName = "",
+  agencyAddress = "",
+  agencyPhone = "",
+  agencyGstin = ""
+}: MySalaryClientProps) {
   const [activeTab, setActiveTab] = useState<Tab>("Overview");
   const [yearFilter, setYearFilter] = useState<number>(new Date().getFullYear());
 
@@ -206,6 +237,7 @@ export function MySalaryClient({ profile, drawings, advances, bonuses, employeeN
       {activeTab === "Payslips"  && <PayslipsTab drawings={drawings} bonuses={bonuses} yearFilter={yearFilter} setYearFilter={setYearFilter} availableYears={availableYears} employeeName={employeeName} agencyName={agencyName} agencyAddress={agencyAddress} agencyPhone={agencyPhone} agencyGstin={agencyGstin} profile={profile} />}
       {activeTab === "Advances"  && <AdvancesTab advances={advances} pendingBalance={pendingAdvanceBalance} />}
       {activeTab === "Bonuses"   && <BonusesTab bonuses={bonuses} ytdBonus={ytdBonus} currentYear={currentYear} />}
+      {activeTab === "My Requests" && <MyRequestsTab initialRequests={requests} employeeId={employeeId} />}
     </div>
   );
 }
@@ -739,6 +771,448 @@ function BonusesTab({ bonuses, ytdBonus, currentYear }: {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── My Requests Tab (Employee Request Workflow) ──────────────────────────
+
+function MyRequestsTab({
+  initialRequests,
+  employeeId
+}: {
+  initialRequests: SalaryPaymentRequest[];
+  employeeId: string;
+}) {
+  const [requestsList, setRequestsList] = useState<SalaryPaymentRequest[]>(initialRequests);
+  const [reqType, setReqType] = useState<"ADVANCE" | "BONUS" | null>(null);
+  const [amount, setAmount] = useState("");
+  const [reason, setReason] = useState("");
+  const [remarks, setRemarks] = useState("");
+  const [advanceDate, setAdvanceDate] = useState(new Date().toISOString().split("T")[0]);
+  const [month, setMonth] = useState(new Date().getMonth() + 1);
+  const [year, setYear] = useState(new Date().getFullYear());
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
+
+  const pendingCount = requestsList.filter(r => r.status === "PENDING" || r.status === "MANAGER_APPROVED").length;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reqType) return;
+    const numAmt = Number(amount);
+    if (!numAmt || numAmt <= 0) {
+      setError("Please enter a valid amount");
+      return;
+    }
+    if (!reason.trim()) {
+      setError("Please enter a reason/remarks");
+      return;
+    }
+
+    setIsSubmitting(true);
+    setError(null);
+    setSuccess(false);
+
+    try {
+      const fd = new FormData();
+      fd.append("type", reqType);
+      fd.append("employeeId", employeeId);
+      fd.append("amount", String(numAmt));
+      fd.append("remarks", remarks || reason);
+
+      if (reqType === "ADVANCE") {
+        fd.append("advanceDate", advanceDate);
+        fd.append("reason", reason);
+      } else {
+        fd.append("bonusDate", new Date().toISOString());
+        fd.append("reason", reason);
+        fd.append("month", String(month));
+        fd.append("year", String(year));
+      }
+
+      const res = await createSalaryRequest(fd);
+      if (res.error) {
+        setError(res.error);
+      } else if (res.request) {
+        setSuccess(true);
+        // Reset form
+        setAmount("");
+        setReason("");
+        setRemarks("");
+        setReqType(null);
+        // Add new request to list
+        setRequestsList([res.request as unknown as SalaryPaymentRequest, ...requestsList]);
+      }
+    } catch (err: any) {
+      setError(err?.message || "An unexpected error occurred");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const getStatusDetails = (status: string) => {
+    switch (status) {
+      case "PENDING":
+        return { label: "⏳ Pending Manager Approval", color: "#D97706", bg: "#FFFBEB" };
+      case "MANAGER_APPROVED":
+        return { label: "⏳ Manager Approved (Pending Admin)", color: "#2563EB", bg: "#EFF6FF" };
+      case "APPROVED":
+        return { label: "✓ Approved & Paid", color: "#059669", bg: "#ECFDF5" };
+      case "REJECTED":
+        return { label: "✗ Rejected", color: "#DC2626", bg: "#FEF2F2" };
+      default:
+        return { label: status, color: "#71717A", bg: "#F4F4F5" };
+    }
+  };
+
+  return (
+    <div className="grid lg:grid-cols-3 gap-6">
+      {/* Left: Request Submission Form */}
+      <div className="lg:col-span-1 space-y-4">
+        <div className="rounded-xl p-5"
+          style={{ background: "#fff", border: "1px solid #E4E4E7", boxShadow: "0 1px 2px rgba(0,0,0,0.04)" }}>
+          <h3 className="text-[14px] font-bold mb-4" style={{ color: "#18181B" }}>New Request</h3>
+
+          {pendingCount > 0 && (
+            <div className="flex items-start gap-2.5 px-3.5 py-2.5 rounded-lg mb-4 text-[12px]"
+              style={{ background: "#FFFBEB", border: "1px solid #FDE68A", color: "#92400E" }}>
+              <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+              <span>You have {pendingCount} pending request(s) awaiting approval.</span>
+            </div>
+          )}
+
+          {!reqType ? (
+            <div className="space-y-2.5">
+              <button
+                onClick={() => { setReqType("ADVANCE"); setError(null); setSuccess(false); }}
+                className="w-full flex items-center justify-between p-4 rounded-xl text-left border hover:border-blue-500 hover:bg-blue-50/30 transition-all group"
+                style={{ borderColor: "#E4E4E7" }}
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-red-50 text-red-600">
+                    <Coins className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <p className="text-[13px] font-semibold" style={{ color: "#18181B" }}>Request Advance (Udhari)</p>
+                    <p className="text-[11px]" style={{ color: "#71717A" }}>Borrow salary in advance</p>
+                  </div>
+                </div>
+                <Plus className="w-4 h-4 text-slate-400 group-hover:text-blue-500 transition-colors" />
+              </button>
+
+              <button
+                onClick={() => { setReqType("BONUS"); setError(null); setSuccess(false); }}
+                className="w-full flex items-center justify-between p-4 rounded-xl text-left border hover:border-purple-500 hover:bg-purple-50/30 transition-all group"
+                style={{ borderColor: "#E4E4E7" }}
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-purple-50 text-purple-600">
+                    <Gift className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <p className="text-[13px] font-semibold" style={{ color: "#18181B" }}>Request Bonus</p>
+                    <p className="text-[11px]" style={{ color: "#71717A" }}>Special bonus request</p>
+                  </div>
+                </div>
+                <Plus className="w-4 h-4 text-slate-400 group-hover:text-purple-500 transition-colors" />
+              </button>
+            </div>
+          ) : (
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="flex items-center justify-between border-b pb-2 mb-2" style={{ borderColor: "#F4F4F5" }}>
+                <span className="text-[12px] font-bold uppercase tracking-wider" style={{ color: reqType === "ADVANCE" ? "#DC2626" : "#7C3AED" }}>
+                  {reqType === "ADVANCE" ? "💰 Requesting Advance" : "🎁 Requesting Bonus"}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setReqType(null)}
+                  className="text-[11px] font-medium text-slate-400 hover:text-slate-600"
+                >
+                  Cancel
+                </button>
+              </div>
+
+              {error && (
+                <div className="p-3 rounded-lg text-[12px]" style={{ background: "#FEF2F2", border: "1px solid #FCA5A5", color: "#DC2626" }}>
+                  {error}
+                </div>
+              )}
+
+              <div>
+                <label className="block text-[12px] font-semibold mb-1" style={{ color: "#52525B" }}>Requested Amount (₹) *</label>
+                <input
+                  type="number"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  placeholder="e.g. 5000"
+                  className="w-full px-3.5 py-2 border rounded-lg text-[13px] outline-none focus:ring-1 focus:ring-slate-400"
+                  style={{ borderColor: "#E4E4E7" }}
+                  required
+                />
+              </div>
+
+              {reqType === "ADVANCE" ? (
+                <div>
+                  <label className="block text-[12px] font-semibold mb-1" style={{ color: "#52525B" }}>Expected Date *</label>
+                  <input
+                    type="date"
+                    value={advanceDate}
+                    onChange={(e) => setAdvanceDate(e.target.value)}
+                    className="w-full px-3.5 py-2 border rounded-lg text-[13px] outline-none focus:ring-1 focus:ring-slate-400"
+                    style={{ borderColor: "#E4E4E7" }}
+                    required
+                  />
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[12px] font-semibold mb-1" style={{ color: "#52525B" }}>Month *</label>
+                    <select
+                      value={month}
+                      onChange={(e) => setMonth(Number(e.target.value))}
+                      className="w-full px-3.5 py-2 border rounded-lg text-[13px] outline-none"
+                      style={{ borderColor: "#E4E4E7" }}
+                    >
+                      {Array.from({ length: 12 }, (_, i) => (
+                        <option key={i + 1} value={i + 1}>{new Date(2000, i).toLocaleString('default', { month: 'short' })}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[12px] font-semibold mb-1" style={{ color: "#52525B" }}>Year *</label>
+                    <select
+                      value={year}
+                      onChange={(e) => setYear(Number(e.target.value))}
+                      className="w-full px-3.5 py-2 border rounded-lg text-[13px] outline-none"
+                      style={{ borderColor: "#E4E4E7" }}
+                    >
+                      {[new Date().getFullYear(), new Date().getFullYear() + 1].map(y => (
+                        <option key={y} value={y}>{y}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-[12px] font-semibold mb-1" style={{ color: "#52525B" }}>Reason / Explanation *</label>
+                <textarea
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                  placeholder="Explain why you are raising this request..."
+                  rows={3}
+                  className="w-full px-3.5 py-2 border rounded-lg text-[13px] outline-none resize-none"
+                  style={{ borderColor: "#E4E4E7" }}
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-[12px] font-semibold mb-1" style={{ color: "#52525B" }}>Remarks (Optional)</label>
+                <input
+                  type="text"
+                  value={remarks}
+                  onChange={(e) => setRemarks(e.target.value)}
+                  placeholder="Any additional remarks"
+                  className="w-full px-3.5 py-2 border rounded-lg text-[13px] outline-none"
+                  style={{ borderColor: "#E4E4E7" }}
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="w-full py-2.5 rounded-lg text-[13px] font-semibold text-white transition-all flex items-center justify-center gap-1.5"
+                style={{
+                  background: reqType === "ADVANCE" ? "#DC2626" : "#7C3AED",
+                  opacity: isSubmitting ? 0.7 : 1,
+                  cursor: isSubmitting ? "not-allowed" : "pointer"
+                }}
+              >
+                {isSubmitting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                Submit Request
+              </button>
+            </form>
+          )}
+
+          {success && (
+            <div className="mt-4 p-3.5 rounded-xl text-center text-[13px] font-medium"
+              style={{ background: "#F0FDF4", border: "1px solid #BBF7D0", color: "#16A34A" }}>
+              <Check className="w-5 h-5 mx-auto mb-1 text-emerald-600 bg-emerald-100 rounded-full p-0.5" />
+              Request submitted successfully!
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Right: Requests List & Pipeline */}
+      <div className="lg:col-span-2 space-y-4">
+        <div className="rounded-xl p-5"
+          style={{ background: "#fff", border: "1px solid #E4E4E7", boxShadow: "0 1px 2px rgba(0,0,0,0.04)" }}>
+          <h3 className="text-[14px] font-bold mb-4" style={{ color: "#18181B" }}>Request History & Approval Pipeline</h3>
+
+          {requestsList.length === 0 ? (
+            <div className="text-center py-16">
+              <FileText className="w-9 h-9 mx-auto mb-2 text-slate-300" />
+              <p className="text-[13px]" style={{ color: "#71717A" }}>No requests submitted yet.</p>
+              <p className="text-[11px] mt-0.5" style={{ color: "#A1A1AA" }}>Any bonus or advance requests you submit will appear here.</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {requestsList.map((req) => {
+                const statusMeta = getStatusDetails(req.status);
+                return (
+                  <div
+                    key={req.id}
+                    className="p-4 rounded-xl border transition-all"
+                    style={{ borderColor: "#E4E4E7", background: "#FCFDFD" }}
+                  >
+                    {/* Header */}
+                    <div className="flex flex-wrap items-start justify-between gap-2 mb-3">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-[11px] px-2 py-0.5 rounded-full font-bold`}
+                            style={{
+                              background: req.type === "ADVANCE" ? "#FEF2F2" : "#F5F3FF",
+                              color: req.type === "ADVANCE" ? "#DC2626" : "#7C3AED"
+                            }}>
+                            {req.type}
+                          </span>
+                          <span className="text-[14px] font-bold" style={{ color: "#18181B" }}>
+                            {formatCurrency(req.amount)}
+                          </span>
+                        </div>
+                        <p className="text-[11px] mt-1" style={{ color: "#A1A1AA" }}>
+                          Submitted: {formatDate(req.createdAt)}
+                        </p>
+                      </div>
+
+                      <span className="text-[11px] px-2.5 py-1 rounded-full font-bold"
+                        style={{ background: statusMeta.bg, color: statusMeta.color }}>
+                        {statusMeta.label}
+                      </span>
+                    </div>
+
+                    {/* Details */}
+                    <div className="text-[13px] mb-4 space-y-1.5 p-3 rounded-lg" style={{ background: "#F8FAFC", border: "1px solid #F1F5F9" }}>
+                      <p style={{ color: "#334155" }}>
+                        <strong>Reason:</strong> {req.remarks || "No reason specified"}
+                      </p>
+                      {req.type === "BONUS" && req.month && req.year && (
+                        <p className="text-[12px]" style={{ color: "#64748B" }}>
+                          <strong>Period:</strong> {new Date(2000, req.month - 1).toLocaleString('default', { month: 'short' })} {req.year}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Visual 3-Step Approval Pipeline */}
+                    <div className="border-t pt-4 mt-3" style={{ borderColor: "#F1F5F9" }}>
+                      <p className="text-[11px] font-bold uppercase tracking-wider mb-3" style={{ color: "#64748B" }}>Approval Pipeline</p>
+
+                      <div className="grid grid-cols-3 gap-2 relative">
+                        {/* Connecting Line */}
+                        <div className="absolute top-3.5 left-6 right-6 h-[2px] bg-slate-200 z-0 font-sans"></div>
+
+                        {/* Step 1: Submitted */}
+                        <div className="flex flex-col items-center text-center z-10">
+                          <div className="w-7 h-7 rounded-full flex items-center justify-center bg-emerald-100 text-emerald-600 border-2 border-white">
+                            <Check className="w-3.5 h-3.5 stroke-[3]" />
+                          </div>
+                          <span className="text-[10px] font-bold mt-1.5" style={{ color: "#059669" }}>Submitted</span>
+                          <span className="text-[9px]" style={{ color: "#94A3B8" }}>by you</span>
+                        </div>
+
+                        {/* Step 2: Manager Review */}
+                        <div className="flex flex-col items-center text-center z-10">
+                          <div className={`w-7 h-7 rounded-full flex items-center justify-center border-2 border-white ${
+                            req.status === "REJECTED" && !req.reviewedBy && req.managerReviewedBy
+                              ? "bg-red-100 text-red-600"
+                              : req.status === "MANAGER_APPROVED" || req.status === "APPROVED"
+                                ? "bg-emerald-100 text-emerald-600"
+                                : "bg-amber-100 text-amber-600"
+                          }`}>
+                            {req.status === "REJECTED" && !req.reviewedBy && req.managerReviewedBy ? (
+                              <XCircle className="w-3.5 h-3.5" />
+                            ) : req.status === "MANAGER_APPROVED" || req.status === "APPROVED" ? (
+                              <Check className="w-3.5 h-3.5 stroke-[3]" />
+                            ) : (
+                              <Clock className="w-3.5 h-3.5 animate-pulse" />
+                            )}
+                          </div>
+                          <span className="text-[10px] font-bold mt-1.5" style={{
+                            color: req.status === "REJECTED" && !req.reviewedBy && req.managerReviewedBy
+                              ? "#DC2626"
+                              : req.status === "MANAGER_APPROVED" || req.status === "APPROVED"
+                                ? "#059669"
+                                : "#D97706"
+                          }}>Manager Approval</span>
+                          <span className="text-[9px] truncate max-w-[90px]" style={{ color: "#94A3B8" }}>
+                            {req.managerReviewedBy?.name || "Awaiting Review"}
+                          </span>
+                        </div>
+
+                        {/* Step 3: Admin Approval */}
+                        <div className="flex flex-col items-center text-center z-10">
+                          <div className={`w-7 h-7 rounded-full flex items-center justify-center border-2 border-white ${
+                            req.status === "APPROVED"
+                              ? "bg-emerald-100 text-emerald-600"
+                              : req.status === "REJECTED" && req.reviewedBy
+                                ? "bg-red-100 text-red-600"
+                                : "bg-slate-100 text-slate-400"
+                          }`}>
+                            {req.status === "APPROVED" ? (
+                              <Check className="w-3.5 h-3.5 stroke-[3]" />
+                            ) : req.status === "REJECTED" && req.reviewedBy ? (
+                              <XCircle className="w-3.5 h-3.5" />
+                            ) : (
+                              <Clock className="w-3.5 h-3.5" />
+                            )}
+                          </div>
+                          <span className="text-[10px] font-bold mt-1.5" style={{
+                            color: req.status === "APPROVED"
+                              ? "#059669"
+                              : req.status === "REJECTED" && req.reviewedBy
+                                ? "#DC2626"
+                                : "#64748B"
+                          }}>Admin Approval</span>
+                          <span className="text-[9px] truncate max-w-[90px]" style={{ color: "#94A3B8" }}>
+                            {req.reviewedBy?.name || "Awaiting Review"}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Review Notes Callouts */}
+                    {req.managerReviewNote && (
+                      <div className="mt-3 p-2.5 rounded-lg text-[12px] border"
+                        style={{
+                          background: req.status === "REJECTED" ? "#FEF2F2" : "#F8FAFC",
+                          borderColor: req.status === "REJECTED" ? "#FEE2E2" : "#E2E8F0",
+                          color: req.status === "REJECTED" ? "#991B1B" : "#475569"
+                        }}>
+                        <strong>Manager Note:</strong> {req.managerReviewNote}
+                      </div>
+                    )}
+                    {req.reviewNote && (
+                      <div className="mt-2 p-2.5 rounded-lg text-[12px] border"
+                        style={{
+                          background: req.status === "REJECTED" ? "#FEF2F2" : "#F0FDF4",
+                          borderColor: req.status === "REJECTED" ? "#FEE2E2" : "#DCFCE7",
+                          color: req.status === "REJECTED" ? "#991B1B" : "#166534"
+                        }}>
+                        <strong>Admin Note:</strong> {req.reviewNote}
+                      </div>
+                    )}
+
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

@@ -27,13 +27,14 @@ export default async function ManagerApprovalsPage() {
     }),
     // Manager sees only their own salary payment requests
     prisma.salaryPaymentRequest.findMany({
-      where: { agencyId: session.agencyId!, requestedById: session.userId },
+      where: { agencyId: session.agencyId! },
       orderBy: { createdAt: "desc" },
       take: 200,
       include: {
         employee: { select: { name: true, role: true } },
         requestedBy: { select: { name: true, role: true } },
         reviewedBy: { select: { name: true } },
+        managerReviewedBy: { select: { name: true } },
       },
     }),
     // Manager sees all agency leave requests (can approve/reject)

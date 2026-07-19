@@ -2,6 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
+import { syncSalaryToPersonalAccount, removeSalarySync } from "./agency-account-sync";
 
 // ─── Employee Salary Profile ──────────────────────────────────────────────────
 
@@ -116,6 +117,10 @@ export async function createSalaryDrawing(formData: FormData) {
     },
     include: { employee: { select: { name: true, role: true } } },
   });
+
+  // Auto-sync to Agency Account
+  await syncSalaryToPersonalAccount(drawing.id);
+
   return { drawing };
 }
 
@@ -140,6 +145,10 @@ export async function deleteSalaryDrawing(id: string) {
   const session = await getSession();
   if (!session || !["ADMIN", "MANAGER"].includes(session.role) || !session.agencyId)
     return { success: false };
+  
+  // Remove sync first before deleting
+  await removeSalarySync(id);
+
   await prisma.salaryDrawing.delete({ where: { id, agencyId: session.agencyId } });
   return { success: true };
 }

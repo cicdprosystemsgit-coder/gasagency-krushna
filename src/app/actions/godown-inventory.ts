@@ -25,6 +25,14 @@ export async function receiveGodownStock(
   if (!productId) return { error: "Product is required" };
   if (!qty || qty <= 0) return { error: "Quantity must be greater than 0" };
 
+  const recordLat = formData.get("recordLat") ? Number(formData.get("recordLat")) : null;
+  const recordLng = formData.get("recordLng") ? Number(formData.get("recordLng")) : null;
+  const recordAccuracy = formData.get("recordAccuracy") ? Number(formData.get("recordAccuracy")) : null;
+
+  const invoiceNo = (formData.get("invoiceNo") as string)?.trim() || null;
+  const invoiceDateStr = formData.get("invoiceDate") as string;
+  const invoiceDate = invoiceDateStr ? new Date(invoiceDateStr) : null;
+
   const record = await prisma.godownInventory.create({
     data: {
       date: new Date(date || Date.now()),
@@ -32,9 +40,14 @@ export async function receiveGodownStock(
       productId,
       qty,
       batchNo: (formData.get("batchNo") as string) || null,
+      invoiceNo,
+      invoiceDate,
       notes: (formData.get("notes") as string) || null,
       recordedById: session.userId,
       agencyId: session.agencyId,
+      recordLat,
+      recordLng,
+      recordAccuracy,
     },
     include: {
       product: { select: { id: true, name: true } },
@@ -74,6 +87,14 @@ export async function dispatchToOffice(
   if (qty > available)
     return { error: `Only ${available} units available in godown (stock: ${received}, dispatched: ${dispatched})` };
 
+  const recordLat = formData.get("recordLat") ? Number(formData.get("recordLat")) : null;
+  const recordLng = formData.get("recordLng") ? Number(formData.get("recordLng")) : null;
+  const recordAccuracy = formData.get("recordAccuracy") ? Number(formData.get("recordAccuracy")) : null;
+
+  const invoiceNo = (formData.get("invoiceNo") as string)?.trim() || null;
+  const invoiceDateStr = formData.get("invoiceDate") as string;
+  const invoiceDate = invoiceDateStr ? new Date(invoiceDateStr) : null;
+
   const record = await prisma.godownInventory.create({
     data: {
       date: new Date(date || Date.now()),
@@ -81,9 +102,14 @@ export async function dispatchToOffice(
       productId,
       qty,
       batchNo: (formData.get("batchNo") as string) || null,
+      invoiceNo,
+      invoiceDate,
       notes: (formData.get("notes") as string) || null,
       recordedById: session.userId,
       agencyId: session.agencyId,
+      recordLat,
+      recordLng,
+      recordAccuracy,
     },
     include: {
       product: { select: { id: true, name: true } },
@@ -187,12 +213,18 @@ export async function updateGodownMovement(
       return { error: `Only ${available} units available for dispatch` };
   }
 
+  const editInvoiceNo = (formData.get("invoiceNo") as string)?.trim() || null;
+  const editInvoiceDateStr = formData.get("invoiceDate") as string;
+  const editInvoiceDate = editInvoiceDateStr ? new Date(editInvoiceDateStr) : null;
+
   const record = await prisma.godownInventory.update({
     where: { id, agencyId: session.agencyId },
     data: {
       qty,
       date: new Date(formData.get("date") as string || Date.now()),
       batchNo: (formData.get("batchNo") as string) || null,
+      invoiceNo: editInvoiceNo,
+      invoiceDate: editInvoiceDate,
       notes: (formData.get("notes") as string) || null,
     },
     include: {

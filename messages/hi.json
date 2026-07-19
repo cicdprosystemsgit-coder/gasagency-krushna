@@ -34,6 +34,18 @@
     "collapse": "सिकोड़ें",
     "my_deliveries": "मेरी डिलीवरी",
     "delivery_ledger": "वितरण बही",
+    "my_attendance": "मेरी उपस्थिति",
+    
+    "personal_finance": "व्यक्तिगत वित्त",
+    "finance_dashboard": "वित्त डैशबोर्ड",
+    "personal_accounts": "व्यक्तिगत खाते",
+    "agency_account": "एजेंसी खाता",
+    "udhaari_ledger": "उधार खाता",
+    "fund_transfer": "फंड ट्रांसफर",
+    "cheque_register": "चेक रजिस्टर",
+    "oil_company_ledger": "ऑयल कंपनी बही",
+    "cash_reconciliation": "कैश मिलान",
+    "fd_loans": "एफडी और लोन ट्रैकर",
     
     "operations": "संचालन",
     "accounts": "खाते",

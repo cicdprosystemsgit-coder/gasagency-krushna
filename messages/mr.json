@@ -34,6 +34,18 @@
     "collapse": "बंद करा",
     "my_deliveries": "माझ्या डिलिव्हरी",
     "delivery_ledger": "डिलिव्हरी खाते",
+    "my_attendance": "माझी उपस्थिती",
+    
+    "personal_finance": "वैयक्तिक वित्त",
+    "finance_dashboard": "वित्त डॅशबोर्ड",
+    "personal_accounts": "वैयक्तिक खाती",
+    "agency_account": "एजन्सी खाते",
+    "udhaari_ledger": "उधारी खाते",
+    "fund_transfer": "फंड ट्रान्सफर",
+    "cheque_register": "चेक रजिस्टर",
+    "oil_company_ledger": "ऑयल कंपनी खाते",
+    "cash_reconciliation": "कॅश जुळवणी",
+    "fd_loans": "एफडी आणि कर्ज ट्रॅकर",
     
     "operations": "कामकाज",
     "accounts": "खाते",

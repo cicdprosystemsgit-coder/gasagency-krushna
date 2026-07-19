@@ -88,9 +88,10 @@ enum AdvanceStatus {
 }
 
 enum SalaryRequestStatus {
-  PENDING         // Awaiting admin approval
+  PENDING         // Awaiting manager approval (employee-initiated)
+  MANAGER_APPROVED // Manager approved, awaiting admin approval
   APPROVED        // Approved and processed
-  REJECTED        // Rejected by admin
+  REJECTED        // Rejected by admin or manager
 }
 
 enum LeaveType {
@@ -161,6 +162,7 @@ model Agency {
   vehicles           VehicleAgencyAsset[]
   gstInvoices        GstInvoice[]
   dailyClosings      DailyClosing[]
+  employeeClosings   DailyClosingEmployee[]
   deliveryVehicles   DeliveryVehicle[]
   vehicleTripLogs    VehicleTripLog[]
 
@@ -177,6 +179,8 @@ model Agency {
   attendanceRecords  Attendance[]
   paymentReceipts    PaymentReceipt[]
   documents          Document[]
+  attendanceRegularizations AttendanceRegularization[]
+  workShifts                WorkShift[]
 
   // Phase 3 relations
   branches           Branch[]
@@ -194,6 +198,16 @@ model Agency {
   enabledFeatures    String[]          @default([])
   companyPayments    CompanyPayment[]
   customRoles        CustomRole[]
+
+  // Personal Finance & Accounts relations
+  personalAccounts        PersonalAccount[]
+  personalTransactions    PersonalTransaction[]
+  personalUdhaaris        PersonalUdhaari[]
+  cheques                 ChequeRegister[]
+  oilCompanyLedgers       OilCompanyLedger[]
+  dailyCashReconciliations DailyCashReconciliation[]
+  fdLoans                 FdLoanRecord[]
+  vendorLedgers           VendorLedger[]
 }
 
 model User {
@@ -243,7 +257,9 @@ model User {
   expenses           Expense[]
   deliveries         DeliveryRecord[]
   creditEntries      CreditLedgerEntry[]
-  commercialSales    CommercialSale[]
+  employeeClosings   DailyClosingEmployee[] @relation("EmployeeClosings")
+  commercialSales          CommercialSale[]       @relation("CommercialSaleAddedBy")
+  commercialSaleDeliveries CommercialSale[]       @relation("CommercialSaleDeliveredBy")
   assignedVehicle    DeliveryVehicle?   @relation("AssignedDeliveryBoy")
   vehicleTripLogs    VehicleTripLog[]
   godownInventory    GodownInventory[]
@@ -253,6 +269,7 @@ model User {
   salaryRequestsAsEmployee  SalaryPaymentRequest[] @relation("SalaryRequestEmployee")
   salaryRequestsMade        SalaryPaymentRequest[] @relation("SalaryRequestedBy")
   salaryRequestsReviewed    SalaryPaymentRequest[] @relation("SalaryReviewedBy")
+  salaryRequestsManagerReviewed SalaryPaymentRequest[] @relation("SalaryManagerReviewer")
 
   // Leave management
   leaveRequests             LeaveRequest[]         @relation("EmployeeLeaves")
@@ -268,10 +285,22 @@ model User {
   attendance                Attendance[]
   collectedReceipts         PaymentReceipt[]
   uploadedDocuments         Document[]
+  regularizationRequests    AttendanceRegularization[] @relation("RegularizationEmployee")
+  reviewedRegularizations   AttendanceRegularization[] @relation("RegularizationReviewer")
 
-  // Phase 4 relations
   leaveBalances             LeaveBalance[]
   companyPayments           CompanyPayment[]
+
+  // Personal Finance & Accounts relations
+  personalAccounts         PersonalAccount[]
+  personalTransactions     PersonalTransaction[]
+  personalUdhaaris         PersonalUdhaari[]
+  udhaariRecoveries        UdhaariRecovery[]
+  cheques                  ChequeRegister[]
+  oilCompanyLedgers        OilCompanyLedger[]
+  dailyCashReconciliations DailyCashReconciliation[]
+  fdLoans                  FdLoanRecord[]
+  vendorLedgerEntries      VendorLedgerEntry[]
 }
 
 model Product {
@@ -308,11 +337,16 @@ model GodownInventory {
   product     Product         @relation(fields: [productId], references: [id])
   qty         Int
   batchNo     String?
+  invoiceNo   String?
+  invoiceDate DateTime?
   notes       String?
   recordedById String
   recordedBy  User            @relation(fields: [recordedById], references: [id])
   agencyId    String
   agency      Agency          @relation(fields: [agencyId], references: [id])
+  recordLat   Float?
+  recordLng   Float?
+  recordAccuracy Float?
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
 }
@@ -349,12 +383,20 @@ model GodownRecord {
   emptyCylindersReturned  Int
   items                   Json?          // Array of objects: { productId: string, productName: string, filledReceived: number, emptyReturned: number }
   notes                   String?
+  ervNo                   String?
+  ervDate                 DateTime?
   status                  ApprovalStatus @default(PENDING)
   submittedById           String
   submittedBy             User           @relation(fields: [submittedById], references: [id])
   agencyId                String
   agency                  Agency         @relation(fields: [agencyId], references: [id])
   approvedAt              DateTime?
+  entryLat                Float?
+  entryLng                Float?
+  entryAccuracy           Float?
+  exitLat                 Float?
+  exitLng                 Float?
+  exitAccuracy            Float?
   createdAt               DateTime       @default(now())
   updatedAt               DateTime       @updatedAt
 }
@@ -427,6 +469,9 @@ model DeliveryRecord {
   deliveredBy   User     @relation(fields: [deliveredById], references: [id])
   agencyId      String
   agency        Agency   @relation(fields: [agencyId], references: [id])
+  deliveryLat   Float?
+  deliveryLng   Float?
+  deliveryAccuracy Float?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 }
@@ -446,7 +491,9 @@ model CommercialSale {
   udhariPrev    Float    @default(0)
   balance       Float    @default(0)
   addedById     String
-  addedBy       User     @relation(fields: [addedById], references: [id])
+  addedBy       User     @relation("CommercialSaleAddedBy", fields: [addedById], references: [id])
+  deliveredById String?
+  deliveredBy   User?    @relation("CommercialSaleDeliveredBy", fields: [deliveredById], references: [id])
   agencyId      String
   agency        Agency   @relation(fields: [agencyId], references: [id])
   createdAt     DateTime @default(now())
@@ -566,21 +613,67 @@ model GstInvoice {
 }
 
 model DailyClosing {
-  id                String         @id @default(cuid())
-  date              DateTime
-  totalDeliveries   Int            @default(0)
-  totalCollection   Float          @default(0)
-  pendingDeliveries Int            @default(0)
-  returnedCylinders Int            @default(0)
-  cashOnHand        Float          @default(0)
-  notes             String?
-  status            ApprovalStatus @default(PENDING)
-  managerApprovedAt DateTime?
-  adminApprovedAt   DateTime?
-  agencyId          String
-  agency            Agency         @relation(fields: [agencyId], references: [id])
-  createdAt         DateTime       @default(now())
-  updatedAt         DateTime       @updatedAt
+  id                  String                 @id @default(cuid())
+  date                DateTime
+  totalDeliveries     Int                    @default(0)
+  totalCashCollected  Float                  @default(0)
+  totalOnlinePayment  Float                  @default(0)
+  totalUdhari         Float                  @default(0)
+  totalCollection     Float                  @default(0)  // cash + online
+  pendingDeliveries   Int                    @default(0)
+  returnedCylinders   Int                    @default(0)
+  kmBasedExtra        Float                  @default(0)
+  grandExpected       Float                  @default(0)
+  cashOnHand          Float                  @default(0)  // actual physical cash counted by manager
+  shortageAmount      Float                  @default(0)
+  excessAmount        Float                  @default(0)
+  cashVerified        Boolean                @default(false)
+  cashVerifiedById    String?
+  cashVerifiedAt      DateTime?
+  notes               String?
+  status              ApprovalStatus         @default(PENDING)
+  managerApprovedAt   DateTime?
+  adminApprovedAt     DateTime?
+  agencyId            String
+  agency              Agency                 @relation(fields: [agencyId], references: [id])
+  employeeClosings    DailyClosingEmployee[]
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
+}
+
+model DailyClosingEmployee {
+  id              String       @id @default(cuid())
+  dailyClosingId  String
+  dailyClosing    DailyClosing @relation(fields: [dailyClosingId], references: [id], onDelete: Cascade)
+  deliveryBoyId   String
+  deliveryBoy     User         @relation("EmployeeClosings", fields: [deliveryBoyId], references: [id])
+  agencyId        String
+  agency          Agency       @relation(fields: [agencyId], references: [id])
+
+  // Cylinder category breakdown (auto-fetched + manager-editable)
+  // Array: [{ productId, productName, soldQty, baseRate, kmRate, kmExtra, totalAmt }]
+  cylinderBreakdown Json       @default("[]")
+
+  // Summary fields
+  totalDelivered  Int          @default(0)
+  pendingQty      Int          @default(0)
+  returnedQty     Int          @default(0)
+  udhariAmount    Float        @default(0)
+  cashCollected   Float        @default(0)
+  onlineAmount    Float        @default(0)   // GPay/PhonePe/Paytm
+  kmBasedExtra    Float        @default(0)   // additional due to distance pricing
+  expectedTotal   Float        @default(0)   // system-calculated
+  actualCashGiven Float        @default(0)   // physically given to manager
+  shortageAmount  Float        @default(0)
+  excessAmount    Float        @default(0)
+  notes           String?
+
+  // Audit
+  fetchedFromDeliveries Boolean @default(true)
+  editedByManagerId     String?
+  editedAt              DateTime?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
 }
 
 model DemoRequest {
@@ -630,6 +723,12 @@ model VehicleTripLog {
   recordedBy           User            @relation(fields: [recordedById], references: [id])
   agencyId             String
   agency               Agency          @relation(fields: [agencyId], references: [id])
+  departureLat         Float?
+  departureLng         Float?
+  departureAccuracy    Float?
+  returnLat            Float?
+  returnLng            Float?
+  returnAccuracy       Float?
   createdAt            DateTime        @default(now())
   updatedAt            DateTime        @updatedAt
 }
@@ -683,7 +782,7 @@ model SalaryBonus {
   updatedAt  DateTime @updatedAt
 }
 
-/// Salary payment requests raised by manager, require admin approval before processing
+/// Salary payment requests raised by manager or employee, require approvals
 model SalaryPaymentRequest {
   id            String              @id @default(cuid())
   type          String              // SALARY | DRAWING | ADVANCE | ADVANCE_RECOVERY | BONUS
@@ -697,9 +796,18 @@ model SalaryPaymentRequest {
   remarks       String?
   requestedById String
   requestedBy   User                @relation("SalaryRequestedBy", fields: [requestedById], references: [id])
+  
+  // Manager review
+  managerReviewedById  String?
+  managerReviewedBy    User?        @relation("SalaryManagerReviewer", fields: [managerReviewedById], references: [id])
+  managerReviewNote    String?
+  managerReviewedAt    DateTime?
+
+  // Admin review
   reviewedById  String?
   reviewedBy    User?               @relation("SalaryReviewedBy", fields: [reviewedById], references: [id])
   reviewNote    String?
+  
   agencyId      String
   agency        Agency              @relation(fields: [agencyId], references: [id])
   createdAt     DateTime            @default(now())
@@ -919,6 +1027,10 @@ model Attendance {
   punchIn     DateTime?                   // When employee punched in
   punchOut    DateTime?                   // When employee punched out
   status      String   @default("PRESENT") // PRESENT | ABSENT | HALF_DAY | ON_LEAVE | HOLIDAY
+  punchInLat  Float?                      // GPS latitude at punch-in
+  punchInLng  Float?                      // GPS longitude at punch-in
+  punchOutLat Float?                      // GPS latitude at punch-out
+  punchOutLng Float?                      // GPS longitude at punch-out
   notes       String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -1135,4 +1247,368 @@ model CustomRole {
 
   @@unique([agencyId, name])
   @@index([agencyId])
+}
+
+model WorkShift {
+  id           String   @id @default(cuid())
+  agencyId     String
+  agency       Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  name         String   // "Morning Shift", "Full Day"
+  startTime    String   // "09:00" (HH:mm)
+  endTime      String   // "18:00"
+  gracePeriod  Int      @default(15) // minutes allowed before flagging late
+  isDefault    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([agencyId, name])
+  @@index([agencyId])
+}
+
+model AttendanceRegularization {
+  id                String    @id @default(cuid())
+  agencyId          String
+  agency            Agency    @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  employeeId        String
+  employee          User      @relation("RegularizationEmployee", fields: [employeeId], references: [id], onDelete: Cascade)
+  date              DateTime
+  reason            String    @db.Text
+  requestedPunchIn  DateTime?
+  requestedPunchOut DateTime?
+  status            String    @default("PENDING") // PENDING | APPROVED | REJECTED
+  reviewNote        String?
+  reviewedById      String?
+  reviewedBy        User?     @relation("RegularizationReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  reviewedAt        DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([agencyId, status])
+  @@index([employeeId])
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Personal Finance & Accounts Models
+// ═══════════════════════════════════════════════════════════════════════════════
+
+enum PersonalAccountType {
+  SAVINGS          // Savings bank account
+  CURRENT          // Current/business account
+  CASH             // Physical cash in hand
+  WALLET           // PhonePe / GPay / Paytm wallet
+  FD               // Fixed Deposit (non-liquid, for visibility only)
+  LOAN             // Outstanding personal loan
+}
+
+enum PersonalTxnType {
+  INCOME           // Money received (salary, rent, other income)
+  EXPENSE          // Money spent (personal purchase, utility)
+  PAID_TO          // Paid to a person / vendor (debit)
+  RECEIVED_FROM    // Received from a person (credit)
+  UDHAARI_GIVEN    // Lent money to someone (personal udhaari out)
+  UDHAARI_RECEIVED // Someone paid back (udhaari recovery)
+  TRANSFER_OUT     // Transferred to another account / agency
+  TRANSFER_IN      // Received transfer from another account / agency
+  AGENCY_DEPOSIT   // Owner deposited personal money into agency
+  AGENCY_WITHDRAWAL// Owner withdrew from agency funds
+}
+
+enum UdhaariStatus {
+  OUTSTANDING      // Not yet recovered
+  PARTIAL          // Partially recovered
+  SETTLED          // Fully settled
+  WRITTEN_OFF      // Bad debt — written off
+}
+
+enum ChequeStatus {
+  PENDING     // Not yet presented to bank
+  PRESENTED   // Submitted to bank for clearing
+  CLEARED     // Honoured — money debited
+  BOUNCED     // Returned / dishonoured
+  CANCELLED   // Voided before presentation
+}
+
+enum FdLoanType {
+  FIXED_DEPOSIT
+  RECURRING_DEPOSIT
+  PERSONAL_LOAN
+  BUSINESS_LOAN
+  VEHICLE_LOAN
+  HOME_LOAN
+  CC_LIMIT        // Credit card limit tracker
+}
+
+/// Owner's personal bank / cash account — e.g., SBI savings, HDFC current, Cash-in-Hand
+model PersonalAccount {
+  id            String              @id @default(cuid())
+  agencyId      String
+  agency        Agency              @relation(fields: [agencyId], references: [id])
+  ownerId       String                             // Always ADMIN user
+  owner         User                @relation(fields: [ownerId], references: [id])
+  name          String                             // e.g. "SBI Savings - 4521", "Cash in Hand"
+  accountType   PersonalAccountType
+  bankName      String?                            // e.g. SBI, HDFC, ICICI
+  accountNo     String?                            // Last 4 digits only for display
+  ifscCode      String?
+  openingBalance Float             @default(0)     // Balance at time of account creation
+  currentBalance Float             @default(0)     // Computed / manually tracked
+  isAgencyAccount Boolean          @default(false) // True = this is the official agency bank account
+  color         String?                            // UI color code for card
+  isActive      Boolean            @default(true)
+  notes         String?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  transactions  PersonalTransaction[]
+  udhaariGiven  PersonalUdhaari[]  @relation("UdhaariFromAccount")
+  udhaariReceived PersonalUdhaari[] @relation("UdhaariToAccount")
+
+  @@index([agencyId, ownerId])
+}
+
+/// Single financial transaction in any personal account
+model PersonalTransaction {
+  id            String            @id @default(cuid())
+  agencyId      String
+  agency        Agency            @relation(fields: [agencyId], references: [id])
+  accountId     String
+  account       PersonalAccount   @relation(fields: [accountId], references: [id])
+  date          DateTime
+  type          PersonalTxnType
+  amount        Float                              // Always positive; type determines direction
+  description   String
+  partyName     String?                            // Who you paid / received from
+  partyPhone    String?                            // Optional contact
+  paymentMode   String?                            // CASH | UPI | NEFT | CHEQUE | IMPS
+  referenceNo   String?                            // UTR / cheque no.
+  
+  // For agency-linked transactions
+  linkedModule  String?                            // "SALARY" | "EXPENSE" | "COMPANY_PAYMENT" | "TRANSFER"
+  linkedRecordId String?                           // ID of the linked record in operational module
+  toAccountId   String?                            // For TRANSFER_OUT: destination account ID
+  
+  // For udhaari-linked transactions
+  udhaariId     String?                            // Links to PersonalUdhaari record
+  
+  tags          String[]           @default([])    // Custom tags e.g. "festival", "petrol"
+  receiptBase64 String?            @db.Text        // Optional photo of receipt
+  notes         String?
+  
+  addedById     String
+  addedBy       User              @relation(fields: [addedById], references: [id])
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  @@index([agencyId, accountId, date])
+  @@index([date])
+}
+
+/// Personal Udhaari Ledger — money lent to or borrowed from individuals
+model PersonalUdhaari {
+  id              String         @id @default(cuid())
+  agencyId        String
+  agency          Agency         @relation(fields: [agencyId], references: [id])
+  partyName       String                          // Person's name
+  partyPhone      String?
+  partyRelation   String?                         // "Friend", "Relative", "Supplier", "Customer"
+  direction       String                          // "GIVEN" (I lent) | "TAKEN" (I borrowed)
+  totalAmount     Float                           // Original amount
+  recoveredAmount Float          @default(0)     // How much has been returned
+  balanceAmount   Float                           // Remaining
+  status          UdhaariStatus  @default(OUTSTANDING)
+  startDate       DateTime
+  dueDate         DateTime?                       // Expected settlement date
+  fromAccountId   String?                         // Account money was taken from (GIVEN)
+  fromAccount     PersonalAccount? @relation("UdhaariFromAccount", fields: [fromAccountId], references: [id])
+  toAccountId     String?                         // Account money was deposited to (TAKEN)
+  toAccount       PersonalAccount? @relation("UdhaariToAccount", fields: [toAccountId], references: [id])
+  reason          String?
+  notes           String?
+  addedById       String
+  addedBy         User           @relation(fields: [addedById], references: [id])
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  
+  recoveries      UdhaariRecovery[]
+  reminders       UdhaariReminder[]
+
+  @@index([agencyId, status])
+}
+
+/// Partial recovery record for personal udhaari
+model UdhaariRecovery {
+  id          String          @id @default(cuid())
+  udhaariId   String
+  udhaari     PersonalUdhaari @relation(fields: [udhaariId], references: [id])
+  date        DateTime
+  amount      Float
+  paymentMode String?         // CASH | UPI | BANK_TRANSFER
+  notes       String?
+  addedById   String
+  addedBy     User            @relation(fields: [addedById], references: [id])
+  createdAt   DateTime        @default(now())
+}
+
+model UdhaariReminder {
+  id          String          @id @default(cuid())
+  udhaariId   String
+  udhaari     PersonalUdhaari @relation(fields: [udhaariId], references: [id])
+  scheduledAt DateTime
+  channel     String          @default("WHATSAPP")  // WHATSAPP | SMS
+  message     String          @db.Text
+  status      String          @default("PENDING")   // PENDING | SENT | FAILED
+  sentAt      DateTime?
+  errorMsg    String?
+  createdAt   DateTime        @default(now())
+}
+
+model ChequeRegister {
+  id                     String       @id @default(cuid())
+  agencyId               String
+  agency                 Agency       @relation(fields: [agencyId], references: [id])
+  chequeNo               String
+  bankName               String                          // Bank cheque drawn on
+  accountId              String?                         // Linked PersonalAccount
+  chequeDate             DateTime                        // PDC date written on cheque
+  amount                 Float
+  payeeName              String                          // HP / Indane / vendor / person
+  purpose                String?
+  status                 ChequeStatus @default(PENDING)
+  presentedDate          DateTime?
+  clearedDate            DateTime?
+  bounceReason           String?
+  linkedCompanyPaymentId String?
+  notes                  String?
+  addedById              String
+  addedBy                User         @relation(fields: [addedById], references: [id])
+  createdAt              DateTime     @default(now())
+  updatedAt              DateTime     @updatedAt
+
+  @@index([agencyId, status])
+  @@index([chequeDate])
+}
+
+model OilCompanyLedger {
+  id                     String   @id @default(cuid())
+  agencyId               String
+  agency                 Agency   @relation(fields: [agencyId], references: [id])
+  oilCompany             String   // HP | INDANE | BHARATGAS
+  date                   DateTime
+  type                   String   // INVOICE | PAYMENT | ADJUSTMENT
+  invoiceNo              String?
+  amount                 Float    // Positive = payable, Negative = payment made
+  description            String?
+  linkedCompanyPaymentId String?  // FK to CompanyPayment
+  addedById              String
+  addedBy                User     @relation(fields: [addedById], references: [id])
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  @@index([agencyId, oilCompany])
+}
+
+model DailyCashReconciliation {
+  id                 String   @id @default(cuid())
+  agencyId           String
+  agency             Agency   @relation(fields: [agencyId], references: [id])
+  date               DateTime
+  openingCash        Float    @default(0)  // Cash at start of day
+  cashFromDeliveries Float    @default(0)  // Auto-pulled from DailyClosing
+  cashFromOffice     Float    @default(0)  // Office transaction cash
+  cashExpenses       Float    @default(0)  // Cash expenses paid today
+  cashSalaries       Float    @default(0)  // Salaries paid in cash today
+  cashDeposited      Float    @default(0)  // Deposited to bank today
+  expectedClosing    Float    @default(0)  // Computed: opening + in - out
+  actualClosing      Float    @default(0)  // Owner manually enters physical count
+  variance           Float    @default(0)  // Difference (shortage/excess)
+  varianceReason     String?
+  status             String   @default("OPEN")  // OPEN | RECONCILED | DISCREPANCY
+  reconciledById     String?
+  reconciledBy       User?    @relation(fields: [reconciledById], references: [id])
+  reconciledAt       DateTime?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@unique([agencyId, date])
+  @@index([agencyId, date])
+}
+
+model FdLoanRecord {
+  id              String      @id @default(cuid())
+  agencyId        String
+  agency          Agency      @relation(fields: [agencyId], references: [id])
+  type            FdLoanType
+  bankName        String
+  accountRef      String?     // FD receipt no. / loan account no.
+  principalAmount Float
+  interestRate    Float       // % per annum
+  startDate       DateTime
+  maturityDate    DateTime?   // FD/RD maturity
+  emiAmount       Float?      // Monthly EMI for loans
+  emiDay          Int?        // Day of month EMI due (1–31)
+  currentValue    Float?      // FD maturity value or loan outstanding
+  isActive        Boolean     @default(true)
+  notes           String?
+  addedById       String
+  addedBy         User        @relation(fields: [addedById], references: [id])
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  emiPayments     EmiPayment[]
+  @@index([agencyId, type])
+}
+
+model EmiPayment {
+  id          String       @id @default(cuid())
+  recordId    String
+  record      FdLoanRecord @relation(fields: [recordId], references: [id])
+  dueDate     DateTime
+  paidDate    DateTime?
+  amount      Float
+  isPaid      Boolean      @default(false)
+  penaltyAmt  Float        @default(0)
+  linkedTxnId String?      // FK to PersonalTransaction
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@index([recordId, isPaid])
+}
+
+model VendorLedger {
+  id             String            @id @default(cuid())
+  agencyId       String
+  agency         Agency            @relation(fields: [agencyId], references: [id])
+  vendorName     String
+  vendorPhone    String?
+  vendorType     String            // OIL_COMPANY | REGULATOR | PIPE | MAINTENANCE | OTHER
+  gstNo          String?
+  openingBalance Float             @default(0)   // Positive = we owe them
+  currentBalance Float             @default(0)
+  creditLimit    Float?
+  notes          String?
+  isActive       Boolean           @default(true)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  entries        VendorLedgerEntry[]
+  @@index([agencyId, vendorType])
+}
+
+model VendorLedgerEntry {
+  id          String       @id @default(cuid())
+  vendorId    String
+  vendor      VendorLedger @relation(fields: [vendorId], references: [id])
+  date        DateTime
+  type        String       // PURCHASE | PAYMENT | RETURN | ADJUSTMENT
+  amount      Float
+  invoiceNo   String?
+  description String?
+  paymentMode String?
+  linkedTxnId String?      // FK to PersonalTransaction
+  addedById   String
+  addedBy     User         @relation(fields: [addedById], references: [id])
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@index([vendorId, date])
 }

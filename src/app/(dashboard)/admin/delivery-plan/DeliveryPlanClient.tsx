@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import dynamic from "next/dynamic";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { formatCurrency } from "@/lib/utils";
 import {
@@ -13,10 +14,21 @@ import {
   Layers,
   UserCheck,
   ToggleLeft,
+  Map,
+  List,
+  Navigation,
 } from "lucide-react";
+
+const AdminDeliveryMap = dynamic(
+  () => import("@/components/attendance/AdminDeliveryMap"),
+  { ssr: false }
+);
 
 interface Delivery {
   id: string;
+  date: string | Date;
+  createdAt: string | Date;
+  notes: string | null;
   deliveredQty: number;
   returnedQty: number;
   pendingQty: number;
@@ -36,19 +48,25 @@ interface Delivery {
   deliveredBy: {
     name: string;
   };
+  deliveryLat: number | null;
+  deliveryLng: number | null;
+  deliveryAccuracy: number | null;
 }
 
 interface DeliveryPlanClientProps {
   deliveries: Delivery[];
+  selectedDate: string;
 }
 
-export function DeliveryPlanClient({ deliveries }: DeliveryPlanClientProps) {
+export function DeliveryPlanClient({ deliveries, selectedDate }: DeliveryPlanClientProps) {
   // Filters state
+  const [viewMode, setViewMode] = useState<"list" | "map">("list");
   const [searchQuery, setSearchQuery] = useState("");
   const [productFilter, setProductFilter] = useState("ALL");
   const [deliveryBoyFilter, setDeliveryBoyFilter] = useState("ALL");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [paymentFilter, setPaymentFilter] = useState("ALL");
+  const [gpsFilter, setGpsFilter] = useState("ALL"); // ALL | WITH_GPS | NO_GPS
 
   // Get unique lists for filter options based on current date's deliveries
   const productOptions = useMemo(() => {
@@ -88,15 +106,22 @@ export function DeliveryPlanClient({ deliveries }: DeliveryPlanClientProps) {
       const matchesStatus = statusFilter === "ALL" || d.status === statusFilter;
       const matchesPayment = paymentFilter === "ALL" || d.paymentMode === paymentFilter;
 
+      const hasGps = d.deliveryLat !== null && d.deliveryLng !== null;
+      const matchesGps =
+        gpsFilter === "ALL" ||
+        (gpsFilter === "WITH_GPS" && hasGps) ||
+        (gpsFilter === "NO_GPS" && !hasGps);
+
       return (
         matchesSearch &&
         matchesProduct &&
         matchesDeliveryBoy &&
         matchesStatus &&
-        matchesPayment
+        matchesPayment &&
+        matchesGps
       );
     });
-  }, [deliveries, searchQuery, productFilter, deliveryBoyFilter, statusFilter, paymentFilter]);
+  }, [deliveries, searchQuery, productFilter, deliveryBoyFilter, statusFilter, paymentFilter, gpsFilter]);
 
   // Calculations for filtered statistics
   const totalDelivered = useMemo(() => {
@@ -156,7 +181,8 @@ export function DeliveryPlanClient({ deliveries }: DeliveryPlanClientProps) {
     productFilter !== "ALL" ||
     deliveryBoyFilter !== "ALL" ||
     statusFilter !== "ALL" ||
-    paymentFilter !== "ALL";
+    paymentFilter !== "ALL" ||
+    gpsFilter !== "ALL";
 
   const clearFilters = () => {
     setSearchQuery("");
@@ -164,6 +190,7 @@ export function DeliveryPlanClient({ deliveries }: DeliveryPlanClientProps) {
     setDeliveryBoyFilter("ALL");
     setStatusFilter("ALL");
     setPaymentFilter("ALL");
+    setGpsFilter("ALL");
   };
 
   return (
@@ -209,7 +236,7 @@ export function DeliveryPlanClient({ deliveries }: DeliveryPlanClientProps) {
           )}
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3.5">
           {/* Search Input */}
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -303,126 +330,190 @@ export function DeliveryPlanClient({ deliveries }: DeliveryPlanClientProps) {
               ))}
             </select>
           </div>
+
+          {/* GPS Tracking Dropdown */}
+          <div className="relative">
+            <Navigation className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <select
+              value={gpsFilter}
+              onChange={(e) => setGpsFilter(e.target.value)}
+              className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50/50 appearance-none font-semibold text-slate-700"
+            >
+              <option value="ALL">All GPS Logs</option>
+              <option value="WITH_GPS">With GPS Coordinates</option>
+              <option value="NO_GPS">No GPS logs / Offline</option>
+            </select>
+          </div>
         </div>
       </div>
 
-      {/* Deliveries Table Card */}
+      {/* Deliveries Table/Map Card */}
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 bg-slate-50/20">
           <h2 className="font-bold text-slate-800 flex items-center gap-2 text-sm">
             <Users className="w-4 h-4 text-blue-600" />
             Deliveries List ({filteredDeliveries.length} records)
           </h2>
+          <div className="flex bg-slate-100 p-0.5 rounded-lg border border-slate-200">
+            <button
+              onClick={() => setViewMode("list")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${
+                viewMode === "list"
+                  ? "bg-white text-blue-600 shadow-sm"
+                  : "text-slate-600 hover:text-slate-800"
+              }`}
+            >
+              <List className="w-3.5 h-3.5" /> List View
+            </button>
+            <button
+              onClick={() => setViewMode("map")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${
+                viewMode === "map"
+                  ? "bg-white text-blue-600 shadow-sm"
+                  : "text-slate-600 hover:text-slate-800"
+              }`}
+            >
+              <Map className="w-3.5 h-3.5" /> Map View
+            </button>
+          </div>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-slate-50/80 border-b border-slate-100 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                <th className="px-5 py-3.5 text-left font-semibold">Customer</th>
-                <th className="px-5 py-3.5 text-left font-semibold">Product</th>
-                <th className="px-5 py-3.5 text-center font-semibold w-24">Delivered</th>
-                <th className="px-5 py-3.5 text-center font-semibold w-24">Returned</th>
-                <th className="px-5 py-3.5 text-center font-semibold w-24">Pending</th>
-                <th className="px-5 py-3.5 text-right font-semibold w-28">Cash</th>
-                <th className="px-5 py-3.5 text-right font-semibold w-28">Online</th>
-                <th className="px-5 py-3.5 text-right font-semibold w-28">Udhari</th>
-                <th className="px-5 py-3.5 text-left font-semibold">Delivery Boy</th>
-                <th className="px-5 py-3.5 text-left font-semibold">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {filteredDeliveries.length === 0 ? (
-                <tr>
-                  <td colSpan={10} className="px-5 py-16 text-center text-slate-400">
-                    <Truck className="w-12 h-12 mx-auto mb-3 opacity-20" />
-                    <p className="font-semibold text-slate-600">No records found matching filters</p>
-                    <p className="text-xs text-slate-400 mt-1">Try relaxing your search terms or clearing the dropdown selections</p>
-                  </td>
+
+        {viewMode === "map" ? (
+          <div className="p-4 bg-slate-50/20">
+            <AdminDeliveryMap
+              initialDeliveries={filteredDeliveries}
+              initialLiveLocations={[]}
+              initialAttendance={[]}
+              selectedDate={selectedDate}
+            />
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-slate-50/80 border-b border-slate-100 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                  <th className="px-5 py-3.5 text-left font-semibold">Customer</th>
+                  <th className="px-5 py-3.5 text-left font-semibold">Product</th>
+                  <th className="px-5 py-3.5 text-center font-semibold w-24">Delivered</th>
+                  <th className="px-5 py-3.5 text-center font-semibold w-24">Returned</th>
+                  <th className="px-5 py-3.5 text-center font-semibold w-24">Pending</th>
+                  <th className="px-5 py-3.5 text-right font-semibold w-28">Cash</th>
+                  <th className="px-5 py-3.5 text-right font-semibold w-28">Online</th>
+                  <th className="px-5 py-3.5 text-right font-semibold w-28">Udhari</th>
+                  <th className="px-5 py-3.5 text-left font-semibold">Delivery Boy</th>
+                  <th className="px-5 py-3.5 text-center font-semibold w-20">GPS</th>
+                  <th className="px-5 py-3.5 text-left font-semibold">Status</th>
                 </tr>
-              ) : (
-                filteredDeliveries.map((d) => {
-                  const isDom = d.customer.type === "DOMESTIC";
-                  const isPartial = d.paymentMode === "PARTIAL";
-                  const isCredit = d.paymentMode === "CREDIT";
-                  const isCash = d.paymentMode === "CASH";
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {filteredDeliveries.length === 0 ? (
+                  <tr>
+                    <td colSpan={11} className="px-5 py-16 text-center text-slate-400">
+                      <Truck className="w-12 h-12 mx-auto mb-3 opacity-20" />
+                      <p className="font-semibold text-slate-600">No records found matching filters</p>
+                      <p className="text-xs text-slate-400 mt-1">Try relaxing your search terms or clearing the dropdown selections</p>
+                    </td>
+                  </tr>
+                ) : (
+                  filteredDeliveries.map((d) => {
+                    const isDom = d.customer.type === "DOMESTIC";
+                    const isPartial = d.paymentMode === "PARTIAL";
+                    const isCredit = d.paymentMode === "CREDIT";
+                    const isCash = d.paymentMode === "CASH";
 
-                  let cashVal = 0;
-                  let onlineVal = 0;
-                  let creditVal = 0;
+                    let cashVal = 0;
+                    let onlineVal = 0;
+                    let creditVal = 0;
 
-                  if (isCash) {
-                    cashVal = d.cashCollected;
-                  } else if (isCredit) {
-                    creditVal = d.creditAmount || 0;
-                  } else if (isPartial) {
-                    cashVal = d.cashCollected;
-                    if (isDom) {
-                      onlineVal = d.creditAmount || 0;
-                    } else {
+                    if (isCash) {
+                      cashVal = d.cashCollected;
+                    } else if (isCredit) {
                       creditVal = d.creditAmount || 0;
+                    } else if (isPartial) {
+                      cashVal = d.cashCollected;
+                      if (isDom) {
+                        onlineVal = d.creditAmount || 0;
+                      } else {
+                        creditVal = d.creditAmount || 0;
+                      }
+                    } else {
+                      onlineVal = d.cashCollected;
                     }
-                  } else {
-                    onlineVal = d.cashCollected;
-                  }
 
-                  return (
-                    <tr key={d.id} className="hover:bg-slate-50/40 transition-colors">
-                      <td className="px-5 py-3.5">
-                        <p className="font-bold text-slate-800 text-[13px]">{d.customer.name}</p>
-                        <p className="text-xs text-slate-400 mt-0.5">{d.customer.phone}</p>
-                      </td>
-                      <td className="px-5 py-3.5 text-slate-600 font-medium text-[13px]">{d.product.name}</td>
-                      <td className="px-5 py-3.5 text-center font-bold text-blue-700 text-[14px]">
-                        {d.deliveredQty}
-                      </td>
-                      <td className="px-5 py-3.5 text-center text-slate-600 font-medium text-[13px]">
-                        {d.returnedQty}
-                      </td>
-                      <td className="px-5 py-3.5 text-center text-orange-600 font-bold text-[13px]">
-                        {d.pendingQty}
-                      </td>
-                      <td className="px-5 py-3.5 text-right font-bold text-green-700">
-                        {cashVal > 0 ? formatCurrency(cashVal) : "—"}
-                      </td>
-                      <td className="px-5 py-3.5 text-right font-bold text-purple-700">
-                        {onlineVal > 0 ? formatCurrency(onlineVal) : "—"}
-                      </td>
-                      <td className="px-5 py-3.5 text-right font-bold text-amber-700">
-                        {creditVal > 0 ? formatCurrency(creditVal) : "—"}
-                      </td>
-                      <td className="px-5 py-3.5 text-slate-600 font-medium text-[13px]">{d.deliveredBy.name}</td>
-                      <td className="px-5 py-3.5">
-                        <StatusBadge status={d.status} />
-                      </td>
-                    </tr>
-                  );
-                })
+                    return (
+                      <tr key={d.id} className="hover:bg-slate-50/40 transition-colors">
+                        <td className="px-5 py-3.5">
+                          <p className="font-bold text-slate-800 text-[13px]">{d.customer.name}</p>
+                          <p className="text-xs text-slate-400 mt-0.5">{d.customer.phone}</p>
+                        </td>
+                        <td className="px-5 py-3.5 text-slate-600 font-medium text-[13px]">{d.product.name}</td>
+                        <td className="px-5 py-3.5 text-center font-bold text-blue-700 text-[14px]">
+                          {d.deliveredQty}
+                        </td>
+                        <td className="px-5 py-3.5 text-center text-slate-600 font-medium text-[13px]">
+                          {d.returnedQty}
+                        </td>
+                        <td className="px-5 py-3.5 text-center text-orange-600 font-bold text-[13px]">
+                          {d.pendingQty}
+                        </td>
+                        <td className="px-5 py-3.5 text-right font-bold text-green-700">
+                          {cashVal > 0 ? formatCurrency(cashVal) : "—"}
+                        </td>
+                        <td className="px-5 py-3.5 text-right font-bold text-purple-700">
+                          {onlineVal > 0 ? formatCurrency(onlineVal) : "—"}
+                        </td>
+                        <td className="px-5 py-3.5 text-right font-bold text-amber-700">
+                          {creditVal > 0 ? formatCurrency(creditVal) : "—"}
+                        </td>
+                        <td className="px-5 py-3.5 text-slate-600 font-medium text-[13px]">{d.deliveredBy.name}</td>
+                        <td className="px-5 py-3.5 text-center">
+                          {d.deliveryLat && d.deliveryLng ? (
+                            <a
+                              href={`https://www.google.com/maps?q=${d.deliveryLat},${d.deliveryLng}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center justify-center p-1 rounded bg-emerald-50 hover:bg-emerald-100 transition border border-emerald-200"
+                              title={`Accuracy: ±${d.deliveryAccuracy?.toFixed(0)}m`}
+                            >
+                              <Navigation className="w-3.5 h-3.5 style={{ color: '#16A34A' }}" />
+                            </a>
+                          ) : (
+                            <span className="text-slate-300 font-bold">—</span>
+                          )}
+                        </td>
+                        <td className="px-5 py-3.5">
+                          <StatusBadge status={d.status} />
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+              {filteredDeliveries.length > 0 && (
+                <tfoot>
+                  <tr className="bg-slate-50/50 border-t border-slate-200 font-extrabold text-slate-800 text-[13px]">
+                    <td colSpan={2} className="px-5 py-4 text-slate-500 font-semibold uppercase tracking-wider">
+                      Total
+                    </td>
+                    <td className="px-5 py-4 text-center text-blue-700 text-[15px]">{totalDelivered}</td>
+                    <td className="px-5 py-4 text-center text-slate-600 text-[14px]">{totalReturned}</td>
+                    <td className="px-5 py-4 text-center text-orange-600 text-[14px]">{totalPending}</td>
+                    <td className="px-5 py-4 text-right text-green-700 text-[14px]">
+                      {totals.cash > 0 ? formatCurrency(totals.cash) : "—"}
+                    </td>
+                    <td className="px-5 py-4 text-right text-purple-700 text-[14px]">
+                      {totals.online > 0 ? formatCurrency(totals.online) : "—"}
+                    </td>
+                    <td className="px-5 py-4 text-right text-amber-700 text-[14px]">
+                      {totals.udhari > 0 ? formatCurrency(totals.udhari) : "—"}
+                    </td>
+                    <td colSpan={3} />
+                  </tr>
+                </tfoot>
               )}
-            </tbody>
-            {filteredDeliveries.length > 0 && (
-              <tfoot>
-                <tr className="bg-slate-50/50 border-t border-slate-200 font-extrabold text-slate-800 text-[13px]">
-                  <td colSpan={2} className="px-5 py-4 text-slate-500 font-semibold uppercase tracking-wider">
-                    Total
-                  </td>
-                  <td className="px-5 py-4 text-center text-blue-700 text-[15px]">{totalDelivered}</td>
-                  <td className="px-5 py-4 text-center text-slate-600 text-[14px]">{totalReturned}</td>
-                  <td className="px-5 py-4 text-center text-orange-600 text-[14px]">{totalPending}</td>
-                  <td className="px-5 py-4 text-right text-green-700 text-[14px]">
-                    {totals.cash > 0 ? formatCurrency(totals.cash) : "—"}
-                  </td>
-                  <td className="px-5 py-4 text-right text-purple-700 text-[14px]">
-                    {totals.online > 0 ? formatCurrency(totals.online) : "—"}
-                  </td>
-                  <td className="px-5 py-4 text-right text-amber-700 text-[14px]">
-                    {totals.udhari > 0 ? formatCurrency(totals.udhari) : "—"}
-                  </td>
-                  <td colSpan={2} />
-                </tr>
-              </tfoot>
-            )}
-          </table>
-        </div>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );

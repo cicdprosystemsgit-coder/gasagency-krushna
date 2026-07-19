@@ -3,11 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Warehouse } from "lucide-react";
-import { GodownClient } from "@/app/(dashboard)/admin/godown/GodownClient";
-import { InternalVehiclesClient } from "@/app/(dashboard)/admin/godown/InternalVehiclesClient";
-
+import { GodownTabsContainer } from "@/app/(dashboard)/admin/godown/GodownTabsContainer";
 import { getAgencyTodayRange } from "@/lib/utils";
-
 import { checkPermission } from "@/lib/rbac";
 
 export default async function ManagerGodownPage() {
@@ -19,7 +16,15 @@ export default async function ManagerGodownPage() {
 
   const { todayStart, todayEnd } = getAgencyTodayRange();
 
-  const [records, totals, deliveryVehicles, deliveryBoys, todayTripLogs, cylinderTypes] = await Promise.all([
+  const [
+    records,
+    totals,
+    deliveryVehicles,
+    deliveryBoys,
+    todayTripLogs,
+    cylinderTypes,
+    todayMovements,
+  ] = await Promise.all([
     prisma.godownRecord.findMany({
       where: { agencyId: session.agencyId! },
       orderBy: { entryDate: "desc" },
@@ -53,47 +58,41 @@ export default async function ManagerGodownPage() {
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     }),
+    prisma.godownInventory.findMany({
+      where: { agencyId: session.agencyId!, date: { gte: todayStart, lte: todayEnd } },
+      orderBy: { date: "desc" },
+      include: {
+        product: { select: { name: true } },
+        recordedBy: { select: { name: true } },
+      },
+    }),
   ]);
+
+  const todayStr = new Date().toISOString().slice(0, 10);
 
   return (
     <div>
       <PageHeader
         title="Godown Management"
-        subtitle="Review company vehicle entries and manage internal delivery fleet"
+        subtitle="Review company vehicle entries, manage internal delivery fleet, and view live GPS tracking"
         icon={<Warehouse className="w-5 h-5" />}
       />
 
-      <div className="mb-2">
-        <div className="flex items-center gap-2 mb-4">
-          <div className="w-2 h-2 rounded-full" style={{ background: "#2563EB" }} />
-          <p className="text-[13px] font-semibold uppercase tracking-wide" style={{ color: "#52525B" }}>Company Supply Vehicle (Bharat Gas)</p>
-        </div>
-        <GodownClient
-          initialRecords={records as Parameters<typeof GodownClient>[0]["initialRecords"]}
-          totalFilled={totals._sum.filledCylindersReceived ?? 0}
-          totalEmpty={totals._sum.emptyCylindersReturned ?? 0}
-          isAdmin={true}
-          userId={session.userId}
-          cylinderTypes={cylinderTypes}
-        />
-      </div>
-
-      <div className="my-8" style={{ borderTop: "2px dashed #E4E4E7" }} />
-
-      <div>
-        <div className="flex items-center gap-2 mb-4">
-          <div className="w-2 h-2 rounded-full" style={{ background: "#16A34A" }} />
-          <p className="text-[13px] font-semibold uppercase tracking-wide" style={{ color: "#52525B" }}>Internal Delivery Fleet</p>
-        </div>
-        <InternalVehiclesClient
-          initialVehicles={deliveryVehicles as Parameters<typeof InternalVehiclesClient>[0]["initialVehicles"]}
-          initialTripLogs={todayTripLogs as Parameters<typeof InternalVehiclesClient>[0]["initialTripLogs"]}
-          deliveryBoys={deliveryBoys}
-          isAdmin={false}
-          userId={session.userId}
-          cylinderTypes={cylinderTypes}
-        />
-      </div>
+      <GodownTabsContainer
+        initialRecords={records}
+        totalFilled={totals._sum.filledCylindersReceived ?? 0}
+        totalEmpty={totals._sum.emptyCylindersReturned ?? 0}
+        deliveryVehicles={deliveryVehicles}
+        deliveryBoys={deliveryBoys}
+        todayTripLogs={todayTripLogs}
+        cylinderTypes={cylinderTypes}
+        isAdmin={false}
+        userId={session.userId}
+        mapRecords={records}
+        mapTrips={todayTripLogs}
+        mapMovements={todayMovements}
+        selectedDate={todayStr}
+      />
     </div>
   );
 }

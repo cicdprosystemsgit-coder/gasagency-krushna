@@ -11,7 +11,7 @@ export default async function StaffMySalaryPage() {
   const session = await getSession();
   if (!session || session.role !== "STAFF" || !session.agencyId) redirect("/login");
 
-  const { profile, drawings, advances, bonuses, agency } = await fetchMySalaryData(session.userId, session.agencyId);
+  const { profile, drawings, advances, bonuses, requests, agency } = await fetchMySalaryData(session.userId, session.agencyId);
 
   return (
     <div>
@@ -25,6 +25,8 @@ export default async function StaffMySalaryPage() {
         drawings={drawings}
         advances={advances}
         bonuses={bonuses}
+        requests={requests}
+        employeeId={session.userId}
         employeeName={session.name ?? ""}
         agencyName={agency?.name ?? ""}
         agencyAddress={[agency?.address, agency?.city, agency?.state].filter(Boolean).join(", ")}

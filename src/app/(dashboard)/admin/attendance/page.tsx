@@ -26,11 +26,48 @@ export default async function AttendancePage({ searchParams }: PageProps) {
     orderBy: { name: "asc" },
   });
 
+  // Get regularizations
+  const regularizations = await prisma.attendanceRegularization.findMany({
+    where: { agencyId: session.agencyId },
+    include: {
+      employee: { select: { name: true, role: true } },
+      reviewedBy: { select: { name: true } },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  // Get work shifts
+  const shifts = await prisma.workShift.findMany({
+    where: { agencyId: session.agencyId },
+    orderBy: { name: "asc" },
+  });
+
+  // Get current month attendance
+  const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+  const monthAttendance = await prisma.attendance.findMany({
+    where: {
+      agencyId: session.agencyId,
+      date: { gte: startOfMonth },
+    },
+    select: {
+      id: true,
+      employeeId: true,
+      date: true,
+      status: true,
+      punchIn: true,
+      punchOut: true,
+    },
+    orderBy: { date: "asc" },
+  });
+
   return (
     <AttendancePageClient
       todayData={today.data ?? []}
       employees={employees}
       selectedDate={selectedDate}
+      regularizations={JSON.parse(JSON.stringify(regularizations))}
+      shifts={JSON.parse(JSON.stringify(shifts))}
+      monthAttendance={JSON.parse(JSON.stringify(monthAttendance))}
     />
   );
 }

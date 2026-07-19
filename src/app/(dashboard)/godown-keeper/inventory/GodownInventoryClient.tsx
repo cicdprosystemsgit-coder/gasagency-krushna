@@ -1,13 +1,17 @@
 "use client";
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect, useCallback } from "react";
 import { Modal } from "@/components/ui/Modal";
-import { Package, ArrowDownToLine, ArrowUpFromLine, Pencil, Trash2, Plus, Boxes, Calendar, TrendingUp, TrendingDown } from "lucide-react";
+import { Package, ArrowDownToLine, ArrowUpFromLine, Pencil, Trash2, Plus, Boxes, Calendar, TrendingUp, TrendingDown, Navigation, FileText } from "lucide-react";
 import { receiveGodownStock, dispatchToOffice, updateGodownMovement, deleteGodownMovement } from "@/app/actions/godown-inventory";
+import { useGodownGps } from "@/hooks/useGodownGps";
+import { GpsStatusBox } from "@/components/ui/GpsStatusBox";
+import { CustomSelect } from "@/components/ui/CustomSelect";
 
 interface Movement {
   id: string; date: Date | string; moveType: "RECEIVED" | "DISPATCHED";
-  qty: number; batchNo: string | null; notes: string | null;
+  qty: number; batchNo: string | null; invoiceNo: string | null; invoiceDate: Date | string | null; notes: string | null;
   product: { id: string; name: string }; recordedBy: { name: string };
+  recordLat?: number | null; recordLng?: number | null; recordAccuracy?: number | null;
 }
 interface Product { id: string; name: string; }
 
@@ -21,7 +25,17 @@ function computeStock(movements: Movement[]) {
   return Object.entries(map).map(([id, v]) => ({ id, ...v, available: v.received - v.dispatched }));
 }
 
-const blankForm = { productId: "", qty: "", batchNo: "", notes: "", date: new Date().toISOString().slice(0, 10) };
+// Helper to get current datetime string in local timezone (YYYY-MM-DDTHH:mm)
+function getLocalDateTimeString(d: Date = new Date()) {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  const hours = String(d.getHours()).padStart(2, "0");
+  const minutes = String(d.getMinutes()).padStart(2, "0");
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
+
+const blankForm = () => ({ productId: "", qty: "", batchNo: "", invoiceNo: "", invoiceDate: "", notes: "", date: getLocalDateTimeString() });
 
 export function GodownInventoryClient({ initialMovements, products, userId }: {
   initialMovements: Movement[]; products: Product[]; userId: string;
@@ -30,17 +44,42 @@ export function GodownInventoryClient({ initialMovements, products, userId }: {
   const [view, setView] = useState<"stock" | "history">("stock");
   const [modalType, setModalType] = useState<"receive" | "dispatch" | "edit" | null>(null);
   const [editTarget, setEditTarget] = useState<Movement | null>(null);
-  const [form, setForm] = useState(blankForm);
+  const [form, setForm] = useState(blankForm());
   const [error, setError] = useState("");
   const [isPending, startTransition] = useTransition();
 
   const stock = computeStock(movements);
 
-  function openReceive() { setForm(blankForm); setError(""); setEditTarget(null); setModalType("receive"); }
-  function openDispatch() { setForm(blankForm); setError(""); setEditTarget(null); setModalType("dispatch"); }
+  const gps = useGodownGps();
+
+  useEffect(() => {
+    if (modalType === "receive" || modalType === "dispatch") {
+      gps.captureGps();
+    } else {
+      gps.resetGps();
+    }
+  }, [modalType, gps.captureGps, gps.resetGps]);
+
+  // Real-time date refresh: whenever a new/receive/dispatch modal opens, reset to current date
+  function openReceive() {
+    setForm(blankForm()); // freshly computed with current local datetime
+    setError(""); setEditTarget(null); setModalType("receive");
+  }
+  function openDispatch() {
+    setForm(blankForm()); // freshly computed with current local datetime
+    setError(""); setEditTarget(null); setModalType("dispatch");
+  }
   function openEdit(m: Movement) {
     setEditTarget(m);
-    setForm({ productId: m.product.id, qty: String(m.qty), batchNo: m.batchNo ?? "", notes: m.notes ?? "", date: new Date(m.date).toISOString().slice(0, 10) });
+    setForm({
+      productId: m.product.id,
+      qty: String(m.qty),
+      batchNo: m.batchNo ?? "",
+      invoiceNo: m.invoiceNo ?? "",
+      invoiceDate: m.invoiceDate ? new Date(m.invoiceDate).toISOString().slice(0, 10) : "",
+      notes: m.notes ?? "",
+      date: getLocalDateTimeString(new Date(m.date)),
+    });
     setError(""); setModalType("edit");
   }
 
@@ -50,11 +89,26 @@ export function GodownInventoryClient({ initialMovements, products, userId }: {
     const fd = new FormData();
     Object.entries(form).forEach(([k, v]) => fd.append(k, v));
     fd.append("recordedById", userId);
+
+    if (modalType === "receive" || modalType === "dispatch") {
+      if (gps.gps.lat !== null) fd.append("recordLat", String(gps.gps.lat));
+      if (gps.gps.lng !== null) fd.append("recordLng", String(gps.gps.lng));
+      if (gps.gps.accuracy !== null) fd.append("recordAccuracy", String(gps.gps.accuracy));
+    }
+
     startTransition(async () => {
       if (modalType === "edit" && editTarget) {
         const res = await updateGodownMovement(editTarget.id, fd);
         if (res.error) { setError(res.error); return; }
-        setMovements(p => p.map(m => m.id === editTarget.id ? { ...m, qty: Number(form.qty), batchNo: form.batchNo || null, notes: form.notes || null, date: new Date(form.date) } : m));
+        setMovements(p => p.map(m => m.id === editTarget.id ? {
+          ...m,
+          qty: Number(form.qty),
+          batchNo: form.batchNo || null,
+          invoiceNo: form.invoiceNo || null,
+          invoiceDate: form.invoiceDate ? new Date(form.invoiceDate) : null,
+          notes: form.notes || null,
+          date: new Date(form.date),
+        } : m));
       } else if (modalType === "receive") {
         if (!form.productId) { setError("Select a product"); return; }
         const res = await receiveGodownStock(fd);
@@ -194,7 +248,7 @@ export function GodownInventoryClient({ initialMovements, products, userId }: {
               <table className="w-full">
                 <thead>
                   <tr style={{ background: "#FAFAFA", borderBottom: "1px solid #F4F4F5" }}>
-                    {["Date", "Product", "Type", "Qty", "Batch", "Notes", "By", "Actions"].map(h => (
+                    {["Date & Time", "Product", "Type", "Qty", "Invoice", "Batch", "Notes", "By", "GPS", "Actions"].map(h => (
                       <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wide" style={{ color: "#A1A1AA" }}>{h}</th>
                     ))}
                   </tr>
@@ -219,9 +273,34 @@ export function GodownInventoryClient({ initialMovements, products, userId }: {
                         </span>
                       </td>
                       <td className="px-4 py-3 font-bold text-[14px]" style={{ color: m.moveType === "RECEIVED" ? "#2563EB" : "#7C3AED" }}>{m.qty}</td>
+                      <td className="px-4 py-3">
+                        {m.invoiceNo ? (
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-[11px] font-mono font-semibold text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">{m.invoiceNo}</span>
+                            {m.invoiceDate && <span className="text-[10px] text-slate-400">{fmtDate(m.invoiceDate)}</span>}
+                          </div>
+                        ) : (
+                          <span className="text-[11px] text-slate-400 italic">—</span>
+                        )}
+                      </td>
                       <td className="px-4 py-3 text-[11px]" style={{ color: "#71717A" }}>{m.batchNo || "—"}</td>
                       <td className="px-4 py-3 text-[11px]" style={{ color: "#71717A" }}>{m.notes || "—"}</td>
                       <td className="px-4 py-3 text-[11px]" style={{ color: "#52525B" }}>{m.recordedBy.name}</td>
+                      <td className="px-4 py-3">
+                        {m.recordLat && m.recordLng ? (
+                          <a
+                            href={`https://www.google.com/maps/search/?api=1&query=${m.recordLat},${m.recordLng}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-[10px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 rounded px-1.5 py-0.5 hover:bg-emerald-100 transition-all inline-flex items-center gap-0.5 whitespace-nowrap"
+                            title="Movement Geolocation"
+                          >
+                            Map <Navigation className="w-2.5 h-2.5" />
+                          </a>
+                        ) : (
+                          <span className="text-[11px] text-slate-400 italic">—</span>
+                        )}
+                      </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-1.5">
                           <button
@@ -268,6 +347,10 @@ export function GodownInventoryClient({ initialMovements, products, userId }: {
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && <div className="text-[13px] px-3 py-2.5 rounded-md" style={{ background: "#FEF2F2", border: "1px solid #FCA5A5", color: "#B91C1C" }}>{error}</div>}
 
+          {(modalType === "receive" || modalType === "dispatch") && (
+            <GpsStatusBox gps={gps.gps} onRetry={gps.captureGps} titleText="Acquiring movement coordinates..." />
+          )}
+
           {/* Stock hint for dispatch */}
           {modalType === "dispatch" && stock.length > 0 && (
             <div className="rounded-lg px-3 py-2.5" style={{ background: "#F0FDF4", border: "1px solid #86EFAC" }}>
@@ -283,16 +366,21 @@ export function GodownInventoryClient({ initialMovements, products, userId }: {
             </div>
           )}
 
+          {/* Product + Date row */}
           <div className="grid grid-cols-2 gap-3">
             {modalType !== "edit" && (
               <div>
                 <label className="block text-[12px] font-medium mb-1.5" style={{ color: "#52525B" }}>Product *</label>
-                <select value={form.productId} onChange={e => setForm({ ...form, productId: e.target.value })} className="input">
-                  <option value="">Choose…</option>
-                  {(modalType === "dispatch" ? dispatchableProducts.map(s => ({ id: s.id, name: `${s.name} (avail: ${s.available})` })) : products).map(p => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
-                  ))}
-                </select>
+                <CustomSelect
+                  value={form.productId}
+                  onChange={(val) => setForm({ ...form, productId: val })}
+                  options={(modalType === "dispatch"
+                    ? dispatchableProducts.map((s) => ({ value: s.id, label: `${s.name} (avail: ${s.available})` }))
+                    : products.map((p) => ({ value: p.id, label: p.name }))
+                  )}
+                  placeholder="Select Product..."
+                  size="sm"
+                />
               </div>
             )}
             {modalType === "edit" && (
@@ -302,10 +390,12 @@ export function GodownInventoryClient({ initialMovements, products, userId }: {
               </div>
             )}
             <div>
-              <label className="block text-[12px] font-medium mb-1.5" style={{ color: "#52525B" }}>Date *</label>
-              <input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} className="input" />
+              <label className="block text-[12px] font-medium mb-1.5" style={{ color: "#52525B" }}>Date & Time *</label>
+              <input type="datetime-local" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} className="input" />
             </div>
           </div>
+
+          {/* Quantity + Batch row */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-[12px] font-medium mb-1.5" style={{ color: "#52525B" }}>Quantity *</label>
@@ -314,14 +404,32 @@ export function GodownInventoryClient({ initialMovements, products, userId }: {
                 style={{ color: modalType === "dispatch" ? "#7C3AED" : "#2563EB" }} />
             </div>
             <div>
-              <label className="block text-[12px] font-medium mb-1.5" style={{ color: "#52525B" }}>Batch / Ref No/HSN No.</label>
+              <label className="block text-[12px] font-medium mb-1.5" style={{ color: "#52525B" }}>Batch / Ref No / HSN No.</label>
               <input value={form.batchNo} onChange={e => setForm({ ...form, batchNo: e.target.value })} placeholder="e.g., LOT-001" className="input" />
             </div>
           </div>
+
+          {/* Invoice No + Invoice Date row */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[12px] font-medium mb-1.5 flex items-center gap-1" style={{ color: "#52525B" }}>
+                <FileText className="w-3 h-3" /> Invoice No.
+              </label>
+              <input value={form.invoiceNo} onChange={e => setForm({ ...form, invoiceNo: e.target.value })}
+                placeholder="e.g., INV-2024-001" className="input text-[13px]" />
+            </div>
+            <div>
+              <label className="block text-[12px] font-medium mb-1.5" style={{ color: "#52525B" }}>Invoice Issue Date</label>
+              <input type="date" value={form.invoiceDate} onChange={e => setForm({ ...form, invoiceDate: e.target.value })} className="input text-[13px]" />
+            </div>
+          </div>
+
+          {/* Notes */}
           <div>
             <label className="block text-[12px] font-medium mb-1.5" style={{ color: "#52525B" }}>Notes</label>
             <textarea value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} rows={2} className="input resize-none" placeholder="Optional remarks…" />
           </div>
+
           <div className="flex justify-end gap-2">
             <button type="button" onClick={() => { setModalType(null); setError(""); }} className="btn btn-secondary">Cancel</button>
             <button type="submit" disabled={isPending} className="btn btn-primary">

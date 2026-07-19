@@ -21,15 +21,14 @@ export default async function ApprovalsPage() {
       take: 100,
     }),
     prisma.salaryPaymentRequest.findMany({
-      where: session.role === "ADMIN"
-        ? { agencyId: session.agencyId! }
-        : { agencyId: session.agencyId!, requestedById: session.userId },
+      where: { agencyId: session.agencyId! },
       orderBy: { createdAt: "desc" },
       take: 200,
       include: {
         employee: { select: { name: true, role: true } },
         requestedBy: { select: { name: true, role: true } },
         reviewedBy: { select: { name: true } },
+        managerReviewedBy: { select: { name: true } },
       },
     }),
     prisma.leaveRequest.findMany({

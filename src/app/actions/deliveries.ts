@@ -19,7 +19,7 @@ export async function createDeliveryRecord(formData: FormData) {
   const partialCollectionMode = (formData.get("partialCollectionMode") as string) || "CASH";
 
   if (!customerId || !productId) return { error: "Customer and product required" };
-  if (!deliveredQty || deliveredQty <= 0) return { error: "Delivered quantity must be at least 1" };
+  if (isNaN(deliveredQty) || deliveredQty < 0) return { error: "Delivered quantity cannot be negative" };
 
   // ── Resolve effective cash / credit amounts per payment mode ──────────────
   let effectiveCash = 0;
@@ -60,6 +60,14 @@ export async function createDeliveryRecord(formData: FormData) {
     effectiveCredit = 0;
   }
 
+  const deliveryLatRaw = formData.get("deliveryLat");
+  const deliveryLngRaw = formData.get("deliveryLng");
+  const deliveryAccuracyRaw = formData.get("deliveryAccuracy");
+
+  const deliveryLat = deliveryLatRaw && !isNaN(Number(deliveryLatRaw)) ? Number(deliveryLatRaw) : null;
+  const deliveryLng = deliveryLngRaw && !isNaN(Number(deliveryLngRaw)) ? Number(deliveryLngRaw) : null;
+  const deliveryAccuracy = deliveryAccuracyRaw && !isNaN(Number(deliveryAccuracyRaw)) ? Number(deliveryAccuracyRaw) : null;
+
   // ── Transactionally create delivery + optional credit ledger entry ────────
   const [delivery] = await prisma.$transaction(async (tx) => {
     const d = await tx.deliveryRecord.create({
@@ -77,9 +85,12 @@ export async function createDeliveryRecord(formData: FormData) {
         deliveredById: session.userId,
         agencyId: session.agencyId!,
         status: "DELIVERED",
+        deliveryLat,
+        deliveryLng,
+        deliveryAccuracy,
       },
       include: {
-        customer: { select: { name: true, phone: true, address: true, type: true } },
+        customer: { select: { name: true, phone: true, address: true, type: true, customerCode: true } },
         product: { select: { name: true, saleRate: true } },
       },
     });
@@ -109,7 +120,13 @@ export async function createDeliveryRecord(formData: FormData) {
     return [d];
   });
 
-  // Bust cache for all credit ledger views (including delivery boy's own view)
+  // Bust cache for all credit ledger, commercial sales, and delivery boy views
+  revalidatePath("/admin/commercial-sales");
+  revalidatePath("/manager/commercial-sales");
+  revalidatePath("/staff/commercial-sales");
+  revalidatePath("/delivery-boy/my-deliveries");
+  revalidatePath("/delivery-boy/delivery-ledger");
+
   if (paymentMode === "CREDIT" || paymentMode === "PARTIAL") {
     revalidatePath("/admin/credit-ledger");
     revalidatePath("/manager/credit-ledger");

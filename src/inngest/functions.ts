@@ -245,6 +245,76 @@ export const bulkSalarySlipDispatch = inngest.createFunction(
   }
 );
 
+// ── Job 7: Daily Attendance Absenteeism Alert ───────────────────────────────
+export const dailyAttendanceAlert = inngest.createFunction(
+  { id: "daily-attendance-alert", triggers: [{ cron: "30 4 * * *" }] }, // 10:00 AM IST
+  async ({ step }: { step: any }) => {
+    const agencies = await step.run("fetch-agencies", async () =>
+      prisma.agency.findMany({ select: { id: true } })
+    );
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const result = await step.run("check-absentees", async () => {
+      let alertCount = 0;
+      for (const agency of agencies as { id: string }[]) {
+        const activeEmployees = await prisma.user.findMany({
+          where: {
+            agencyId: agency.id,
+            isActive: true,
+            role: { not: "SYSTEM_ADMIN" },
+          },
+          select: { id: true, name: true, role: true },
+        });
+
+        if (activeEmployees.length === 0) continue;
+
+        const punchedRecords = await prisma.attendance.findMany({
+          where: {
+            agencyId: agency.id,
+            date: today,
+            status: { in: ["PRESENT", "HALF_DAY", "ON_LEAVE"] },
+          },
+          select: { employeeId: true },
+        });
+
+        const punchedIds = new Set(punchedRecords.map((r) => r.employeeId));
+        const absentees = activeEmployees.filter(
+          (emp) => emp.role !== "ADMIN" && !punchedIds.has(emp.id)
+        );
+
+        if (absentees.length > 0) {
+          const admins = await prisma.user.findMany({
+            where: { agencyId: agency.id, role: "ADMIN", isActive: true },
+            select: { id: true },
+          });
+
+          const namesStr = absentees.map((e) => e.name).join(", ");
+          await Promise.all(
+            admins.map((admin) =>
+              prisma.notification.create({
+                data: {
+                  agencyId: agency.id,
+                  userId: admin.id,
+                  type: "ATTENDANCE_ABSENT_ALERT",
+                  title: "Absenteeism Alert",
+                  body: `${absentees.length} employees haven't punched in yet: ${namesStr}`,
+                  link: "/admin/attendance",
+                },
+              })
+            )
+          );
+          alertCount += admins.length;
+        }
+      }
+      return alertCount;
+    });
+
+    return { alertsSent: result };
+  }
+);
+
 export const functions = [
   dailyStockSnapshot,
   documentExpiryReminder,
@@ -252,4 +322,5 @@ export const functions = [
   monthlyPayrollSummary,
   lowStockAlert,
   bulkSalarySlipDispatch,
+  dailyAttendanceAlert,
 ];

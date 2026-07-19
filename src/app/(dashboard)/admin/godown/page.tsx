@@ -3,9 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Warehouse } from "lucide-react";
-import { GodownClient } from "./GodownClient";
-import { InternalVehiclesClient } from "./InternalVehiclesClient";
-
+import { GodownTabsContainer } from "./GodownTabsContainer";
 import { getAgencyTodayRange } from "@/lib/utils";
 
 export default async function GodownPage() {
@@ -14,7 +12,15 @@ export default async function GodownPage() {
 
   const { todayStart, todayEnd } = getAgencyTodayRange();
 
-  const [records, totals, deliveryVehicles, deliveryBoys, todayTripLogs, cylinderTypes] = await Promise.all([
+  const [
+    records,
+    totals,
+    deliveryVehicles,
+    deliveryBoys,
+    todayTripLogs,
+    cylinderTypes,
+    todayMovements,
+  ] = await Promise.all([
     prisma.godownRecord.findMany({
       where: { agencyId: session.agencyId! },
       orderBy: { entryDate: "desc" },
@@ -48,50 +54,41 @@ export default async function GodownPage() {
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     }),
+    prisma.godownInventory.findMany({
+      where: { agencyId: session.agencyId!, date: { gte: todayStart, lte: todayEnd } },
+      orderBy: { date: "desc" },
+      include: {
+        product: { select: { name: true } },
+        recordedBy: { select: { name: true } },
+      },
+    }),
   ]);
+
+  const todayStr = new Date().toISOString().slice(0, 10);
 
   return (
     <div>
       <PageHeader
         title="Godown Management"
-        subtitle="Track company supply vehicles and manage internal delivery fleet"
+        subtitle="Track company supply vehicles, manage internal delivery fleet, and view live GPS tracking"
         icon={<Warehouse className="w-5 h-5" />}
       />
 
-      {/* Company Vehicle Section */}
-      <div className="mb-2">
-        <div className="flex items-center gap-2 mb-4">
-          <div className="w-2 h-2 rounded-full" style={{ background: "#2563EB" }} />
-          <p className="text-[13px] font-semibold uppercase tracking-wide" style={{ color: "#52525B" }}>Company Supply Vehicle (Bharat Gas)</p>
-        </div>
-        <GodownClient
-          initialRecords={records as Parameters<typeof GodownClient>[0]["initialRecords"]}
-          totalFilled={totals._sum.filledCylindersReceived ?? 0}
-          totalEmpty={totals._sum.emptyCylindersReturned ?? 0}
-          isAdmin={session.role === "ADMIN"}
-          userId={session.userId}
-          cylinderTypes={cylinderTypes}
-        />
-      </div>
-
-      {/* Divider */}
-      <div className="my-8" style={{ borderTop: "2px dashed #E4E4E7" }} />
-
-      {/* Internal Fleet Section */}
-      <div>
-        <div className="flex items-center gap-2 mb-4">
-          <div className="w-2 h-2 rounded-full" style={{ background: "#16A34A" }} />
-          <p className="text-[13px] font-semibold uppercase tracking-wide" style={{ color: "#52525B" }}>Internal Delivery Fleet</p>
-        </div>
-        <InternalVehiclesClient
-          initialVehicles={deliveryVehicles as Parameters<typeof InternalVehiclesClient>[0]["initialVehicles"]}
-          initialTripLogs={todayTripLogs as Parameters<typeof InternalVehiclesClient>[0]["initialTripLogs"]}
-          deliveryBoys={deliveryBoys}
-          isAdmin={session.role === "ADMIN"}
-          userId={session.userId}
-          cylinderTypes={cylinderTypes}
-        />
-      </div>
+      <GodownTabsContainer
+        initialRecords={records}
+        totalFilled={totals._sum.filledCylindersReceived ?? 0}
+        totalEmpty={totals._sum.emptyCylindersReturned ?? 0}
+        deliveryVehicles={deliveryVehicles}
+        deliveryBoys={deliveryBoys}
+        todayTripLogs={todayTripLogs}
+        cylinderTypes={cylinderTypes}
+        isAdmin={session.role === "ADMIN"}
+        userId={session.userId}
+        mapRecords={records}
+        mapTrips={todayTripLogs}
+        mapMovements={todayMovements}
+        selectedDate={todayStr}
+      />
     </div>
   );
 }

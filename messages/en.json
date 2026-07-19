@@ -34,6 +34,18 @@
     "collapse": "Collapse",
     "my_deliveries": "My Deliveries",
     "delivery_ledger": "Delivery Ledger",
+    "my_attendance": "My Attendance",
+    
+    "personal_finance": "Personal Finance",
+    "finance_dashboard": "Finance Dashboard",
+    "personal_accounts": "Personal Accounts",
+    "agency_account": "Agency Account",
+    "udhaari_ledger": "Udhaari Ledger",
+    "fund_transfer": "Fund Transfer",
+    "cheque_register": "Cheque Register",
+    "oil_company_ledger": "Oil Company Ledger",
+    "cash_reconciliation": "Cash Reconciliation",
+    "fd_loans": "FD & Loan Tracker",
     
     "operations": "Operations",
     "accounts": "Accounts",

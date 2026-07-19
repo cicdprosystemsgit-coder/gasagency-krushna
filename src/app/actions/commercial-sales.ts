@@ -2,6 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
+import { revalidatePath } from "next/cache";
 
 export async function createCommercialSale(formData: FormData) {
   const session = await getSession();
@@ -9,6 +10,7 @@ export async function createCommercialSale(formData: FormData) {
 
   const customerId = formData.get("customerId") as string;
   const productId = formData.get("productId") as string;
+  const deliveredById = (formData.get("deliveredById") as string) || null;
   if (!customerId || !productId) return { error: "Customer and product required" };
 
   const sale = await prisma.commercialSale.create({
@@ -24,14 +26,21 @@ export async function createCommercialSale(formData: FormData) {
       balance: Number(formData.get("balance")) || 0,
       date: new Date(formData.get("date") as string),
       addedById: session.userId,
+      deliveredById,
       agencyId: session.agencyId,
     },
     include: {
       customer: { select: { name: true, type: true } },
       product: { select: { name: true } },
       addedBy: { select: { name: true } },
+      deliveredBy: { select: { name: true } },
     },
   });
+
+  revalidatePath("/admin/commercial-sales");
+  revalidatePath("/manager/commercial-sales");
+  revalidatePath("/staff/commercial-sales");
+
   return { sale };
 }
 
@@ -40,5 +49,10 @@ export async function deleteCommercialSale(formData: FormData) {
   if (!session || !["ADMIN", "MANAGER"].includes(session.role) || !session.agencyId) return { success: false };
 
   await prisma.commercialSale.delete({ where: { id: formData.get("id") as string, agencyId: session.agencyId } });
+
+  revalidatePath("/admin/commercial-sales");
+  revalidatePath("/manager/commercial-sales");
+  revalidatePath("/staff/commercial-sales");
+
   return { success: true };
 }

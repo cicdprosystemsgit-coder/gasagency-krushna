@@ -77,11 +77,14 @@ interface SalaryRequest {
   status: string;
   remarks: string | null;
   reviewNote: string | null;
+  managerReviewNote: string | null;
+  managerReviewedAt: Date | string | null;
   requestData: Record<string, unknown>;
   employeeId: string;
   employee: { name: string; role: string };
-  requestedBy: { name: string };
+  requestedBy: { name: string; role: string };
   reviewedBy: { name: string } | null;
+  managerReviewedBy: { name: string } | null;
   createdAt: Date | string;
   updatedAt: Date | string;
 }
@@ -104,6 +107,7 @@ export interface SalariesClientProps {
   currentYear: number;
   userRole: string;
   userId: string;
+  attendance?: any[];
 }
 
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
@@ -129,6 +133,7 @@ const ADVANCE_STATUS_COLORS: Record<string, string> = {
 
 const REQUEST_STATUS_COLORS: Record<string, string> = {
   PENDING: "bg-amber-100 text-amber-700",
+  MANAGER_APPROVED: "bg-blue-100 text-blue-700",
   APPROVED: "bg-green-100 text-green-700",
   REJECTED: "bg-red-100 text-red-700",
 };
@@ -139,6 +144,7 @@ export function SalariesClient({
   initialDrawings, initialAdvances, initialBonuses,
   initialProfiles, initialRequests,
   staff, currentMonth, currentYear, userRole, userId,
+  attendance = [],
 }: SalariesClientProps) {
   const isAdmin = userRole === "ADMIN";
   const TABS = isAdmin ? TABS_ADMIN : TABS_MANAGER;
@@ -208,6 +214,7 @@ export function SalariesClient({
           onDrawingAdded={(d) => setDrawings((prev) => [d, ...prev])}
           onAdvanceUpdated={(a) => setAdvances((prev) => prev.map((x) => (x.id === a.id ? a : x)))}
           onRequestAdded={(r) => setRequests((prev) => [r, ...prev])}
+          attendance={attendance}
         />
       )}
 
@@ -269,6 +276,7 @@ export function SalariesClient({
 function PayrollOverview({
   staff, profiles, drawings, advances, bonuses,
   month, year, isAdmin, onDrawingAdded, onAdvanceUpdated, onRequestAdded,
+  attendance,
 }: {
   staff: Staff[];
   profiles: Profile[];
@@ -281,6 +289,7 @@ function PayrollOverview({
   onDrawingAdded: (d: Drawing) => void;
   onAdvanceUpdated: (a: Advance) => void;
   onRequestAdded: (r: SalaryRequest) => void;
+  attendance: any[];
 }) {
   const [payModal, setPayModal] = useState<Staff | null>(null);
 
@@ -295,11 +304,23 @@ function PayrollOverview({
       const bonusThisMonth = bonuses.filter((b) => b.month === month && b.year === year && b.employeeId === emp.id).reduce((s, b) => s + b.amount, 0);
       const pendingAdvance = advances.filter((a) => a.employeeId === emp.id && (a.status === "PENDING" || a.status === "PARTIAL")).reduce((s, a) => s + a.balanceAmount, 0);
       const baseSalary = profile?.monthlySalary ?? 0;
-      const netPayable = baseSalary + bonusThisMonth - salaryPaid - recoveryThisMonth;
-      const isPaid = baseSalary > 0 && salaryPaid >= baseSalary;
-      return { emp, profile, baseSalary, salaryPaid, recoveryThisMonth, bonusThisMonth, pendingAdvance, netPayable, isPaid };
+
+      // Geolocation / Attendance deduction calculation
+      const empAttendance = attendance.filter((att) => {
+        const d = new Date(att.date);
+        return d.getMonth() + 1 === month && d.getFullYear() === year && att.employeeId === emp.id;
+      });
+      const absentCount = empAttendance.filter((a) => a.status === "ABSENT").length;
+      const halfDayCount = empAttendance.filter((a) => a.status === "HALF_DAY").length;
+      const totalDaysInMonth = new Date(year, month, 0).getDate();
+      const dailyRate = baseSalary / totalDaysInMonth;
+      const deduction = Math.round(dailyRate * absentCount + dailyRate * 0.5 * halfDayCount);
+
+      const netPayable = Math.max(0, baseSalary + bonusThisMonth - deduction - salaryPaid - recoveryThisMonth);
+      const isPaid = baseSalary > 0 && salaryPaid >= (baseSalary - deduction);
+      return { emp, profile, baseSalary, salaryPaid, recoveryThisMonth, bonusThisMonth, pendingAdvance, deduction, absentCount, halfDayCount, netPayable, isPaid };
     });
-  }, [staff, profiles, drawings, advances, bonuses, month, year]);
+  }, [staff, profiles, drawings, advances, bonuses, month, year, attendance]);
 
   const totals = useMemo(() => ({
     totalPayable: employeeSummaries.reduce((s, e) => s + e.baseSalary + e.bonusThisMonth, 0),
@@ -331,6 +352,7 @@ function PayrollOverview({
                 <th className="px-5 py-3 text-left font-semibold text-slate-600">Role</th>
                 <th className="px-5 py-3 text-right font-semibold text-slate-600">Base Salary</th>
                 <th className="px-5 py-3 text-right font-semibold text-slate-600">Bonus</th>
+                <th className="px-5 py-3 text-right font-semibold text-slate-600">Deduction (Abs/Half)</th>
                 <th className="px-5 py-3 text-right font-semibold text-slate-600">Advance Bal.</th>
                 <th className="px-5 py-3 text-right font-semibold text-slate-600">Paid</th>
                 <th className="px-5 py-3 text-right font-semibold text-slate-600">Net Remaining</th>
@@ -339,7 +361,7 @@ function PayrollOverview({
               </tr>
             </thead>
             <tbody>
-              {employeeSummaries.map(({ emp, profile, baseSalary, salaryPaid, bonusThisMonth, pendingAdvance, netPayable, isPaid }) => (
+              {employeeSummaries.map(({ emp, profile, baseSalary, salaryPaid, bonusThisMonth, pendingAdvance, deduction, absentCount, halfDayCount, netPayable, isPaid }) => (
                 <tr key={emp.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/50">
                   <td className="px-5 py-3">
                     <div className="font-medium text-slate-800">{emp.name}</div>
@@ -351,6 +373,13 @@ function PayrollOverview({
                   </td>
                   <td className="px-5 py-3 text-right">
                     {bonusThisMonth > 0 ? <span className="text-purple-700 font-medium">+{formatCurrency(bonusThisMonth)}</span> : <span className="text-slate-400">—</span>}
+                  </td>
+                  <td className="px-5 py-3 text-right">
+                    {deduction > 0 ? (
+                      <span className="text-rose-600 font-medium" title={`${absentCount} Absent, ${halfDayCount} Half Day`}>
+                        -{formatCurrency(deduction)}
+                      </span>
+                    ) : <span className="text-slate-400">—</span>}
                   </td>
                   <td className="px-5 py-3 text-right">
                     {pendingAdvance > 0 ? <span className="text-red-600 font-medium">{formatCurrency(pendingAdvance)}</span> : <span className="text-slate-400">—</span>}
@@ -1411,11 +1440,24 @@ function ApprovalsTab({ requests, isAdmin, onRequestUpdated }: {
   const [isPending, startTransition] = useTransition();
 
   const filtered = useMemo(() => requests.filter((r) => {
+    if (filterStatus === "PENDING") {
+      if (isAdmin) {
+        return r.status === "MANAGER_APPROVED" || (r.status === "PENDING" && ["MANAGER", "ADMIN"].includes(r.requestedBy.role));
+      } else {
+        return r.status === "PENDING" || r.status === "MANAGER_APPROVED";
+      }
+    }
     if (filterStatus && r.status !== filterStatus) return false;
     return true;
-  }), [requests, filterStatus]);
+  }), [requests, filterStatus, isAdmin]);
 
-  const pendingCount = requests.filter((r) => r.status === "PENDING").length;
+  const pendingCount = requests.filter((r) => {
+    if (isAdmin) {
+      return r.status === "MANAGER_APPROVED" || (r.status === "PENDING" && ["MANAGER", "ADMIN"].includes(r.requestedBy.role));
+    } else {
+      return r.status === "PENDING" || r.status === "MANAGER_APPROVED";
+    }
+  }).length;
   const approvedCount = requests.filter((r) => r.status === "APPROVED").length;
   const rejectedCount = requests.filter((r) => r.status === "REJECTED").length;
 
@@ -1464,7 +1506,7 @@ function ApprovalsTab({ requests, isAdmin, onRequestUpdated }: {
                 ? "bg-slate-800 text-white border-slate-800"
                 : "bg-white text-slate-600 border-slate-200 hover:border-slate-300"
             }`}>
-            {s === "" ? "All" : s.charAt(0) + s.slice(1).toLowerCase()}
+            {s === "" ? "All" : s === "PENDING" ? "Pending" : s.charAt(0) + s.slice(1).toLowerCase()}
             {s === "PENDING" && pendingCount > 0 && (
               <span className="ml-1.5 bg-amber-100 text-amber-700 text-xs font-bold px-1.5 py-0.5 rounded-full">{pendingCount}</span>
             )}
@@ -1478,7 +1520,7 @@ function ApprovalsTab({ requests, isAdmin, onRequestUpdated }: {
         <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 mb-4 flex items-center gap-3">
           <ShieldCheck className="w-5 h-5 text-blue-600 shrink-0" />
           <p className="text-blue-800 text-sm">
-            <strong>{pendingCount} payment request{pendingCount > 1 ? "s" : ""}</strong> from manager waiting for your approval.
+            <strong>{pendingCount} payment request{pendingCount > 1 ? "s" : ""}</strong> waiting for your final approval.
             Review carefully before approving — approving will immediately process the payment.
           </p>
         </div>
@@ -1495,23 +1537,23 @@ function ApprovalsTab({ requests, isAdmin, onRequestUpdated }: {
                 <th className="px-5 py-3 text-left font-semibold text-slate-600">Period</th>
                 <th className="px-5 py-3 text-right font-semibold text-slate-600">Amount</th>
                 <th className="px-5 py-3 text-left font-semibold text-slate-600">Remarks / Details</th>
-                {isAdmin && <th className="px-5 py-3 text-left font-semibold text-slate-600">Requested By</th>}
+                <th className="px-5 py-3 text-left font-semibold text-slate-600">Requested By</th>
                 <th className="px-5 py-3 text-center font-semibold text-slate-600">Status</th>
                 {isAdmin && <th className="px-5 py-3 text-center font-semibold text-slate-600">Actions</th>}
               </tr>
             </thead>
             <tbody>
               {filtered.length === 0 ? (
-                <tr><td colSpan={isAdmin ? 9 : 7} className="px-5 py-14 text-center">
+                <tr><td colSpan={isAdmin ? 9 : 8} className="px-5 py-14 text-center">
                   <ShieldCheck className="w-10 h-10 mx-auto mb-3 text-slate-300" />
                   <p className="text-slate-400">
                     {filterStatus === "PENDING"
-                      ? isAdmin ? "No pending requests — all caught up!" : "No pending requests submitted"
+                      ? "No pending requests — all caught up!"
                       : "No requests found"}
                   </p>
                 </td></tr>
               ) : filtered.map((r) => (
-                <tr key={r.id} className={`border-b border-slate-50 last:border-0 ${r.status === "PENDING" ? "bg-amber-50/30" : ""}`}>
+                <tr key={r.id} className={`border-b border-slate-50 last:border-0 ${r.status === "PENDING" || r.status === "MANAGER_APPROVED" ? "bg-amber-50/30" : ""}`}>
                   <td className="px-5 py-3 text-slate-500 text-xs">{formatDate(r.createdAt)}</td>
                   <td className="px-5 py-3">
                     <div className="font-medium text-slate-800">{r.employee.name}</div>
@@ -1526,29 +1568,62 @@ function ApprovalsTab({ requests, isAdmin, onRequestUpdated }: {
                     {r.month && r.year ? `${MONTHS[r.month - 1]} ${r.year}` : "—"}
                   </td>
                   <td className="px-5 py-3 text-right font-bold text-slate-800">{formatCurrency(r.amount)}</td>
-                  <td className="px-5 py-3 text-slate-500 text-xs max-w-[160px]">
+                  <td className="px-5 py-3 text-slate-500 text-xs max-w-[180px]">
                     <div className="truncate">{r.remarks ?? "—"}</div>
+                    {r.managerReviewNote && (
+                      <div className="text-amber-700 mt-1 font-medium">Manager Reason: {r.managerReviewNote}</div>
+                    )}
                     {r.status === "REJECTED" && r.reviewNote && (
-                      <div className="text-red-600 mt-1 font-medium">Reason: {r.reviewNote}</div>
+                      <div className="text-red-600 mt-1 font-medium">Admin Reason: {r.reviewNote}</div>
                     )}
                     {r.type === "SALARY" && Number((r.requestData as Record<string, unknown>).advanceRecoveryAmount ?? 0) > 0 && (
                       <div className="text-emerald-600 mt-0.5">Advance recovery: {formatCurrency(Number((r.requestData as Record<string, unknown>).advanceRecoveryAmount))}</div>
                     )}
                   </td>
-                  {isAdmin && (
-                    <td className="px-5 py-3 text-slate-500 text-xs">{r.requestedBy.name}</td>
-                  )}
+                  <td className="px-5 py-3 text-slate-500 text-xs">{r.requestedBy.name}</td>
                   <td className="px-5 py-3 text-center">
                     <span className={`text-xs px-2.5 py-1 rounded-full font-semibold ${REQUEST_STATUS_COLORS[r.status] ?? "bg-slate-100 text-slate-600"}`}>
-                      {r.status === "PENDING" ? "⏳ Pending" : r.status === "APPROVED" ? "✓ Approved" : "✗ Rejected"}
+                      {r.status === "PENDING" ? "⏳ Pending Manager" : r.status === "MANAGER_APPROVED" ? "⏳ Manager Approved" : r.status === "APPROVED" ? "✓ Approved" : "✗ Rejected"}
                     </span>
-                    {r.status !== "PENDING" && r.reviewedBy && (
+                    {r.status === "APPROVED" && r.reviewedBy && (
                       <div className="text-xs text-slate-400 mt-1">by {r.reviewedBy.name}</div>
                     )}
+                    {r.status === "MANAGER_APPROVED" && r.managerReviewedBy && (
+                      <div className="text-xs text-slate-400 mt-1">by {r.managerReviewedBy.name}</div>
+                    )}
+                    
+                    {/* Visual pipeline steps */}
+                    <div className="flex items-center justify-center gap-1 mt-1.5 text-[10px] text-slate-400">
+                      <span className="text-green-600 font-semibold">Submit ✓</span>
+                      <span>→</span>
+                      {!["MANAGER", "ADMIN"].includes(r.requestedBy.role) && (
+                        <>
+                          <span className={
+                            r.status === "APPROVED" || r.status === "MANAGER_APPROVED"
+                              ? "text-green-600 font-semibold"
+                              : r.status === "REJECTED" && !r.reviewedBy && r.managerReviewedBy
+                                ? "text-red-600 font-semibold"
+                                : "text-slate-500 font-medium"
+                          }>
+                            Manager {r.status === "APPROVED" || r.status === "MANAGER_APPROVED" ? "✓" : r.status === "REJECTED" && !r.reviewedBy && r.managerReviewedBy ? "✗" : ""}
+                          </span>
+                          <span>→</span>
+                        </>
+                      )}
+                      <span className={
+                        r.status === "APPROVED"
+                          ? "text-green-600 font-semibold"
+                          : r.status === "REJECTED" && r.reviewedBy
+                            ? "text-red-600 font-semibold"
+                            : "text-slate-500 font-medium"
+                      }>
+                        Admin {r.status === "APPROVED" ? "✓" : r.status === "REJECTED" && r.reviewedBy ? "✗" : ""}
+                      </span>
+                    </div>
                   </td>
                   {isAdmin && (
                     <td className="px-5 py-3 text-center">
-                      {r.status === "PENDING" && (
+                      {(r.status === "MANAGER_APPROVED" || (r.status === "PENDING" && ["MANAGER", "ADMIN"].includes(r.requestedBy.role))) && (
                         <div className="flex items-center justify-center gap-1.5">
                           <button onClick={() => handleApprove(r.id)} disabled={isPending}
                             className="flex items-center gap-1 text-xs font-semibold text-green-700 bg-green-50 hover:bg-green-100 px-2.5 py-1.5 rounded-lg transition disabled:opacity-40">

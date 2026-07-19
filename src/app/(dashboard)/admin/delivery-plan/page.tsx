@@ -21,7 +21,10 @@ export default async function DeliveryPlanPage({ searchParams }: PageProps) {
   const dateEnd = new Date(targetDate.setHours(23, 59, 59, 999));
 
   const deliveries = await prisma.deliveryRecord.findMany({
-    where: { date: { gte: dateStart, lte: dateEnd } },
+    where: {
+      agencyId: session.agencyId!,
+      date: { gte: dateStart, lte: dateEnd },
+    },
     include: {
       customer: { select: { name: true, phone: true, address: true, type: true } },
       product: { select: { name: true } },
@@ -33,7 +36,7 @@ export default async function DeliveryPlanPage({ searchParams }: PageProps) {
   return (
     <div>
       <DeliveryPlanHeader selectedDate={selectedDate} />
-      <DeliveryPlanClient deliveries={deliveries} />
+      <DeliveryPlanClient deliveries={deliveries as any} selectedDate={selectedDate} />
     </div>
   );
 }

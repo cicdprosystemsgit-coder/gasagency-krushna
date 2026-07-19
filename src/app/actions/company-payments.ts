@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { type CompanyPayment } from "@/generated/prisma";
 import { revalidatePath } from "next/cache";
+import { syncCompanyPaymentToPersonalAccount, removeCompanyPaymentSync } from "./agency-account-sync";
 
 export async function getCompanyPayments(filters?: {
   from?: string;
@@ -78,6 +79,9 @@ export async function createCompanyPayment(formData: FormData): Promise<{ paymen
       },
     });
 
+    // Auto-sync to Agency Personal Account
+    await syncCompanyPaymentToPersonalAccount(payment.id);
+
     revalidatePath("/admin/company-payments");
     revalidatePath("/admin/assets");
     return { payment };
@@ -122,6 +126,9 @@ export async function updateCompanyPayment(id: string, formData: FormData): Prom
       },
     });
 
+    // Update synced Agency Personal Account Transaction
+    await syncCompanyPaymentToPersonalAccount(payment.id);
+
     revalidatePath("/admin/company-payments");
     revalidatePath("/admin/assets");
     return { payment };
@@ -138,6 +145,9 @@ export async function deleteCompanyPayment(id: string): Promise<{ success: boole
   }
 
   try {
+    // Remove synced Agency Personal Account transactions first
+    await removeCompanyPaymentSync(id);
+
     await prisma.companyPayment.delete({
       where: { id, agencyId: session.agencyId },
     });

@@ -14,6 +14,7 @@ import { getTranslations } from "next-intl/server";
 
 
 import { checkPermission } from "@/lib/rbac";
+import { PunchWidget } from "@/components/ui/PunchWidget";
 
 export default async function GodownKeeperDashboard() {
   const session = await getSession();
@@ -194,6 +195,10 @@ export default async function GodownKeeperDashboard() {
             </Link>
           )}
         </div>
+      </div>
+
+      <div className="max-w-md">
+        <PunchWidget />
       </div>
 
       {/* ── Live Metric Telemetry ── */}
