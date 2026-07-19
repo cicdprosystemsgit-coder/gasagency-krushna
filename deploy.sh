@@ -2,12 +2,12 @@
 # =============================================================================
 #  Gasagency — Docker VPS Deployment Script
 #  Domain: https://dev.agency.cicdprosystems.com
-#  Place at: /home/deploy/gasagency/gasagency/deploy.sh
-#  Usage:    bash /home/deploy/gasagency/gasagency/deploy.sh
+#  Place at: /home/deploy/gasagency-krushna/deploy.sh
+#  Usage:    bash /home/deploy/gasagency-krushna/deploy.sh
 # =============================================================================
 set -euo pipefail
 
-APP_DIR="/home/deploy/gasagency/gasagency"
+APP_DIR="/home/deploy/gasagency-krushna/"
 BRANCH="my-idea"
 DOMAIN="dev.agency.cicdprosystems.com"
 
