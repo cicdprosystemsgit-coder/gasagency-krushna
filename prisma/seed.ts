@@ -1,10 +1,12 @@
 import { PrismaClient } from "../src/generated/prisma";
 import { PrismaPg } from "@prisma/adapter-pg";
+import { Pool } from "pg";
 import bcrypt from "bcryptjs";
 import "dotenv/config";
 
-const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });
-const prisma = new PrismaClient({ adapter } as ConstructorParameters<typeof PrismaClient>[0]);
+const pool = new Pool({ connectionString: process.env.DATABASE_URL! });
+const adapter = new PrismaPg(pool);
+const prisma = new PrismaClient({ adapter } as unknown as ConstructorParameters<typeof PrismaClient>[0]);
 
 async function main() {
   console.log("Cleaning database...");
@@ -52,6 +54,9 @@ async function main() {
   await prisma.godownInventory.deleteMany();
   await prisma.customer.deleteMany();
   await prisma.product.deleteMany();
+  await prisma.fdLoanRecord.deleteMany();
+  await prisma.personalTransaction.deleteMany();
+  await prisma.personalAccount.deleteMany();
   await prisma.user.deleteMany();
   await prisma.agency.deleteMany();
   await prisma.demoRequest.deleteMany();
