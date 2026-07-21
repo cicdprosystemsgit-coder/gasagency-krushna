@@ -1,14 +1,15 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useEffect, useTransition } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { formatDate, formatCurrency } from "@/lib/utils";
 import { Plus, ClipboardCheck, CheckCircle2, ChevronDown, ChevronRight, CheckSquare, Calendar, AlertTriangle, Printer, Edit2 } from "lucide-react";
-import { createDailyClosingWithEmployees, getDeliveryBoysForDate, approveDailyClosing, updateDailyClosingEmployee } from "@/app/actions/daily-closing";
+import { createDailyClosingWithEmployees, getDeliveryBoysForDate, getOfficeStaffForDate, approveDailyClosing, updateDailyClosingEmployee } from "@/app/actions/daily-closing";
 import { CalendarPicker } from "@/components/ui/CalendarPicker";
 import { DateRangePicker } from "@/components/ui/DateRangePicker";
 import { DailyClosingEmployeePanel, EmployeeClosingData } from "@/components/daily-closing/DailyClosingEmployeePanel";
+import { OfficeSalesPanel, OfficeEmployeeClosingData } from "@/components/daily-closing/OfficeSalesPanel";
 
 interface ClosingEmployee {
   id: string;
@@ -66,35 +67,33 @@ export function DailyClosingClient({ initialClosings, role }: DailyClosingClient
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
 
-  // Wizard state (fallback creation for admin if they want to create directly)
+  // Wizard state
   const [step, setStep] = useState(1);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10));
-  const [fetchedEmployees, setFetchedEmployees] = useState<EmployeeClosingData[]>([]);
+  const [fetchedEmployees, setFetchedEmployees] = useState<(EmployeeClosingData & { alreadyClosed?: boolean })[]>([]);
+  const [fetchedOfficeEmployees, setFetchedOfficeEmployees] = useState<(OfficeEmployeeClosingData & { alreadyClosed?: boolean })[]>([]);
+  const [selectedBoyId, setSelectedBoyId] = useState<string | null>(null);
+  const [selectedEmployeeType, setSelectedEmployeeType] = useState<"DELIVERY" | "OFFICE">("DELIVERY");
   const [generalNotes, setGeneralNotes] = useState("");
   const [cashVerified, setCashVerified] = useState(false);
+  const [hasSavedAny, setHasSavedAny] = useState(false);
 
-  const filteredClosings = closings.filter((c) => {
-    const cDate = new Date(c.date);
-    cDate.setHours(0, 0, 0, 0);
-    if (dateFrom && cDate < new Date(dateFrom)) return false;
-    if (dateTo && cDate > new Date(dateTo)) return false;
-    return true;
-  });
-
-  const handleFetchDeliveryBoys = () => {
+  // Auto-fetch delivery boys and office staff for the selected date when the modal opens or the date changes
+  useEffect(() => {
+    if (!modalOpen) return;
     setError("");
+    setFetchedEmployees([]);
+    setFetchedOfficeEmployees([]);
+    setSelectedBoyId(null);
+
     startTransition(async () => {
+      // 1. Fetch delivery boys
       const res = await getDeliveryBoysForDate(selectedDate);
       if (res.error) {
         setError(res.error);
         return;
       }
-      if (!res.deliveryBoys || res.deliveryBoys.length === 0) {
-        setError("No delivery records found for this date.");
-        setFetchedEmployees([]);
-        return;
-      }
-      const formatted = res.deliveryBoys.map((db: any) => ({
+      const formatted = (res.deliveryBoys || []).map((db: any) => ({
         deliveryBoyId: db.deliveryBoy.id,
         deliveryBoyName: db.deliveryBoy.name,
         cylinderBreakdown: db.products.map((p: any) => ({
@@ -116,10 +115,61 @@ export function DailyClosingClient({ initialClosings, role }: DailyClosingClient
         expectedTotal: db.cashCollected + db.onlineAmount + db.udhariAmount,
         actualCashGiven: 0,
         notes: "",
+        alreadyClosed: db.alreadyClosed,
       }));
       setFetchedEmployees(formatted);
-      setStep(2);
+
+      // 2. Fetch office staff
+      const officeRes = await getOfficeStaffForDate(selectedDate);
+      if (!officeRes.error && officeRes.officeStaff) {
+        const formattedOffice = officeRes.officeStaff.map((db: any) => ({
+          deliveryBoyId: db.deliveryBoyId,
+          deliveryBoyName: db.deliveryBoyName,
+          totalDelivered: db.totalDelivered,
+          pendingQty: db.pendingQty,
+          returnedQty: db.returnedQty,
+          udhariAmount: db.udhariAmount,
+          cashCollected: db.cashCollected,
+          onlineAmount: db.onlineAmount,
+          kmBasedExtra: 0,
+          expectedTotal: db.expectedTotal,
+          actualCashGiven: 0,
+          notes: "",
+          isOfficeSale: true,
+          officeTransactionItems: db.officeTransactionItems,
+          alreadyClosed: db.alreadyClosed,
+        }));
+        setFetchedOfficeEmployees(formattedOffice);
+      }
     });
+  }, [selectedDate, modalOpen]);
+
+  const filteredClosings = closings.filter((c) => {
+    const cDate = new Date(c.date);
+    cDate.setHours(0, 0, 0, 0);
+    if (dateFrom && cDate < new Date(dateFrom)) return false;
+    if (dateTo && cDate > new Date(dateTo)) return false;
+    return true;
+  });
+
+  const handleOpenModal = () => {
+    setError("");
+    setStep(1);
+    setFetchedEmployees([]);
+    setFetchedOfficeEmployees([]);
+    setSelectedBoyId(null);
+    setSelectedEmployeeType("DELIVERY");
+    setCashVerified(false);
+    setGeneralNotes("");
+    setHasSavedAny(false);
+    setModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    setModalOpen(false);
+    if (hasSavedAny) {
+      window.location.reload();
+    }
   };
 
   const handleEmployeeChange = (index: number, updated: EmployeeClosingData) => {
@@ -128,16 +178,39 @@ export function DailyClosingClient({ initialClosings, role }: DailyClosingClient
     setFetchedEmployees(next);
   };
 
+  const handleOfficeEmployeeChange = (updated: OfficeEmployeeClosingData) => {
+    const next = [...fetchedOfficeEmployees];
+    const index = next.findIndex(e => e.deliveryBoyId === updated.deliveryBoyId);
+    if (index !== -1) {
+      next[index] = updated;
+      setFetchedOfficeEmployees(next);
+    }
+  };
+
   const handleSubmitClosing = () => {
     if (!cashVerified) {
       setError("Please physically verify all cash payments and check the confirmation box.");
       return;
     }
     setError("");
+    const isOffice = selectedEmployeeType === "OFFICE";
+    const activeBoy = isOffice
+      ? fetchedOfficeEmployees.find((e) => e.deliveryBoyId === selectedBoyId)
+      : fetchedEmployees.find((e) => e.deliveryBoyId === selectedBoyId);
+    if (!activeBoy) {
+      setError("No active employee selected.");
+      return;
+    }
+
     const payload = {
       date: selectedDate,
       notes: generalNotes,
-      employeeClosings: fetchedEmployees,
+      employeeClosings: [
+        {
+          ...activeBoy,
+          isOfficeSale: isOffice,
+        }
+      ],
       cashVerified: true,
     };
 
@@ -147,9 +220,64 @@ export function DailyClosingClient({ initialClosings, role }: DailyClosingClient
         setError(res.error);
         return;
       }
-      if (res.closing) {
-        window.location.reload();
+      setHasSavedAny(true);
+
+      // Re-fetch to update statuses
+      const fetchRes = await getDeliveryBoysForDate(selectedDate);
+      if (!fetchRes.error && fetchRes.deliveryBoys) {
+        const formatted = fetchRes.deliveryBoys.map((db: any) => ({
+          deliveryBoyId: db.deliveryBoy.id,
+          deliveryBoyName: db.deliveryBoy.name,
+          cylinderBreakdown: db.products.map((p: any) => ({
+            productId: p.productId,
+            productName: p.productName,
+            soldQty: p.soldQty,
+            baseRate: p.baseRate,
+            kmRate: p.kmRate,
+            kmExtra: p.kmExtra,
+            totalAmt: p.totalAmt,
+          })),
+          totalDelivered: db.totalDelivered,
+          pendingQty: db.pendingQty,
+          returnedQty: db.returnedQty,
+          udhariAmount: db.udhariAmount,
+          cashCollected: db.cashCollected,
+          onlineAmount: db.onlineAmount,
+          kmBasedExtra: 0,
+          expectedTotal: db.cashCollected + db.onlineAmount + db.udhariAmount,
+          actualCashGiven: 0,
+          notes: "",
+          alreadyClosed: db.alreadyClosed,
+        }));
+        setFetchedEmployees(formatted);
       }
+
+      const officeRes = await getOfficeStaffForDate(selectedDate);
+      if (!officeRes.error && officeRes.officeStaff) {
+        const formattedOffice = officeRes.officeStaff.map((db: any) => ({
+          deliveryBoyId: db.deliveryBoyId,
+          deliveryBoyName: db.deliveryBoyName,
+          totalDelivered: db.totalDelivered,
+          pendingQty: db.pendingQty,
+          returnedQty: db.returnedQty,
+          udhariAmount: db.udhariAmount,
+          cashCollected: db.cashCollected,
+          onlineAmount: db.onlineAmount,
+          kmBasedExtra: 0,
+          expectedTotal: db.expectedTotal,
+          actualCashGiven: 0,
+          notes: "",
+          isOfficeSale: true,
+          officeTransactionItems: db.officeTransactionItems,
+          alreadyClosed: db.alreadyClosed,
+        }));
+        setFetchedOfficeEmployees(formattedOffice);
+      }
+
+      setCashVerified(false);
+      setGeneralNotes("");
+      setSelectedBoyId(null);
+      setStep(1);
     });
   };
 
@@ -202,8 +330,10 @@ export function DailyClosingClient({ initialClosings, role }: DailyClosingClient
       expectedTotal: ec.expectedTotal,
       actualCashGiven: ec.actualCashGiven,
       notes: ec.notes || "",
+      isOfficeSale: !!(ec as any).isOfficeSale,
+      officeTransactionItems: (ec as any).isOfficeSale ? (ec.cylinderBreakdown as any) : [],
     }));
-    setEditableEmployees(editable);
+    setEditableEmployees(editable as any[]);
     setEditMode(true);
   };
 
@@ -245,14 +375,7 @@ export function DailyClosingClient({ initialClosings, role }: DailyClosingClient
           />
         </div>
         <button
-          onClick={() => {
-            setError("");
-            setStep(1);
-            setFetchedEmployees([]);
-            setCashVerified(false);
-            setGeneralNotes("");
-            setModalOpen(true);
-          }}
+          onClick={handleOpenModal}
           className="flex items-center gap-2 bg-blue-700 text-white px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-blue-800 transition shadow-sm"
         >
           <Plus className="w-4 h-4" /> Record Daily Closing
@@ -320,7 +443,7 @@ export function DailyClosingClient({ initialClosings, role }: DailyClosingClient
       </div>
 
       {/* Record Daily Closing Wizard Modal (Add closing) */}
-      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="Record Daily Closing" size="xl" style={{ minHeight: "500px" }}>
+      <Modal open={modalOpen} onClose={handleCloseModal} title="Record Daily Closing" size="xl" style={{ minHeight: "500px" }}>
         <div className="space-y-6">
           <div className="flex items-center justify-between border-b border-slate-100 pb-4">
             {[
@@ -353,216 +476,262 @@ export function DailyClosingClient({ initialClosings, role }: DailyClosingClient
             </div>
           )}
 
+          {/* STEP 1: Select Date & Employee */}
           {step === 1 && (
             <div className="space-y-4 max-w-md mx-auto py-4 min-h-[480px]">
               <div className="flex flex-col gap-2">
                 <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Select Closing Date</label>
                 <CalendarPicker value={selectedDate} onChange={(val) => setSelectedDate(val)} />
               </div>
-              <p className="text-xs text-slate-400">
-                This will automatically fetch all active deliveries logged by delivery boys for this date.
-              </p>
-              <button
-                type="button"
-                onClick={handleFetchDeliveryBoys}
-                disabled={isPending}
-                className="w-full bg-blue-700 text-white font-bold py-2.5 rounded-xl text-xs hover:bg-blue-800 transition disabled:opacity-60"
-              >
-                {isPending ? "Fetching Records..." : "Fetch Active Boys & Proceed"}
-              </button>
+
+              {isPending ? (
+                <div className="text-center py-6 text-xs font-semibold text-slate-500">
+                  Fetching employee records for this date...
+                </div>
+              ) : (fetchedEmployees.filter((emp) => !emp.alreadyClosed).length > 0 || fetchedOfficeEmployees.filter((emp) => !emp.alreadyClosed).length > 0) ? (
+                <div className="flex flex-col gap-2 animate-in fade-in duration-200">
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Select Employee</label>
+                  <select
+                    value={selectedBoyId ? `${selectedEmployeeType}:${selectedBoyId}` : ""}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val) {
+                        const [type, id] = val.split(":");
+                        setSelectedEmployeeType(type as "DELIVERY" | "OFFICE");
+                        setSelectedBoyId(id);
+                      } else {
+                        setSelectedBoyId(null);
+                      }
+                    }}
+                    className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 font-bold text-slate-700 bg-white"
+                  >
+                    <option value="">-- Choose Employee --</option>
+                    {fetchedEmployees.filter((emp) => !emp.alreadyClosed).length > 0 && (
+                      <optgroup label="🚴 Delivery Boys">
+                        {fetchedEmployees.filter((emp) => !emp.alreadyClosed).map((emp) => (
+                          <option key={emp.deliveryBoyId} value={`DELIVERY:${emp.deliveryBoyId}`}>
+                            {emp.deliveryBoyName}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
+                    {fetchedOfficeEmployees.filter((emp) => !emp.alreadyClosed).length > 0 && (
+                      <optgroup label="🏪 Office Sales Staff">
+                        {fetchedOfficeEmployees.filter((emp) => !emp.alreadyClosed).map((emp) => (
+                          <option key={emp.deliveryBoyId} value={`OFFICE:${emp.deliveryBoyId}`}>
+                            {emp.deliveryBoyName}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
+                  </select>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (selectedBoyId) setStep(2);
+                    }}
+                    disabled={!selectedBoyId}
+                    className="w-full mt-2 bg-blue-700 text-white font-bold py-2.5 rounded-xl text-xs hover:bg-blue-800 transition disabled:opacity-50"
+                  >
+                    Proceed to Reconcile
+                  </button>
+                </div>
+              ) : (
+                <div className="text-center py-6 text-xs text-slate-400 font-medium">
+                  {(fetchedEmployees.length > 0 || fetchedOfficeEmployees.length > 0)
+                    ? "All employee records for this date have been reconciled."
+                    : "No active records found for this date."}
+                </div>
+              )}
             </div>
           )}
 
+          {/* STEP 2: Adjust Boy Records */}
           {step === 2 && (
             <div className="space-y-4">
-              <div className="flex justify-between items-center bg-blue-50/50 px-4 py-3 rounded-xl border border-blue-100">
-                <p className="text-xs text-blue-700 font-semibold">
-                  Found <span className="font-bold">{fetchedEmployees.length}</span> active delivery boy records for{" "}
-                  {formatDate(selectedDate)}.
-                </p>
-                <button
-                  onClick={() => setStep(1)}
-                  className="text-xs text-slate-600 hover:text-slate-800 font-bold bg-white border border-slate-200 px-3 py-1.5 rounded-lg transition"
-                >
-                  Change Date
-                </button>
-              </div>
+              {(() => {
+                const isOffice = selectedEmployeeType === "OFFICE";
+                const emp = isOffice
+                  ? fetchedOfficeEmployees.find(e => e.deliveryBoyId === selectedBoyId)
+                  : fetchedEmployees.find(e => e.deliveryBoyId === selectedBoyId);
+                const empIndex = isOffice
+                  ? fetchedOfficeEmployees.findIndex(e => e.deliveryBoyId === selectedBoyId)
+                  : fetchedEmployees.findIndex(e => e.deliveryBoyId === selectedBoyId);
 
-              <div className="max-h-[50vh] overflow-y-auto pr-1">
-                {fetchedEmployees.map((emp, index) => (
-                  <DailyClosingEmployeePanel
-                    key={emp.deliveryBoyId}
-                    employee={emp}
-                    onChange={(updated) => handleEmployeeChange(index, updated)}
-                  />
-                ))}
-              </div>
+                if (!emp) {
+                  return (
+                    <div className="text-center py-6 text-xs text-slate-400 font-medium animate-in fade-in duration-200">
+                      No active employee selected. Please go back and select one.
+                      <button
+                        type="button"
+                        onClick={() => { setSelectedBoyId(null); setStep(1); }}
+                        className="mt-2 block mx-auto px-4 py-2 bg-blue-700 text-white rounded-xl"
+                      >
+                        Back to Selection
+                      </button>
+                    </div>
+                  );
+                }
+                return (
+                  <div className="space-y-4 animate-in fade-in duration-200">
+                    <div className="flex justify-between items-center bg-blue-50/50 px-4 py-2.5 rounded-xl border border-blue-100">
+                      <p className="text-xs text-blue-700 font-semibold">
+                        Reconciling: <span className="font-bold">{emp.deliveryBoyName}</span> for {formatDate(selectedDate)}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => { setSelectedBoyId(null); setStep(1); }}
+                        className="text-xs text-slate-600 hover:text-slate-800 font-bold bg-white border border-slate-200 px-3 py-1.5 rounded-lg transition"
+                      >
+                        Change Employee
+                      </button>
+                    </div>
 
-              <div className="flex justify-end gap-3 pt-3 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setModalOpen(false)}
-                  className="px-5 py-2.5 rounded-xl text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 transition"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setStep(3)}
-                  className="px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-blue-700 hover:bg-blue-800 transition"
-                >
-                  Next: Verify Cash & Submit
-                </button>
-              </div>
+                    <div className="max-h-[50vh] overflow-y-auto pr-1">
+                      {isOffice ? (
+                        <OfficeSalesPanel
+                          employee={emp as OfficeEmployeeClosingData}
+                          onChange={handleOfficeEmployeeChange}
+                        />
+                      ) : (
+                        <DailyClosingEmployeePanel
+                          employee={emp as any}
+                          onChange={(updated) => handleEmployeeChange(empIndex, updated)}
+                        />
+                      )}
+                    </div>
+
+                    <div className="flex justify-between items-center pt-3 border-t border-slate-100">
+                      <button
+                        type="button"
+                        onClick={() => { setSelectedBoyId(null); setStep(1); }}
+                        className="px-5 py-2.5 rounded-xl text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 transition"
+                      >
+                        Back
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setStep(3)}
+                        className="px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-blue-700 hover:bg-blue-800 transition"
+                      >
+                        Next: Verify Cash & Submit
+                      </button>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           )}
 
+          {/* STEP 3: Verify Physical Cash */}
           {step === 3 && (
-            <div className="space-y-5">
-              <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4">
-                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">
-                  Reconciliation Summary
-                </h4>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs text-left">
-                    <thead>
-                      <tr className="border-b border-slate-200 text-slate-500 font-bold pb-2">
-                        <th className="py-2">Delivery Boy</th>
-                        <th className="py-2 text-right">Online (UPI)</th>
-                        <th className="py-2 text-right">Udhari (Credit)</th>
-                        <th className="py-2 text-right">Expected Cash</th>
-                        <th className="py-2 text-right">Actual Handover</th>
-                        <th className="py-2 text-right">Discrepancy</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {fetchedEmployees.map((emp) => {
-                        const expectedCash = emp.expectedTotal - emp.onlineAmount - emp.udhariAmount;
-                        const disc = emp.actualCashGiven - expectedCash;
-                        return (
-                          <tr key={emp.deliveryBoyId} className="text-slate-700">
-                            <td className="py-3 font-semibold">{emp.deliveryBoyName}</td>
-                            <td className="py-3 text-right font-semibold text-purple-700">
-                              {formatCurrency(emp.onlineAmount)}
-                            </td>
-                            <td className="py-3 text-right font-semibold text-amber-700">
-                              {formatCurrency(emp.udhariAmount)}
-                            </td>
-                            <td className="py-3 text-right font-bold text-slate-600">{formatCurrency(expectedCash)}</td>
-                            <td className="py-3 text-right font-black text-blue-700">
-                              {formatCurrency(emp.actualCashGiven)}
-                            </td>
-                            <td className="py-3 text-right font-black">
-                              {disc === 0 ? (
-                                <span className="text-green-600">Balanced</span>
-                              ) : disc < 0 ? (
-                                <span className="text-rose-600">-{formatCurrency(Math.abs(disc))}</span>
-                              ) : (
-                                <span className="text-emerald-600">+{formatCurrency(disc)}</span>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                    <tfoot>
-                      <tr className="border-t border-slate-200 font-black text-slate-800">
-                        <td className="py-3">Grand Total</td>
-                        <td className="py-3 text-right text-purple-700">
-                          {formatCurrency(fetchedEmployees.reduce((sum, e) => sum + e.onlineAmount, 0))}
-                        </td>
-                        <td className="py-3 text-right text-amber-700">
-                          {formatCurrency(fetchedEmployees.reduce((sum, e) => sum + e.udhariAmount, 0))}
-                        </td>
-                        <td className="py-3 text-right">
-                          {formatCurrency(
-                            fetchedEmployees.reduce(
-                              (sum, e) => sum + (e.expectedTotal - e.onlineAmount - e.udhariAmount),
-                              0
-                            )
-                          )}
-                        </td>
-                        <td className="py-3 text-right text-blue-700">
-                          {formatCurrency(fetchedEmployees.reduce((sum, e) => sum + e.actualCashGiven, 0))}
-                        </td>
-                        <td className="py-3 text-right">
-                          {(() => {
-                            const totExp = fetchedEmployees.reduce(
-                              (sum, e) => sum + (e.expectedTotal - e.onlineAmount - e.udhariAmount),
-                              0
-                            );
-                            const totAct = fetchedEmployees.reduce((sum, e) => sum + e.actualCashGiven, 0);
-                            const diff = totAct - totExp;
-                            return diff === 0 ? (
+            <div className="space-y-5 animate-in fade-in duration-200">
+              {(() => {
+                const isOffice = selectedEmployeeType === "OFFICE";
+                const emp = (isOffice
+                  ? fetchedOfficeEmployees.find(e => e.deliveryBoyId === selectedBoyId)
+                  : fetchedEmployees.find(e => e.deliveryBoyId === selectedBoyId)) as any;
+                if (!emp) return null;
+                const expectedCash = emp.expectedTotal - emp.onlineAmount - emp.udhariAmount;
+                const disc = emp.actualCashGiven - expectedCash;
+                return (
+                  <>
+                    <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4">
+                      <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">
+                        Reconciliation Summary for {emp.deliveryBoyName}
+                      </h4>
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-xs font-medium text-slate-600">
+                        <div className="bg-white p-3 rounded-xl border border-slate-100">
+                          <p className="text-[10px] text-slate-400 uppercase font-bold">Online Payments (UPI)</p>
+                          <p className="text-sm font-black text-purple-700 mt-1">{formatCurrency(emp.onlineAmount)}</p>
+                        </div>
+                        <div className="bg-white p-3 rounded-xl border border-slate-100">
+                          <p className="text-[10px] text-slate-400 uppercase font-bold">Udhari (Credit)</p>
+                          <p className="text-sm font-black text-amber-700 mt-1">{formatCurrency(emp.udhariAmount)}</p>
+                        </div>
+                        <div className="bg-white p-3 rounded-xl border border-slate-100">
+                          <p className="text-[10px] text-slate-400 uppercase font-bold">Expected Cash</p>
+                          <p className="text-sm font-black text-slate-800 mt-1">{formatCurrency(expectedCash)}</p>
+                        </div>
+                        <div className="bg-white p-3 rounded-xl border border-slate-100">
+                          <p className="text-[10px] text-slate-400 uppercase font-bold">Actual Cash Handover</p>
+                          <p className="text-sm font-black text-blue-700 mt-1">{formatCurrency(emp.actualCashGiven)}</p>
+                        </div>
+                        <div className="bg-white p-3 rounded-xl border border-slate-100 col-span-1 md:col-span-2">
+                          <p className="text-[10px] text-slate-400 uppercase font-bold">Discrepancy</p>
+                          <p className="text-sm font-black mt-1 font-bold">
+                            {disc === 0 ? (
                               <span className="text-green-600">Balanced</span>
-                            ) : diff < 0 ? (
-                              <span className="text-rose-600">-{formatCurrency(Math.abs(diff))}</span>
+                            ) : disc < 0 ? (
+                              <span className="text-rose-600">Shortage of -{formatCurrency(Math.abs(disc))}</span>
                             ) : (
-                              <span className="text-emerald-600">+{formatCurrency(diff)}</span>
-                            );
-                          })()}
-                        </td>
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
-              </div>
+                              <span className="text-emerald-600">Excess of +{formatCurrency(disc)}</span>
+                            )}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
-                  General Closing Notes
-                </label>
-                <textarea
-                  value={generalNotes}
-                  onChange={(e) => setGeneralNotes(e.target.value)}
-                  placeholder="Notes for the whole day, general cash drawer issues..."
-                  rows={2}
-                  className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none font-medium text-slate-600"
-                />
-              </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
+                        Closing Notes for {emp.deliveryBoyName}
+                      </label>
+                      <textarea
+                        value={generalNotes}
+                        onChange={(e) => setGeneralNotes(e.target.value)}
+                        placeholder="Explain any shortages, excess, or other reconciliation issues..."
+                        rows={2}
+                        className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none font-medium text-slate-600"
+                      />
+                    </div>
 
-              <div className="flex items-start gap-3 p-4 bg-emerald-50 border border-emerald-100 rounded-2xl">
-                <input
-                  type="checkbox"
-                  id="admin-confirm-verified"
-                  checked={cashVerified}
-                  onChange={(e) => setCashVerified(e.target.checked)}
-                  className="mt-0.5 w-4.5 h-4.5 text-emerald-600 border-slate-300 rounded focus:ring-emerald-500 cursor-pointer"
-                />
-                <label htmlFor="admin-confirm-verified" className="text-xs text-emerald-800 font-bold cursor-pointer select-none">
-                  Cash Verified ✅
-                  <span className="block font-medium text-[11px] text-emerald-700/80 mt-1">
-                    I confirm that I have physically counted all notes/coins handed over by the delivery boys and checked all digital payments. I verify the shortage/excess figures are correct.
-                  </span>
-                </label>
-              </div>
+                    {/* Physical Cash Verification Checkbox */}
+                    <div className="flex items-start gap-3 p-4 bg-emerald-50 border border-emerald-100 rounded-2xl">
+                      <input
+                        type="checkbox"
+                        id="admin-confirm-verified"
+                        checked={cashVerified}
+                        onChange={(e) => setCashVerified(e.target.checked)}
+                        className="mt-0.5 w-4.5 h-4.5 text-emerald-600 border-slate-300 rounded focus:ring-emerald-500 cursor-pointer"
+                      />
+                      <label htmlFor="admin-confirm-verified" className="text-xs text-emerald-800 font-bold cursor-pointer select-none">
+                        Cash Verified ✅
+                        <span className="block font-medium text-[11px] text-emerald-700/80 mt-1">
+                          I confirm that I have physically counted all notes/coins handed over by {emp.deliveryBoyName} and verified all payments.
+                        </span>
+                      </label>
+                    </div>
 
-              <div className="flex justify-between items-center pt-3 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setStep(2)}
-                  className="px-5 py-2.5 rounded-xl text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 transition"
-                >
-                  Back
-                </button>
-                <div className="flex gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setModalOpen(false)}
-                    className="px-5 py-2.5 rounded-xl text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 transition"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleSubmitClosing}
-                    disabled={isPending || !cashVerified}
-                    className="px-6 py-2.5 rounded-xl text-xs font-black text-white bg-green-600 hover:bg-green-700 transition disabled:opacity-50"
-                  >
-                    {isPending ? "Submitting..." : "Submit Daily Closing"}
-                  </button>
-                </div>
-              </div>
+                    <div className="flex justify-between items-center pt-3 border-t border-slate-100">
+                      <button
+                        type="button"
+                        onClick={() => setStep(2)}
+                        className="px-5 py-2.5 rounded-xl text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 transition"
+                      >
+                        Back
+                      </button>
+                      <div className="flex gap-3">
+                        <button
+                          type="button"
+                          onClick={() => { setSelectedBoyId(null); setStep(1); }}
+                          className="px-5 py-2.5 rounded-xl text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 transition"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleSubmitClosing}
+                          disabled={isPending || !cashVerified}
+                          className="px-6 py-2.5 rounded-xl text-xs font-black text-white bg-green-600 hover:bg-green-700 transition disabled:opacity-50"
+                        >
+                          {isPending ? "Submitting..." : `Submit Closing for ${emp.deliveryBoyName}`}
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                );
+              })()}
             </div>
           )}
         </div>
@@ -618,7 +787,7 @@ export function DailyClosingClient({ initialClosings, role }: DailyClosingClient
             {/* Edit / View individual employee closings */}
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Delivery Boys Breakdown</h4>
+                <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Employee Closing Breakdown</h4>
                 {!editMode && detailClosing.status !== "APPROVED" && (
                   <button
                     onClick={() => handleStartEdit(detailClosing)}
@@ -631,36 +800,71 @@ export function DailyClosingClient({ initialClosings, role }: DailyClosingClient
 
               <div className="max-h-[40vh] overflow-y-auto pr-1">
                 {editMode ? (
-                  editableEmployees.map((emp, index) => (
-                    <DailyClosingEmployeePanel
-                      key={emp.deliveryBoyId}
-                      employee={emp}
-                      onChange={(updated) => handleEditableEmployeeChange(index, updated)}
-                    />
-                  ))
+                  editableEmployees.map((emp, index) => {
+                    const isOffice = (emp as any).isOfficeSale;
+                    return isOffice ? (
+                      <OfficeSalesPanel
+                        key={emp.deliveryBoyId}
+                        employee={emp as any}
+                        onChange={(updated) => handleEditableEmployeeChange(index, updated as any)}
+                      />
+                    ) : (
+                      <DailyClosingEmployeePanel
+                        key={emp.deliveryBoyId}
+                        employee={emp as any}
+                        onChange={(updated) => handleEditableEmployeeChange(index, updated)}
+                      />
+                    );
+                  })
                 ) : (
-                  detailClosing.employeeClosings.map((emp) => (
-                    <DailyClosingEmployeePanel
-                      key={emp.id}
-                      employee={{
-                        deliveryBoyId: emp.deliveryBoy.id,
-                        deliveryBoyName: emp.deliveryBoy.name,
-                        cylinderBreakdown: emp.cylinderBreakdown,
-                        totalDelivered: emp.totalDelivered,
-                        pendingQty: emp.pendingQty,
-                        returnedQty: emp.returnedQty,
-                        udhariAmount: emp.udhariAmount,
-                        cashCollected: emp.cashCollected,
-                        onlineAmount: emp.onlineAmount,
-                        kmBasedExtra: emp.kmBasedExtra,
-                        expectedTotal: emp.expectedTotal,
-                        actualCashGiven: emp.actualCashGiven,
-                        notes: emp.notes || "",
-                      }}
-                      onChange={() => { }}
-                      readOnly={true}
-                    />
-                  ))
+                  detailClosing.employeeClosings.map((emp) => {
+                    const isOffice = (emp as any).isOfficeSale;
+                    return isOffice ? (
+                      <OfficeSalesPanel
+                        key={emp.id}
+                        employee={{
+                          deliveryBoyId: emp.deliveryBoy.id,
+                          deliveryBoyName: emp.deliveryBoy.name,
+                          cylinderBreakdown: emp.cylinderBreakdown as any,
+                          totalDelivered: emp.totalDelivered,
+                          pendingQty: emp.pendingQty,
+                          returnedQty: emp.returnedQty,
+                          udhariAmount: emp.udhariAmount,
+                          cashCollected: emp.cashCollected,
+                          onlineAmount: emp.onlineAmount,
+                          kmBasedExtra: emp.kmBasedExtra,
+                          expectedTotal: emp.expectedTotal,
+                          actualCashGiven: emp.actualCashGiven,
+                          notes: emp.notes || "",
+                          isOfficeSale: true,
+                          officeTransactionItems: emp.cylinderBreakdown as any,
+                        }}
+                        onChange={() => { }}
+                        readOnly={true}
+                      />
+                    ) : (
+                      <DailyClosingEmployeePanel
+                        key={emp.id}
+                        employee={{
+                          deliveryBoyId: emp.deliveryBoy.id,
+                          deliveryBoyName: emp.deliveryBoy.name,
+                          cylinderBreakdown: emp.cylinderBreakdown as any,
+                          totalDelivered: emp.totalDelivered,
+                          pendingQty: emp.pendingQty,
+                          returnedQty: emp.returnedQty,
+                          udhariAmount: emp.udhariAmount,
+                          cashCollected: emp.cashCollected,
+                          onlineAmount: emp.onlineAmount,
+                          kmBasedExtra: emp.kmBasedExtra,
+                          expectedTotal: emp.expectedTotal,
+                          actualCashGiven: emp.actualCashGiven,
+                          notes: emp.notes || "",
+                        }}
+                        onChange={() => { }}
+                        readOnly={true}
+                      />
+                    );
+                  })
                 )}
               </div>
             </div>

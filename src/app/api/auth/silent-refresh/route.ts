@@ -7,9 +7,7 @@ import {
 } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
-const IS_PROD       = process.env.NODE_ENV === "production";
-const ROOT_DOMAIN   = process.env.ROOT_DOMAIN ?? "localhost";
-const COOKIE_DOMAIN = ROOT_DOMAIN === "localhost" ? ".localhost" : `.${ROOT_DOMAIN}`;
+const IS_PROD = process.env.NODE_ENV === "production";
 
 /**
  * GET /api/auth/silent-refresh?next=<encoded-path>
@@ -91,7 +89,7 @@ export async function GET(req: NextRequest) {
     sameSite: "lax",
     maxAge:   6 * 60 * 60,        // 6 hours
     path:     "/",
-    domain:   COOKIE_DOMAIN,
+    // No `domain` — same-origin cookie (single-domain SaaS)
   });
 
   // New RT — 7 days (rotated for security, duration unchanged)
@@ -101,7 +99,7 @@ export async function GET(req: NextRequest) {
     sameSite: "lax",
     maxAge:   7 * 24 * 60 * 60,   // 7 days
     path:     "/",
-    domain:   COOKIE_DOMAIN,
+    // No `domain` — same-origin cookie (single-domain SaaS)
   });
 
   return response;

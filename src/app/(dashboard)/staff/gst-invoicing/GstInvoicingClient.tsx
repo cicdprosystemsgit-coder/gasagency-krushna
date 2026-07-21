@@ -46,6 +46,7 @@ interface GstInvoicingClientProps {
   customers: Customer[];
   products: Product[];
   agencyInfo: AgencyInfo;
+  stockMap?: Record<string, { officeStock: number; godownStock: number }>;
   readonly?: boolean;
 }
 
@@ -60,6 +61,7 @@ export function GstInvoicingClient({
   customers,
   products,
   agencyInfo,
+  stockMap = {},
   readonly = false,
 }: GstInvoicingClientProps) {
   const [invoices, setInvoices] = useState(initialInvoices);
@@ -98,6 +100,16 @@ export function GstInvoicingClient({
       document.removeEventListener("mousedown", handleClickOutside);
     };
   }, []);
+
+  useEffect(() => {
+    const cost = parseFloat(quickProductForm.unitCost) || 0;
+    const rate = parseFloat(quickProductForm.saleRate) || 0;
+    const computed = rate - cost;
+    const computedStr = computed > 0 ? String(Number(computed.toFixed(2))) : "0";
+    if (quickProductForm.margin !== computedStr) {
+      setQuickProductForm((prev) => ({ ...prev, margin: computedStr }));
+    }
+  }, [quickProductForm.unitCost, quickProductForm.saleRate]);
 
 
   function handleQuickCustomerSubmit(e: React.FormEvent) {
@@ -196,11 +208,22 @@ export function GstInvoicingClient({
   const gstAmount = subtotal * GST_RATE;
   const total     = subtotal + gstAmount;
 
+  // Check if any item exceeds available office stock
+  const hasStockError = items.some((item) => {
+    if (!item.productId) return false;
+    const officeStock = stockMap[item.productId]?.officeStock ?? null;
+    return officeStock !== null && item.qty > officeStock;
+  });
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!form.customerId) { setError("Please select a customer"); return; }
     if (items.some((i) => !i.productId || i.qty <= 0)) {
       setError("Please fill all item details");
+      return;
+    }
+    if (hasStockError) {
+      setError("One or more items exceed available office stock. Please reduce quantities.");
       return;
     }
     const fd = new FormData();
@@ -548,57 +571,103 @@ export function GstInvoicingClient({
                     </tr>
                   </thead>
                   <tbody>
-                    {items.map((item, i) => (
-                      <tr key={i} className="border-t border-slate-100">
-                        <td className="px-3 py-2">
-                          <div className="flex gap-1">
-                            <select
-                              value={item.productId}
-                              onChange={(e) => updateItem(i, "productId", e.target.value)}
-                              className="flex-1 px-2 py-1.5 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
-                            >
-                              <option value="">Select...</option>
-                              {localProducts.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-                            </select>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setQuickError("");
-                                setPendingItemIndex(i);
-                                setQuickProductForm({ name: "", unitCost: "", saleRate: "", margin: "", isCylinder: "false" });
-                                setQuickProductModal(true);
-                              }}
-                              className="px-2 bg-slate-50 border border-slate-200 hover:bg-slate-100 rounded-lg flex items-center justify-center transition-colors font-bold text-xs text-slate-500"
-                              title="Add new product"
-                            >
-                              +
-                            </button>
-                          </div>
-                        </td>
-                        <td className="px-3 py-2">
-                          <input
-                            type="number" min="1" value={item.qty}
-                            onChange={(e) => updateItem(i, "qty", Number(e.target.value))}
-                            className="w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
-                          />
-                        </td>
-                        <td className="px-3 py-2">
-                          <input
-                            type="number" min="0" value={item.rate}
-                            onChange={(e) => updateItem(i, "rate", Number(e.target.value))}
-                            className="w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs text-right focus:outline-none focus:ring-1 focus:ring-blue-500"
-                          />
-                        </td>
-                        <td className="px-3 py-2 text-right font-semibold text-slate-800 text-xs">{formatCurrency(item.amount)}</td>
-                        <td className="px-3 py-2 text-center">
-                          {items.length > 1 && (
-                            <button type="button" onClick={() => removeItem(i)} className="text-red-400 hover:text-red-600">
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
+                    {items.map((item, i) => {
+                      const officeStock = item.productId ? (stockMap[item.productId]?.officeStock ?? null) : null;
+                      const godownStock = item.productId ? (stockMap[item.productId]?.godownStock ?? 0) : 0;
+                      const isOverStock = officeStock !== null && item.qty > officeStock;
+                      return (
+                        <tr key={i} className={`border-t border-slate-100 ${isOverStock ? "bg-red-50" : ""}`}>
+                          <td className="px-3 py-2">
+                            <div className="flex flex-col gap-1">
+                              <div className="flex gap-1">
+                                <select
+                                  value={item.productId}
+                                  onChange={(e) => updateItem(i, "productId", e.target.value)}
+                                  className={`flex-1 px-2 py-1.5 border rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 ${
+                                    isOverStock ? "border-red-400" : "border-slate-200"
+                                  }`}
+                                >
+                                  <option value="">Select...</option>
+                                  {localProducts.map((p) => {
+                                    const pStock = stockMap[p.id]?.officeStock ?? null;
+                                    return (
+                                      <option key={p.id} value={p.id}>
+                                        {p.name}{pStock !== null ? ` (Office: ${pStock})` : ""}
+                                      </option>
+                                    );
+                                  })}
+                                </select>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setQuickError("");
+                                    setPendingItemIndex(i);
+                                    setQuickProductForm({ name: "", unitCost: "", saleRate: "", margin: "", isCylinder: "false" });
+                                    setQuickProductModal(true);
+                                  }}
+                                  className="px-2 bg-slate-50 border border-slate-200 hover:bg-slate-100 rounded-lg flex items-center justify-center transition-colors font-bold text-xs text-slate-500"
+                                  title="Add new product"
+                                >
+                                  +
+                                </button>
+                              </div>
+                              {/* Stock availability badges */}
+                              {item.productId && (
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  {officeStock !== null && (
+                                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                                      officeStock === 0
+                                        ? "bg-red-100 text-red-700"
+                                        : isOverStock
+                                        ? "bg-orange-100 text-orange-700"
+                                        : "bg-emerald-100 text-emerald-700"
+                                    }`}>
+                                      🏪 Office: {officeStock} units
+                                    </span>
+                                  )}
+                                  {godownStock > 0 && (
+                                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-700">
+                                      🏭 Godown: {godownStock} units
+                                    </span>
+                                  )}
+                                  {isOverStock && (
+                                    <span className="text-[10px] font-bold text-red-600">
+                                      ⚠ Insufficient stock!
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-3 py-2">
+                            <input
+                              type="number" min="1" value={item.qty}
+                              onChange={(e) => updateItem(i, "qty", Number(e.target.value))}
+                              className={`w-full px-2 py-1.5 border rounded-lg text-xs text-center focus:outline-none focus:ring-1 ${
+                                isOverStock
+                                  ? "border-red-400 bg-red-50 focus:ring-red-400 text-red-700 font-bold"
+                                  : "border-slate-200 focus:ring-blue-500"
+                              }`}
+                            />
+                          </td>
+                          <td className="px-3 py-2">
+                            <input
+                              type="number" min="0" value={item.rate}
+                              onChange={(e) => updateItem(i, "rate", Number(e.target.value))}
+                              className="w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs text-right focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            />
+                          </td>
+                          <td className="px-3 py-2 text-right font-semibold text-slate-800 text-xs">{formatCurrency(item.amount)}</td>
+                          <td className="px-3 py-2 text-center">
+                            {items.length > 1 && (
+                              <button type="button" onClick={() => removeItem(i)} className="text-red-400 hover:text-red-600">
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -624,13 +693,19 @@ export function GstInvoicingClient({
               </div>
             </div>
 
+            {hasStockError && (
+              <div className="flex items-center gap-2 text-xs text-red-700 bg-red-50 border border-red-200 rounded-xl px-3 py-2">
+                <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                <span>One or more items exceed available office stock. Adjust quantities to proceed.</span>
+              </div>
+            )}
             <div className="flex justify-end gap-3 pt-1">
               <button type="button" onClick={() => setModalOpen(false)}
                 className="px-5 py-2.5 rounded-xl text-sm font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 transition">
                 Cancel
               </button>
-              <button type="submit" disabled={isPending}
-                className="px-5 py-2.5 rounded-xl text-sm font-semibold text-white bg-blue-700 hover:bg-blue-800 disabled:opacity-60 transition">
+              <button type="submit" disabled={isPending || hasStockError}
+                className="px-5 py-2.5 rounded-xl text-sm font-semibold text-white bg-blue-700 hover:bg-blue-800 disabled:opacity-60 disabled:cursor-not-allowed transition">
                 {isPending ? "Creating..." : "Create Invoice"}
               </button>
             </div>
@@ -904,7 +979,8 @@ export function GstInvoicingClient({
                 value={quickProductForm.margin}
                 onChange={(e) => setQuickProductForm({ ...quickProductForm, margin: e.target.value })}
                 placeholder="0.00"
-                className="w-full px-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50 cursor-not-allowed opacity-75 font-semibold text-slate-500"
+                readOnly
               />
             </div>
             <div>

@@ -926,11 +926,11 @@ export function GodownClient({
                                     {r.ervNo && (
                                       <div className="mt-3 pt-3 border-t border-slate-100 flex flex-col gap-1 text-[12px] text-slate-600">
                                         <div>
-                                          <span className="font-semibold text-slate-700">ERV Number:</span> <span className="font-mono bg-slate-100 px-1.5 py-0.5 rounded border">{r.ervNo}</span>
+                                          <span className="font-semibold text-slate-700">Invoice No:</span> <span className="font-mono bg-slate-100 px-1.5 py-0.5 rounded border">{r.ervNo}</span>
                                         </div>
                                         {r.ervDate && (
                                           <div>
-                                            <span className="font-semibold text-slate-700">ERV Date:</span> <span>{new Date(r.ervDate).toLocaleDateString()}</span>
+                                            <span className="font-semibold text-slate-700">Invoice Issue Date:</span> <span>{new Date(r.ervDate).toLocaleDateString()}</span>
                                           </div>
                                         )}
                                       </div>
@@ -1112,11 +1112,11 @@ export function GodownClient({
                 <input type="datetime-local" value={entryDate} onChange={(e) => setEntryDate(e.target.value)} className="input text-[13px]" />
               </div>
               <div>
-                <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1.5">ERV Number</label>
-                <input value={entryErvNo} onChange={(e) => setEntryErvNo(e.target.value)} placeholder="e.g. ERV-12345" className="input text-[13px]" />
+                <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1.5">Invoice No</label>
+                <input value={entryErvNo} onChange={(e) => setEntryErvNo(e.target.value)} placeholder="e.g. INV-12345" className="input text-[13px]" />
               </div>
               <div>
-                <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1.5">ERV Issue Date</label>
+                <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1.5">Invoice Issue Date</label>
                 <input type="date" value={entryErvDate} onChange={(e) => setEntryErvDate(e.target.value)} className="input text-[13px]" />
               </div>
             </div>
@@ -1241,7 +1241,7 @@ export function GodownClient({
             <>
               <div className="rounded-xl border border-slate-200 overflow-hidden">
                 <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-200">
-                  <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Exit Details &amp; ERV Info</p>
+                  <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Exit Details &amp; Invoice Info</p>
                 </div>
                 <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="sm:col-span-2">
@@ -1249,11 +1249,11 @@ export function GodownClient({
                     <input type="datetime-local" value={exitDate} onChange={(e) => setExitDate(e.target.value)} className="input text-[13px]" />
                   </div>
                   <div>
-                    <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1.5">ERV Number</label>
-                    <input value={exitErvNo} onChange={(e) => setExitErvNo(e.target.value)} placeholder="e.g. ERV-12345" className="input text-[13px]" />
+                    <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1.5">Invoice No</label>
+                    <input value={exitErvNo} onChange={(e) => setExitErvNo(e.target.value)} placeholder="e.g. INV-12345" className="input text-[13px]" />
                   </div>
                   <div>
-                    <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1.5">ERV Issue Date</label>
+                    <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1.5">Invoice Issue Date</label>
                     <input type="date" value={exitErvDate} onChange={(e) => setExitErvDate(e.target.value)} className="input text-[13px]" />
                   </div>
                 </div>

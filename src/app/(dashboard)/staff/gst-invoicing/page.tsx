@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { FileText } from "lucide-react";
 import { GstInvoicingClient } from "./GstInvoicingClient";
+import { getProductStockMap } from "@/app/actions/gst-invoicing";
 
 import { checkPermission } from "@/lib/rbac";
 
@@ -14,7 +15,7 @@ export default async function StaffGstInvoicingPage() {
   const isAllowed = await checkPermission(session.userId, "gstInvoices", "read");
   if (!isAllowed) redirect("/staff");
 
-  const [invoices, customers, products, agency] = await Promise.all([
+  const [invoices, customers, products, agency, stockMap] = await Promise.all([
     prisma.gstInvoice.findMany({
       where: { agencyId: session.agencyId },
       orderBy: { date: "desc" },
@@ -29,6 +30,7 @@ export default async function StaffGstInvoicingPage() {
       orderBy: { name: "asc" },
     }),
     prisma.agency.findUnique({ where: { id: session.agencyId } }),
+    getProductStockMap(session.agencyId),
   ]);
 
   const agencyInfo = {
@@ -52,6 +54,7 @@ export default async function StaffGstInvoicingPage() {
         customers={customers}
         products={products}
         agencyInfo={agencyInfo}
+        stockMap={stockMap}
       />
     </div>
   );

@@ -1,0 +1,20 @@
+{
+    "keep": {
+        "days": true,
+        "amount": 30
+    },
+    "auditLog": "D:\\CICD Project\\Gasagency\\gasagency\\logs\\.log-audit.json",
+    "files": [
+        {
+            "date": 1784564117689,
+            "name": "D:\\CICD Project\\Gasagency\\gasagency\\logs\\gasagency_logs_20260720.log",
+            "hash": "9062107bf4bcfc2c877484b33e0306099f5d5e2927cfa7a099620e9abfc0829a"
+        },
+        {
+            "date": 1784574240959,
+            "name": "D:\\CICD Project\\Gasagency\\gasagency\\logs\\gasagency_logs_20260721.log",
+            "hash": "f976241136b730cc7fe1161b0353ec575a8a892b952cdadbf4610fbed8ea4e5a"
+        }
+    ],
+    "hashType": "sha256"
+}

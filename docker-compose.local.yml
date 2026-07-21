@@ -10,7 +10,6 @@ services:
     environment:
       NODE_ENV: production
       NEXTAUTH_URL: http://localhost:3000
-      ROOT_DOMAIN: localhost
 
   postgres:
     ports:

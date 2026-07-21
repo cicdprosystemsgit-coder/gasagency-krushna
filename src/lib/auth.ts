@@ -168,8 +168,6 @@ export async function verifyRefreshToken(token: string): Promise<RefreshTokenPay
 // ─── Cookie Management ────────────────────────────────────────────────────────
 
 const IS_PROD = process.env.NODE_ENV === "production";
-const ROOT_DOMAIN = process.env.ROOT_DOMAIN ?? "localhost";
-const COOKIE_DOMAIN = ROOT_DOMAIN === "localhost" ? ".localhost" : `.${ROOT_DOMAIN}`;
 
 export async function setAuthCookies(accessToken: string, refreshToken: string) {
   const cookieStore = await cookies();
@@ -180,23 +178,23 @@ export async function setAuthCookies(accessToken: string, refreshToken: string) 
     sameSite: "lax",
     maxAge:   6 * 60 * 60,   // 6 hours — proxy slides this on every request
     path:     "/",
-    domain:   COOKIE_DOMAIN,
+    // No `domain` — same-origin cookie (single-domain SaaS, no subdomains)
   });
 
   cookieStore.set("rt", refreshToken, {
     httpOnly: true,
     secure:   IS_PROD,
     sameSite: "lax",
-    maxAge:   7 * 24 * 60 * 60, // 7 days — unchanged
-    path:     "/",              // was /api/auth/refresh — proxy needs to read it on all routes
-    domain:   COOKIE_DOMAIN,
+    maxAge:   7 * 24 * 60 * 60, // 7 days
+    path:     "/",
+    // No `domain` — same-origin cookie
   });
 }
 
 export async function clearAuthCookies() {
   const cookieStore = await cookies();
-  cookieStore.set("at", "", { path: "/", domain: COOKIE_DOMAIN, maxAge: 0 });
-  cookieStore.set("rt", "", { path: "/", domain: COOKIE_DOMAIN, maxAge: 0 }); // path updated to match setAuthCookies
+  cookieStore.set("at", "", { path: "/", maxAge: 0 });
+  cookieStore.set("rt", "", { path: "/", maxAge: 0 });
 }
 
 // ─── Session Helpers (backward-compatible with existing actions) ──────────────

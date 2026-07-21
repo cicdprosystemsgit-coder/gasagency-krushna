@@ -126,6 +126,7 @@ export async function getDeliveryBoysForDate(dateStr: string) {
   const closedEntries = await prisma.dailyClosingEmployee.findMany({
     where: {
       agencyId: session.agencyId!,
+      isOfficeSale: false,
       dailyClosing: {
         date: { gte: start, lte: end },
         agencyId: session.agencyId!,
@@ -145,6 +146,130 @@ export async function getDeliveryBoysForDate(dateStr: string) {
   }));
 
   return { deliveryBoys: result };
+}
+
+export async function getOfficeStaffForDate(dateStr: string) {
+  const session = await getSession();
+  if (!session || !["ADMIN", "MANAGER"].includes(session.role) || !session.agencyId) {
+    return { error: "Unauthorized" };
+  }
+
+  const start = new Date(dateStr);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(dateStr);
+  end.setHours(23, 59, 59, 999);
+
+  const transactions = await prisma.officeTransaction.findMany({
+    where: {
+      agencyId: session.agencyId,
+      date: { gte: start, lte: end },
+    },
+    include: {
+      addedBy: {
+        select: { id: true, name: true },
+      },
+      product: {
+        select: { id: true, name: true },
+      },
+    },
+  });
+
+  // Group by office staff (addedById)
+  const grouped: Record<string, {
+    deliveryBoyId: string;
+    deliveryBoyName: string;
+    cylinderBreakdown: any[];
+    totalDelivered: number;
+    pendingQty: number;
+    returnedQty: number;
+    cashCollected: number;
+    onlineAmount: number;
+    udhariAmount: number;
+    kmBasedExtra: number;
+    expectedTotal: number;
+    actualCashGiven: number;
+    notes: string;
+    officeTransactionItems: {
+      type: string;
+      description: string | null;
+      qty: number;
+      unitRate: number;
+      amount: number;
+      paymentMode: string;
+    }[];
+  }> = {};
+
+  for (const t of transactions) {
+    const staffId = t.addedById;
+    if (!staffId || !t.addedBy) continue;
+    if (!grouped[staffId]) {
+      grouped[staffId] = {
+        deliveryBoyId: staffId,
+        deliveryBoyName: t.addedBy.name,
+        cylinderBreakdown: [],
+        totalDelivered: 0,
+        pendingQty: 0,
+        returnedQty: 0,
+        cashCollected: 0,
+        onlineAmount: 0,
+        udhariAmount: 0,
+        kmBasedExtra: 0,
+        expectedTotal: 0,
+        actualCashGiven: 0,
+        notes: "",
+        officeTransactionItems: [],
+      };
+    }
+
+    const group = grouped[staffId];
+    group.totalDelivered += t.qty;
+
+    const paymentMode = t.paymentMode || "CASH";
+    const isCash = paymentMode === "CASH";
+    const isCredit = paymentMode === "CREDIT";
+
+    if (isCash) {
+      group.cashCollected += t.amount;
+    } else if (isCredit) {
+      group.udhariAmount += t.amount;
+    } else {
+      group.onlineAmount += t.amount;
+    }
+
+    group.expectedTotal += t.amount;
+    group.officeTransactionItems.push({
+      type: t.type,
+      description: t.product?.name ?? t.description ?? "—",
+      qty: t.qty,
+      unitRate: t.unitRate,
+      amount: t.amount,
+      paymentMode: paymentMode,
+    });
+  }
+
+  // Check if any have already closed entries for this date
+  const closedEntries = await prisma.dailyClosingEmployee.findMany({
+    where: {
+      agencyId: session.agencyId!,
+      isOfficeSale: true,
+      dailyClosing: {
+        date: { gte: start, lte: end },
+        agencyId: session.agencyId!,
+      }
+    },
+    select: {
+      deliveryBoyId: true
+    }
+  });
+  const closedStaffIds = new Set(closedEntries.map(e => e.deliveryBoyId));
+
+  // Convert to array
+  const result = Object.values(grouped).map((g) => ({
+    ...g,
+    alreadyClosed: closedStaffIds.has(g.deliveryBoyId),
+  }));
+
+  return { officeStaff: result };
 }
 
 export async function createDailyClosingWithEmployees(formDataJson: string) {
@@ -224,6 +349,7 @@ export async function createDailyClosingWithEmployees(formDataJson: string) {
         where: {
           dailyClosingId: closing.id,
           deliveryBoyId: emp.deliveryBoyId,
+          isOfficeSale: !!emp.isOfficeSale,
           agencyId: session.agencyId!,
         }
       });
@@ -243,6 +369,7 @@ export async function createDailyClosingWithEmployees(formDataJson: string) {
         excessAmount: empExcess,
         notes: emp.notes || null,
         fetchedFromDeliveries: emp.fetchedFromDeliveries !== false,
+        isOfficeSale: !!emp.isOfficeSale,
       };
 
       if (existingEmpClosing) {

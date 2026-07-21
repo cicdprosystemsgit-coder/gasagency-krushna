@@ -39,6 +39,7 @@ enum PaymentMode {
 enum TransactionType {
   NEW_CONNECTION
   REGULATOR
+  REGULATOR_REPLACE
   PIPE
   OTHER
   CYLINDER_REFILL
@@ -165,6 +166,7 @@ model Agency {
   employeeClosings   DailyClosingEmployee[]
   deliveryVehicles   DeliveryVehicle[]
   vehicleTripLogs    VehicleTripLog[]
+  regulatorRecords   RegulatorRecord[]
 
   // Phase 1 relations
   subscription       AgencySubscription?
@@ -373,6 +375,8 @@ model Customer {
   commercialSales    CommercialSale[]
   complaints         CustomerComplaint[]   // Phase 1
   paymentReceipts    PaymentReceipt[]      // Phase 2
+  officeTransactions OfficeTransaction[]
+  regulators         RegulatorRecord[]
 }
 
 model GodownRecord {
@@ -506,6 +510,8 @@ model OfficeTransaction {
   type        TransactionType
   inventoryId String?
   product     Product?        @relation(fields: [inventoryId], references: [id])
+  customerId  String?
+  customer    Customer?       @relation(fields: [customerId], references: [id])
   description String?
   qty         Int             @default(1)
   unitRate    Float           @default(0)
@@ -516,6 +522,8 @@ model OfficeTransaction {
   addedBy     User            @relation(fields: [addedById], references: [id])
   agencyId    String
   agency      Agency          @relation(fields: [agencyId], references: [id])
+  creditEntry CreditLedgerEntry?
+  regulatorIssued RegulatorRecord? @relation("RegulatorIssued")
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
 }
@@ -532,8 +540,32 @@ model CreditLedgerEntry {
   addedBy     User     @relation(fields: [addedById], references: [id])
   agencyId    String
   agency      Agency   @relation(fields: [agencyId], references: [id])
+  officeTransactionId String?            @unique
+  officeTransaction   OfficeTransaction? @relation(fields: [officeTransactionId], references: [id], onDelete: Cascade)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+model RegulatorRecord {
+  id                  String             @id @default(cuid())
+  regulatorNo         String
+  status              String             @default("ISSUED")
+  issuedAt            DateTime           @default(now())
+  customerId          String
+  customer            Customer           @relation(fields: [customerId], references: [id])
+  officeTransactionId String?            @unique
+  officeTransaction   OfficeTransaction? @relation("RegulatorIssued", fields: [officeTransactionId], references: [id], onDelete: Cascade)
+  replacedById        String?            @unique
+  replacedBy          RegulatorRecord?   @relation("RegulatorReplacement", fields: [replacedById], references: [id])
+  replacesId          String?
+  replaces            RegulatorRecord?   @relation("RegulatorReplacement")
+  notes               String?
+  agencyId            String
+  agency              Agency             @relation(fields: [agencyId], references: [id])
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+
+  @@index([regulatorNo, agencyId])
 }
 
 model SalaryDrawing {
@@ -670,6 +702,7 @@ model DailyClosingEmployee {
 
   // Audit
   fetchedFromDeliveries Boolean @default(true)
+  isOfficeSale          Boolean  @default(false)
   editedByManagerId     String?
   editedAt              DateTime?
   createdAt             DateTime @default(now())

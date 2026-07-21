@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useEffect, useTransition } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { formatCurrency } from "@/lib/utils";
 import {
@@ -264,6 +264,16 @@ export function InventoryClient({ initialProducts, isAdmin, dashboardData }: Inv
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState("");
   const [form, setForm] = useState({ name: "", unitCost: "", saleRate: "", margin: "", isCylinder: "false", hsnCode: "" });
+
+  useEffect(() => {
+    const cost = parseFloat(form.unitCost) || 0;
+    const rate = parseFloat(form.saleRate) || 0;
+    const computed = rate - cost;
+    const computedStr = computed > 0 ? String(Number(computed.toFixed(2))) : "0";
+    if (form.margin !== computedStr) {
+      setForm((prev) => ({ ...prev, margin: computedStr }));
+    }
+  }, [form.unitCost, form.saleRate]);
 
   const filteredProducts = activeTab === "dashboard"
     ? []
@@ -554,7 +564,16 @@ export function InventoryClient({ initialProducts, isAdmin, dashboardData }: Inv
             ].map((f) => (
               <div key={f.key}>
                 <label className="block text-[12px] font-medium mb-1.5" style={{ color: "#52525B" }}>{f.label}</label>
-                <input type="number" min="0" step="0.01" value={form[f.key as keyof typeof form]} onChange={(e) => setForm({ ...form, [f.key]: e.target.value })} placeholder="0" className="input" />
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={form[f.key as keyof typeof form]}
+                  onChange={(e) => setForm({ ...form, [f.key]: e.target.value })}
+                  placeholder="0"
+                  className={`input ${f.key === "margin" ? "bg-slate-50 cursor-not-allowed opacity-75 font-semibold text-slate-500" : ""}`}
+                  readOnly={f.key === "margin"}
+                />
               </div>
             ))}
           </div>

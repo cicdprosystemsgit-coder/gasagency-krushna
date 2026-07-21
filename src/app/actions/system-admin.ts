@@ -243,9 +243,6 @@ export async function impersonateAgency(agencyId: string) {
 
   await setAuthCookies(accessToken, rawRefreshToken);
 
-  const ROOT_DOMAIN = process.env.ROOT_DOMAIN ?? "localhost";
-  const targetSlug = targetUser.agency.slug || "localhost";
-  const redirectUrl = `http://${targetSlug}.${ROOT_DOMAIN}:3000/admin`;
-
-  return { success: true, redirectUrl };
+  // Single-domain SaaS: impersonation lands directly on /admin (no subdomain redirect)
+  return { success: true, redirectUrl: "/admin" };
 }
