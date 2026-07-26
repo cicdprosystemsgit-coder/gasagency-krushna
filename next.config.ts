@@ -28,7 +28,6 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
-  output: "standalone",
   transpilePackages: ["lucide-react"],
   experimental: {
     webpackBuildWorker: false,
@@ -37,7 +36,13 @@ const nextConfig: NextConfig = {
     if (process.env.NODE_ENV !== "production") {
       return [];
     }
-    return [{ source: "/(.*)", headers: securityHeaders }];
+    return [
+      {
+        // Apply security headers only to pages and API routes, NOT to static assets
+        source: "/((?!_next/static|_next/image|favicon.ico).*)",
+        headers: securityHeaders,
+      },
+    ];
   },
 };
 
