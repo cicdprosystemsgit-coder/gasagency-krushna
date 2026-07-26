@@ -8,7 +8,7 @@
 set -euo pipefail
 
 APP_DIR="/home/deploy/gasagency-krushna/"
-BRANCH="my-idea"
+BRANCH="new-client-requirement"
 DOMAIN="dev.agency.cicdprosystems.com"
 
 GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; NC='\033[0m'
