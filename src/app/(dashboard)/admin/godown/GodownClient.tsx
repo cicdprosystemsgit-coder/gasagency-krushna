@@ -117,6 +117,15 @@ function makeId() {
   return Math.random().toString(36).slice(2);
 }
 
+function getLocalDateTimeString(d: Date = new Date()) {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  const hours = String(d.getHours()).padStart(2, "0");
+  const minutes = String(d.getMinutes()).padStart(2, "0");
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
+
 function newRow(products: Product[]): CylinderItem {
   const p = products[0];
   return { id: makeId(), productId: p?.id ?? "", productName: p?.name ?? "", qty: 10 }; // Default qty to 10 for convenience
@@ -417,7 +426,7 @@ export function GodownClient({
   useEffect(() => {
     if (entryOpen) {
       if (!modifyRecordId) {
-        setEntryDate(new Date().toISOString().slice(0, 16)); // capture real-time when modal opens
+        setEntryDate(getLocalDateTimeString()); // capture real-time when modal opens
       }
       entryGps.captureGps();
     } else {
@@ -434,7 +443,7 @@ export function GodownClient({
   useEffect(() => {
     if (exitOpen) {
       if (!isEditingExit) {
-        setExitDate(new Date().toISOString().slice(0, 16)); // capture real-time when modal opens
+        setExitDate(getLocalDateTimeString()); // capture real-time when modal opens
       }
       exitGps.captureGps();
     } else {
@@ -507,7 +516,7 @@ export function GodownClient({
         setEntryOpen(false);
         setModifyRecordId(null);
         setEntryVehicleNo("");
-        setEntryDate(new Date().toISOString().slice(0, 16));
+        setEntryDate(getLocalDateTimeString());
         setEntryItems([]);
         setEntryNotes("");
         setEntryErvNo("");
@@ -569,7 +578,7 @@ export function GodownClient({
       const minutes = String(localDt.getMinutes()).padStart(2, "0");
       setExitDate(`${year}-${month}-${day}T${hours}:${minutes}`);
     } else {
-      setExitDate(new Date().toISOString().slice(0, 16));
+      setExitDate(getLocalDateTimeString());
     }
 
     // Load exit items

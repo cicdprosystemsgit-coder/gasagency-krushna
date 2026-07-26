@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect, useState, useRef, useCallback } from "react";
-import { MapContainer, TileLayer, Marker, Popup, useMap, Polyline } from "react-leaflet";
-import L from "leaflet";
+import { Map, AdvancedMarker, InfoWindow, useMap } from "@vis.gl/react-google-maps";
 import {
   Clock, MapPin, User, Search, RefreshCw, Eye, EyeOff,
   Navigation, Layers, AlertCircle, Wifi, WifiOff, ChevronRight,
 } from "lucide-react";
+import { GoogleMapsProvider } from "@/components/providers/GoogleMapsProvider";
 
 // ── Color helpers ─────────────────────────────────────────────────────────────
 
@@ -23,14 +23,57 @@ const STATUS_LABEL: Record<string, string> = {
   PRESENT: "Present", ABSENT: "Absent", HALF_DAY: "Half Day", ON_LEAVE: "On Leave",
 };
 
-function makeIcon(color: string, label: string, selected: boolean) {
+// Custom Marker styling in Google Maps (uses pure HTML/React children inside AdvancedMarker)
+function MarkerPin({ color, label, selected }: { color: string; label: string; selected: boolean }) {
   const sz = selected ? 38 : 30;
-  const ring = selected ? `box-shadow:0 0 0 3px white,0 0 0 5px ${color};` : "";
-  return L.divIcon({
-    html: `<div style="background:${color};width:${sz}px;height:${sz}px;border-radius:50%;border:3px solid white;${ring}display:flex;align-items:center;justify-content:center;color:white;font-size:11px;font-weight:bold;box-shadow:0 2px 8px rgba(0,0,0,.25)">${label}</div>`,
-    className: "custom-leaflet-marker",
-    iconSize: [sz, sz], iconAnchor: [sz / 2, sz], popupAnchor: [0, -(sz + 2)],
-  });
+  return (
+    <div
+      style={{
+        background: color,
+        width: `${sz}px`,
+        height: `${sz}px`,
+        borderRadius: "50%",
+        border: "3px solid white",
+        boxShadow: selected
+          ? `0 0 0 3px white, 0 0 0 5px ${color}, 0 2px 8px rgba(0,0,0,.25)`
+          : "0 2px 8px rgba(0,0,0,.25)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        color: "white",
+        fontSize: "11px",
+        fontWeight: "bold",
+        transition: "all 0.2s ease-in-out",
+        transform: "translate(-50%, -50%)", // Center on coordinate
+      }}
+    >
+      {label}
+    </div>
+  );
+}
+
+// Custom Polyline helper component for Google Maps
+function MapPolyline({ paths, options }: { paths: { lat: number; lng: number }[]; options?: google.maps.PolylineOptions }) {
+  const map = useMap();
+  const polylineRef = useRef<google.maps.Polyline | null>(null);
+
+  useEffect(() => {
+    if (!map) return;
+
+    polylineRef.current = new google.maps.Polyline({
+      path: paths,
+      map,
+      ...options,
+    });
+
+    return () => {
+      if (polylineRef.current) {
+        polylineRef.current.setMap(null);
+      }
+    };
+  }, [map, paths, options]);
+
+  return null;
 }
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -54,8 +97,12 @@ function AutoBounds({ pts }: { pts: [number, number][] }) {
   const map = useMap();
   const done = useRef(false);
   useEffect(() => {
-    if (!done.current && pts.length > 0) {
-      map.fitBounds(L.latLngBounds(pts), { padding: [60, 60], maxZoom: 15 });
+    if (map && pts.length > 0 && !done.current) {
+      const bounds = new google.maps.LatLngBounds();
+      pts.forEach(([lat, lng]) => {
+        bounds.extend({ lat, lng });
+      });
+      map.fitBounds(bounds);
       done.current = true;
     }
   }, [pts, map]);
@@ -65,9 +112,9 @@ function AutoBounds({ pts }: { pts: [number, number][] }) {
 // ── POLL_MS: how often we fetch fresh data (30 s) ────────────────────────────
 const POLL_MS = 30_000;
 
-// ── Main component ────────────────────────────────────────────────────────────
+// ── Main Content component ────────────────────────────────────────────────────
 
-export default function AdminAttendanceMap({ data: initialData, layer, selectedDate }: Props) {
+function AdminAttendanceMapContent({ data: initialData, layer, selectedDate }: Props) {
   const [isClient, setIsClient] = useState(false);
   const [liveData, setLiveData] = useState<LocationRecord[]>(initialData);
   const [lastFetch, setLastFetch] = useState<Date>(new Date());
@@ -153,12 +200,18 @@ export default function AdminAttendanceMap({ data: initialData, layer, selectedD
   });
 
   const selEmp = filtered.find((r) => r.id === selectedId);
-  const routeLine: [number, number][] =
+  
+  const routeLinePaths =
     selEmp?.punchInLat && selEmp.punchInLng && selEmp.punchOutLat && selEmp.punchOutLng
-      ? [[selEmp.punchInLat, selEmp.punchInLng], [selEmp.punchOutLat, selEmp.punchOutLng]]
+      ? [
+          { lat: selEmp.punchInLat, lng: selEmp.punchInLng },
+          { lat: selEmp.punchOutLat, lng: selEmp.punchOutLng }
+        ]
       : [];
 
   const bounds = pins.map((p) => [p.lat, p.lng] as [number, number]);
+
+  const activePin = pins.find((p) => p.empId === selectedId);
 
   if (!isClient) {
     return (
@@ -304,8 +357,6 @@ export default function AdminAttendanceMap({ data: initialData, layer, selectedD
 
         {/* Map */}
         <div className="flex-1 relative rounded-xl border border-zinc-200 shadow-sm overflow-hidden" style={{ minHeight: 520 }}>
-          <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-
           {/* Live pulse badge */}
           {polling && (
             <div className="absolute top-3 left-3 z-[1000] flex items-center gap-1.5 bg-white/90 backdrop-blur-sm rounded-full px-2.5 py-1 border border-emerald-300 shadow text-[11px] font-bold text-emerald-700">
@@ -314,53 +365,76 @@ export default function AdminAttendanceMap({ data: initialData, layer, selectedD
             </div>
           )}
 
-
-
-          <MapContainer center={[20.5937, 78.9629]} zoom={5}
-            style={{ height: "100%", width: "100%", minHeight: 520, zIndex: 1 }}>
-            <TileLayer
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-
-            {routeLine.length === 2 && (
-              <Polyline positions={routeLine}
-                pathOptions={{ color: "#2563eb", weight: 2, dashArray: "6 4", opacity: 0.8 }} />
+          <Map
+            defaultCenter={{ lat: 20.5937, lng: 78.9629 }}
+            defaultZoom={5}
+            style={{ height: "100%", width: "100%", minHeight: 520 }}
+            mapId="DEMO_MAP_ID"
+          >
+            {routeLinePaths.length === 2 && (
+              <MapPolyline
+                paths={routeLinePaths}
+                options={{
+                  strokeColor: "#2563eb",
+                  strokeWeight: 2,
+                  strokeOpacity: 0.8,
+                  // Dashed line style
+                  icons: [{
+                    icon: { path: "M 0,-1 0,1", strokeOpacity: 1, scale: 2 },
+                    offset: "0",
+                    repeat: "10px"
+                  }]
+                }}
+              />
             )}
 
             {pins.map((pin) => (
-              <Marker key={pin.id} position={[pin.lat, pin.lng]}
-                icon={makeIcon(pin.color, pin.type, pin.empId === selectedId)}
-                eventHandlers={{ click: () => setSelectedId(pin.empId) }}>
-                <Popup>
-                  <div className="p-1 min-w-[170px] space-y-1.5">
-                    <div className="flex items-center gap-1.5 font-bold text-zinc-800 text-sm">
-                      <User className="w-4 h-4 text-zinc-400" />{pin.name}
-                    </div>
-                    <div className="text-[10px] font-bold uppercase text-zinc-400 tracking-wider">
-                      {pin.role.replace(/_/g, " ")}
-                    </div>
-                    <div className="border-t pt-1 flex items-center justify-between text-xs text-zinc-600">
-                      <span className="flex items-center gap-1">
-                        <Clock className="w-3.5 h-3.5 text-zinc-400" />
-                        {pin.type === "▶" ? "Punch In" : "Punch Out"}
-                      </span>
-                      <span className="font-bold text-zinc-800">{pin.time}</span>
-                    </div>
-                    <div className="text-[10px] text-zinc-400 font-mono">
-                      {pin.lat.toFixed(5)}, {pin.lng.toFixed(5)}
-                    </div>
-                    <a href={`https://www.google.com/maps?q=${pin.lat},${pin.lng}`}
-                      target="_blank" rel="noreferrer"
-                      className="block text-[10px] font-bold text-blue-600 hover:underline">
-                      Open in Google Maps ↗
-                    </a>
-                  </div>
-                </Popup>
-              </Marker>
+              <AdvancedMarker
+                key={pin.id}
+                position={{ lat: pin.lat, lng: pin.lng }}
+                onClick={() => setSelectedId(pin.empId)}
+              >
+                <MarkerPin
+                  color={pin.color}
+                  label={pin.type}
+                  selected={pin.empId === selectedId}
+                />
+              </AdvancedMarker>
             ))}
 
-            <AutoBounds pts={bounds} />
-          </MapContainer>
+            {activePin && (
+              <InfoWindow
+                position={{ lat: activePin.lat, lng: activePin.lng }}
+                onCloseClick={() => setSelectedId(null)}
+              >
+                <div className="p-1 min-w-[170px] space-y-1.5">
+                  <div className="flex items-center gap-1.5 font-bold text-zinc-800 text-sm">
+                    <User className="w-4 h-4 text-zinc-400" />{activePin.name}
+                  </div>
+                  <div className="text-[10px] font-bold uppercase text-zinc-400 tracking-wider">
+                    {activePin.role.replace(/_/g, " ")}
+                  </div>
+                  <div className="border-t pt-1 flex items-center justify-between text-xs text-zinc-600">
+                    <span className="flex items-center gap-1">
+                      <Clock className="w-3.5 h-3.5 text-zinc-400" />
+                      {activePin.type === "▶" ? "Punch In" : "Punch Out"}
+                    </span>
+                    <span className="font-bold text-zinc-800">{activePin.time}</span>
+                  </div>
+                  <div className="text-[10px] text-zinc-400 font-mono">
+                    {activePin.lat.toFixed(5)}, {activePin.lng.toFixed(5)}
+                  </div>
+                  <a href={`https://www.google.com/maps?q=${activePin.lat},${activePin.lng}`}
+                    target="_blank" rel="noreferrer"
+                    className="block text-[10px] font-bold text-blue-600 hover:underline">
+                    Open in Google Maps ↗
+                  </a>
+                </div>
+              </InfoWindow>
+            )}
+
+            {bounds.length > 0 && <AutoBounds pts={bounds} />}
+          </Map>
 
           {/* Legend */}
           <div className="absolute bottom-4 right-4 z-[1000] bg-white/90 backdrop-blur-sm rounded-xl px-3 py-2 shadow border border-zinc-200 text-[10px] font-semibold space-y-1">
@@ -416,8 +490,8 @@ export default function AdminAttendanceMap({ data: initialData, layer, selectedD
               },
               {
                 label: "Route", color: "#8b5cf6",
-                value: routeLine.length === 2 ? "Shown on map" : "N/A",
-                sub: routeLine.length === 2 ? "Blue dashed line" : "Need both punches"
+                value: routeLinePaths.length === 2 ? "Shown on map" : "N/A",
+                sub: routeLinePaths.length === 2 ? "Blue dashed line" : "Need both punches"
               },
             ].map((item) => (
               <div key={item.label} className="space-y-0.5">
@@ -446,5 +520,13 @@ export default function AdminAttendanceMap({ data: initialData, layer, selectedD
         </div>
       )}
     </div>
+  );
+}
+
+export default function AdminAttendanceMap(props: Props) {
+  return (
+    <GoogleMapsProvider>
+      <AdminAttendanceMapContent {...props} />
+    </GoogleMapsProvider>
   );
 }

@@ -1,39 +1,61 @@
 "use client";
 
 import { useEffect, useState, useRef, useCallback } from "react";
-import { MapContainer, TileLayer, Marker, Popup, useMap, Polyline } from "react-leaflet";
-import L from "leaflet";
+import { Map as GoogleMap, AdvancedMarker, InfoWindow, useMap } from "@vis.gl/react-google-maps";
 import {
   Clock, MapPin, User, Search, RefreshCw, Eye, EyeOff,
   Navigation, Layers, AlertCircle, Wifi, CheckCircle2, ChevronRight, Map as MapIcon
 } from "lucide-react";
+import { GoogleMapsProvider } from "@/components/providers/GoogleMapsProvider";
 
-// Icons helpers
-function makeDivIcon(color: string, label: string, selected: boolean, pulse: boolean = false) {
+// Custom Marker styling in Google Maps (uses pure HTML/React children inside AdvancedMarker)
+function MarkerPin({ color, label, selected, pulse = false }: { color: string; label: string; selected: boolean; pulse?: boolean }) {
   const sz = selected ? 36 : 28;
-  const ring = selected ? `box-shadow: 0 0 0 3px white, 0 0 0 5px ${color};` : "";
-  const pulseClass = pulse ? "animate-pulse" : "";
-  const pulseStyle = pulse ? "box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.4);" : "";
-  
-  return L.divIcon({
-    html: `<div class="${pulseClass}" style="background:${color};width:${sz}px;height:${sz}px;border-radius:50%;border:2px solid white;${ring}${pulseStyle}display:flex;align-items:center;justify-content:center;color:white;font-size:10px;font-weight:bold;box-shadow:0 2px 6px rgba(0,0,0,.2)">${label}</div>`,
-    className: "custom-leaflet-marker",
-    iconSize: [sz, sz],
-    iconAnchor: [sz / 2, sz / 2],
-    popupAnchor: [0, -sz / 2],
-  });
+  return (
+    <div
+      className={pulse ? "animate-pulse" : ""}
+      style={{
+        background: color,
+        width: `${sz}px`,
+        height: `${sz}px`,
+        borderRadius: "50%",
+        border: "2px solid white",
+        boxShadow: selected
+          ? `0 0 0 3px white, 0 0 0 5px ${color}, 0 2px 6px rgba(0,0,0,.2)`
+          : pulse
+          ? `0 0 0 4px rgba(16, 185, 129, 0.4), 0 2px 6px rgba(0,0,0,.2)`
+          : "0 2px 6px rgba(0,0,0,.2)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        color: "white",
+        fontSize: "10px",
+        fontWeight: "bold",
+        transition: "all 0.2s ease-in-out",
+        transform: "translate(-50%, -50%)", // Center on coordinate
+      }}
+    >
+      {label}
+    </div>
+  );
 }
 
 // Custom auto bounds helper
 function AutoBounds({ pts }: { pts: [number, number][] }) {
   const map = useMap();
   const done = useRef(false);
+
   useEffect(() => {
-    if (!done.current && pts.length > 0) {
-      map.fitBounds(L.latLngBounds(pts), { padding: [50, 50], maxZoom: 15 });
+    if (map && pts.length > 0 && !done.current) {
+      const bounds = new google.maps.LatLngBounds();
+      pts.forEach(([lat, lng]) => {
+        bounds.extend({ lat, lng });
+      });
+      map.fitBounds(bounds);
       done.current = true;
     }
   }, [pts, map]);
+
   return null;
 }
 
@@ -87,7 +109,7 @@ interface Props {
   selectedDate: string;
 }
 
-export default function AdminDeliveryMap({
+function AdminDeliveryMapContent({
   initialDeliveries,
   initialLiveLocations,
   initialAttendance,
@@ -170,7 +192,7 @@ export default function AdminDeliveryMap({
     return loc.user.name.toLowerCase().includes(search.toLowerCase());
   });
 
-  // Create markers for Leaflet
+  // Create markers for Google Maps
   const pins: {
     id: string;
     lat: number;
@@ -246,6 +268,8 @@ export default function AdminDeliveryMap({
       }
     }
   });
+
+  const activePin = pins.find((p) => p.id === selectedPinId);
 
   if (!isClient) {
     return (
@@ -358,8 +382,6 @@ export default function AdminDeliveryMap({
 
         {/* Map view container */}
         <div className="flex-1 relative rounded-xl border border-zinc-200 shadow-sm overflow-hidden" style={{ minHeight: 520 }}>
-          <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-
           {/* Polling Countdown Banner */}
           {polling && (
             <div className="absolute top-3 left-3 z-[1000] flex items-center gap-1.5 bg-white/95 backdrop-blur-sm rounded-full px-2.5 py-1 border border-emerald-300 shadow text-[10px] font-bold text-emerald-700">
@@ -374,58 +396,69 @@ export default function AdminDeliveryMap({
             </div>
           )}
 
-          <MapContainer center={[20.5937, 78.9629]} zoom={5} style={{ height: "100%", width: "100%", minHeight: 520, zIndex: 1 }}>
-            <TileLayer
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            />
-
+          <GoogleMap
+            defaultCenter={{ lat: 20.5937, lng: 78.9629 }}
+            defaultZoom={5}
+            style={{ height: "100%", width: "100%", minHeight: 520 }}
+            mapId="DEMO_MAP_ID"
+          >
             {pins.map((pin) => (
-              <Marker
+              <AdvancedMarker
                 key={pin.id}
-                position={[pin.lat, pin.lng]}
-                icon={makeDivIcon(pin.color, pin.label, pin.id === selectedPinId, pin.type === "LIVE")}
-                eventHandlers={{ click: () => setSelectedPinId(pin.id) }}
+                position={{ lat: pin.lat, lng: pin.lng }}
+                onClick={() => setSelectedPinId(pin.id)}
               >
-                <Popup>
-                  <div className="p-1 min-w-[180px] space-y-1.5 text-xs">
-                    <div className="flex items-center gap-1.5 font-extrabold text-zinc-800">
-                      <User className="w-3.5 h-3.5 text-zinc-400" />
-                      {pin.name}
-                    </div>
-                    
-                    <div className="text-[10px] font-extrabold uppercase text-zinc-400">
-                      {pin.type === "LIVE" ? "⚡ Live heartbeat" : pin.type === "PUNCH_IN" ? "📍 Punch in" : "📦 Completed delivery"}
-                    </div>
-
-                    <div className="border-t pt-1 space-y-1 text-zinc-600">
-                      <div className="font-semibold">{pin.details}</div>
-                      <div className="flex items-center justify-between text-[10px] font-bold bg-zinc-50 p-1 rounded border">
-                        <span className="flex items-center gap-1"><Clock className="w-3 h-3 text-zinc-400" /> Log Time</span>
-                        <span className="text-zinc-800">{pin.time}</span>
-                      </div>
-                      {pin.accuracy && (
-                        <div className="text-[9px] text-zinc-400 font-mono">
-                          Accuracy: ±{pin.accuracy.toFixed(0)}m
-                        </div>
-                      )}
-                    </div>
-
-                    <a
-                      href={`https://www.google.com/maps?q=${pin.lat},${pin.lng}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="block text-[10px] font-bold text-center py-1 rounded bg-blue-50 border border-blue-200 text-blue-600 hover:bg-blue-100 transition"
-                    >
-                      Open in Google Maps ↗
-                    </a>
-                  </div>
-                </Popup>
-              </Marker>
+                <MarkerPin
+                  color={pin.color}
+                  label={pin.label}
+                  selected={pin.id === selectedPinId}
+                  pulse={pin.type === "LIVE"}
+                />
+              </AdvancedMarker>
             ))}
 
-            <AutoBounds pts={bounds} />
-          </MapContainer>
+            {activePin && (
+              <InfoWindow
+                position={{ lat: activePin.lat, lng: activePin.lng }}
+                onCloseClick={() => setSelectedPinId(null)}
+              >
+                <div className="p-1 min-w-[180px] space-y-1.5 text-xs">
+                  <div className="flex items-center gap-1.5 font-extrabold text-zinc-800">
+                    <User className="w-3.5 h-3.5 text-zinc-400" />
+                    {activePin.name}
+                  </div>
+                  
+                  <div className="text-[10px] font-extrabold uppercase text-zinc-400">
+                    {activePin.type === "LIVE" ? "⚡ Live heartbeat" : activePin.type === "PUNCH_IN" ? "📍 Punch in" : "📦 Completed delivery"}
+                  </div>
+
+                  <div className="border-t pt-1 space-y-1 text-zinc-600">
+                    <div className="font-semibold">{activePin.details}</div>
+                    <div className="flex items-center justify-between text-[10px] font-bold bg-zinc-50 p-1 rounded border">
+                      <span className="flex items-center gap-1"><Clock className="w-3 h-3 text-zinc-400" /> Log Time</span>
+                      <span className="text-zinc-800">{activePin.time}</span>
+                    </div>
+                    {activePin.accuracy && (
+                      <div className="text-[9px] text-zinc-400 font-mono">
+                        Accuracy: ±{activePin.accuracy.toFixed(0)}m
+                      </div>
+                    )}
+                  </div>
+
+                  <a
+                    href={`https://www.google.com/maps?q=${activePin.lat},${activePin.lng}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="block text-[10px] font-bold text-center py-1 rounded bg-blue-50 border border-blue-200 text-blue-600 hover:bg-blue-100 transition"
+                  >
+                    Open in Google Maps ↗
+                  </a>
+                </div>
+              </InfoWindow>
+            )}
+
+            {bounds.length > 0 && <AutoBounds pts={bounds} />}
+          </GoogleMap>
 
           {/* Legend panel */}
           <div className="absolute bottom-4 right-4 z-[1000] bg-white/95 backdrop-blur-xs rounded-xl px-3 py-2 shadow border border-zinc-200 text-[10px] font-bold space-y-1">
@@ -448,5 +481,13 @@ export default function AdminDeliveryMap({
         </div>
       </div>
     </div>
+  );
+}
+
+export default function AdminDeliveryMap(props: Props) {
+  return (
+    <GoogleMapsProvider>
+      <AdminDeliveryMapContent {...props} />
+    </GoogleMapsProvider>
   );
 }

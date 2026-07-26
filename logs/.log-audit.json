@@ -14,6 +14,11 @@
             "date": 1784574240959,
             "name": "D:\\CICD Project\\Gasagency\\gasagency\\logs\\gasagency_logs_20260721.log",
             "hash": "f976241136b730cc7fe1161b0353ec575a8a892b952cdadbf4610fbed8ea4e5a"
+        },
+        {
+            "date": 1784981241393,
+            "name": "D:\\CICD Project\\Gasagency\\gasagency\\logs\\gasagency_logs_20260725.log",
+            "hash": "655dcbed8cb4f874a003c09ab39e842c7d34a0299ce0308ed8a120fd310d30d4"
         }
     ],
     "hashType": "sha256"
