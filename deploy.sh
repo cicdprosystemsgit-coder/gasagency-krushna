@@ -7,7 +7,7 @@
 # =============================================================================
 set -euo pipefail
 
-APP_DIR="/home/deploy/gasagency-krushna/"
+APP_DIR="/home/deploy/gasagency/"
 BRANCH="new-client-requirement"
 DOMAIN="dev.agency.cicdprosystems.com"
 
