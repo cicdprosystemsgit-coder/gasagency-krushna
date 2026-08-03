@@ -6,11 +6,6 @@ const STATIC_ASSETS = [
   "/offline",
 ];
 
-/**
- * Only http: and https: URLs are supported by the Cache API.
- * chrome-extension://, moz-extension://, etc. will throw a TypeError
- * if passed to cache.put(), so we guard every write with this check.
- */
 function isCacheable(request) {
   const url = new URL(request.url);
   return url.protocol === "http:" || url.protocol === "https:";
@@ -34,17 +29,23 @@ self.addEventListener("activate", (event) => {
   self.clients.claim();
 });
 
-// Fetch — network-first for API routes, cache-first for static assets
+// Fetch — network-first for API routes, skip local dev and external scripts
 self.addEventListener("fetch", (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
-  // Skip non-GET, API routes, and non-cacheable schemes (e.g. chrome-extension://)
-  if (request.method !== "GET" || url.pathname.startsWith("/api/") || !isCacheable(request)) {
+  // Skip localhost / dev mode, non-GET, API routes, and external domains (e.g. google translate)
+  if (
+    url.hostname === "localhost" ||
+    url.hostname === "127.0.0.1" ||
+    request.method !== "GET" ||
+    url.pathname.startsWith("/api/") ||
+    !isCacheable(request)
+  ) {
     return;
   }
 
-  // Cache-first for static assets
+  // Cache-first for local static assets (production only)
   if (url.pathname.startsWith("/_next/static/") || url.pathname.startsWith("/icons/")) {
     event.respondWith(
       caches.match(request).then((cached) => cached || fetch(request).then((response) => {

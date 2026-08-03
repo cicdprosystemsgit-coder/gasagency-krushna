@@ -5,11 +5,13 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { BookOpen } from "lucide-react";
 import { ApprovalsClient } from "./ApprovalsClient";
 
+export const dynamic = "force-dynamic";
+
 export default async function ApprovalsPage() {
   const session = await getSession();
   if (!session || !["ADMIN", "MANAGER"].includes(session.role)) redirect("/login");
 
-  const [summaries, salaryRequests, leaveRequests] = await Promise.all([
+  const [summaries, salaryRequests, leaveRequests, employeeExpenses] = await Promise.all([
     prisma.dailySummary.findMany({
       where: { agencyId: session.agencyId! },
       orderBy: { createdAt: "desc" },
@@ -40,19 +42,31 @@ export default async function ApprovalsPage() {
         reviewedBy: { select: { name: true } },
       },
     }),
+    prisma.employeeExpense.findMany({
+      where: { agencyId: session.agencyId! },
+      orderBy: { createdAt: "desc" },
+      take: 200,
+      include: {
+        submittedBy: { select: { name: true, email: true, role: true } },
+        expenseCategory: { select: { name: true, color: true } },
+        manager: { select: { name: true } },
+        admin: { select: { name: true } },
+      },
+    }),
   ]);
 
   return (
-    <div>
+    <div className="space-y-6">
       <PageHeader
-        title="Pending Approvals"
-        subtitle="Review and approve daily summaries, salary requests and leave applications"
+        title="Approvals Hub"
+        subtitle="Review and approve daily summaries, salary requests, leave applications & employee expense claims"
         icon={<BookOpen className="w-5 h-5" />}
       />
       <ApprovalsClient
-        initialSummaries={summaries as Parameters<typeof ApprovalsClient>[0]["initialSummaries"]}
-        initialSalaryRequests={salaryRequests as Parameters<typeof ApprovalsClient>[0]["initialSalaryRequests"]}
-        initialLeaveRequests={leaveRequests as Parameters<typeof ApprovalsClient>[0]["initialLeaveRequests"]}
+        initialSummaries={summaries as any}
+        initialSalaryRequests={salaryRequests as any}
+        initialLeaveRequests={leaveRequests as any}
+        initialEmployeeExpenses={employeeExpenses as any}
         role={session.role}
         userId={session.userId}
       />

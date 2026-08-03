@@ -54,7 +54,7 @@ log "Image built"
 
 # ── Run DB migrations ─────────────────────────────────────────────────────
 warn "Running DB migrations..."
-docker compose run --rm app \
+docker compose run --rm --env-file .env.production app \
     sh -c "npx prisma migrate deploy"
 log "DB migrations applied"
 
@@ -95,3 +95,4 @@ echo ""
 docker compose ps
 echo "=================================================="
 echo ""
+

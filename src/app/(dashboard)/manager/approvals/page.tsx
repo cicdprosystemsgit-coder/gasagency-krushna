@@ -4,8 +4,9 @@ import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { BookOpen } from "lucide-react";
 import { ApprovalsClient } from "@/app/(dashboard)/admin/approvals/ApprovalsClient";
-
 import { checkPermission } from "@/lib/rbac";
+
+export const dynamic = "force-dynamic";
 
 export default async function ManagerApprovalsPage() {
   const session = await getSession();
@@ -14,7 +15,7 @@ export default async function ManagerApprovalsPage() {
   const isAllowed = await checkPermission(session.userId, "approvals", "read");
   if (!isAllowed) redirect("/manager");
 
-  const [summaries, salaryRequests, leaveRequests] = await Promise.all([
+  const [summaries, salaryRequests, leaveRequests, employeeExpenses] = await Promise.all([
     prisma.dailySummary.findMany({
       where: { agencyId: session.agencyId! },
       orderBy: { createdAt: "desc" },
@@ -25,7 +26,6 @@ export default async function ManagerApprovalsPage() {
       },
       take: 50,
     }),
-    // Manager sees only their own salary payment requests
     prisma.salaryPaymentRequest.findMany({
       where: { agencyId: session.agencyId! },
       orderBy: { createdAt: "desc" },
@@ -37,7 +37,6 @@ export default async function ManagerApprovalsPage() {
         managerReviewedBy: { select: { name: true } },
       },
     }),
-    // Manager sees all agency leave requests (can approve/reject)
     prisma.leaveRequest.findMany({
       where: { agencyId: session.agencyId! },
       orderBy: { createdAt: "desc" },
@@ -47,19 +46,31 @@ export default async function ManagerApprovalsPage() {
         reviewedBy: { select: { name: true } },
       },
     }),
+    prisma.employeeExpense.findMany({
+      where: { agencyId: session.agencyId! },
+      orderBy: { createdAt: "desc" },
+      take: 200,
+      include: {
+        submittedBy: { select: { name: true, email: true, role: true } },
+        expenseCategory: { select: { name: true, color: true } },
+        manager: { select: { name: true } },
+        admin: { select: { name: true } },
+      },
+    }),
   ]);
 
   return (
-    <div>
+    <div className="space-y-6">
       <PageHeader
         title="Pending Approvals"
-        subtitle="Review daily summaries, salary requests and leave applications"
+        subtitle="Review daily summaries, salary requests, leave applications & employee expense claims"
         icon={<BookOpen className="w-5 h-5" />}
       />
       <ApprovalsClient
-        initialSummaries={summaries as Parameters<typeof ApprovalsClient>[0]["initialSummaries"]}
-        initialSalaryRequests={salaryRequests as Parameters<typeof ApprovalsClient>[0]["initialSalaryRequests"]}
-        initialLeaveRequests={leaveRequests as Parameters<typeof ApprovalsClient>[0]["initialLeaveRequests"]}
+        initialSummaries={summaries as any}
+        initialSalaryRequests={salaryRequests as any}
+        initialLeaveRequests={leaveRequests as any}
+        initialEmployeeExpenses={employeeExpenses as any}
         role={session.role}
         userId={session.userId}
       />

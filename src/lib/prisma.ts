@@ -18,10 +18,7 @@ function createPrismaClient() {
 
   return new PrismaClient({
     adapter,
-    log:
-      process.env.NODE_ENV === "development"
-        ? [{ emit: "stdout", level: "query" }, { emit: "stdout", level: "warn" }, { emit: "stdout", level: "error" }]
-        : [{ emit: "stdout", level: "warn" }, { emit: "stdout", level: "error" }],
+    log: [{ emit: "stdout", level: "warn" }, { emit: "stdout", level: "error" }],
   } as ConstructorParameters<typeof PrismaClient>[0]);
 }
 

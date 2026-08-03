@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { prisma } from "@/lib/prisma";
 import { Role } from "@/generated/prisma";
 
@@ -83,9 +84,28 @@ export const DEFAULT_PERMISSIONS: Record<Role, Record<string, string[]>> = {
   },
 };
 
+// Request-scoped user lookup cached across concurrent calls in a single HTTP request
+const getCachedUser = cache(async (userId: string) => {
+  return prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, role: true, customRoleId: true, agencyId: true, isActive: true },
+  });
+});
+
+// Request-scoped role permissions lookup for an agency
+const getCachedRolePermissions = cache(async (agencyId: string, role: string, customRoleId?: string | null) => {
+  const rolesToCheck = [role, customRoleId].filter(Boolean) as string[];
+  return prisma.rolePermission.findMany({
+    where: {
+      agencyId,
+      role: { in: rolesToCheck },
+    },
+  });
+});
+
 /**
  * Checks if a user has permission to perform an action on a resource.
- * Checks SYSTEM_ADMIN -> DB custom override -> Static fallback.
+ * Uses request-scoped memoization to eliminate DB connection pool contention.
  */
 export async function checkPermission(
   userId: string,
@@ -93,17 +113,12 @@ export async function checkPermission(
   action: string
 ): Promise<boolean> {
   try {
-    // Fetch user details
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { id: true, role: true, customRoleId: true, agencyId: true, isActive: true },
-    });
+    const user = await getCachedUser(userId);
 
     if (!user || !user.isActive) {
       return false;
     }
 
-    // SYSTEM_ADMIN bypasses all local checks
     if (user.role === Role.SYSTEM_ADMIN) {
       return true;
     }
@@ -112,37 +127,27 @@ export async function checkPermission(
       return false;
     }
 
+    const rolePermissions = await getCachedRolePermissions(user.agencyId, user.role, user.customRoleId);
+
     // 1. Check database for custom role override first
     if (user.customRoleId) {
-      const customOverride = await prisma.rolePermission.findFirst({
-        where: {
-          agencyId: user.agencyId,
-          role: user.customRoleId,
-          resource: resource,
-          action: action,
-        },
-      });
-
-      if (customOverride !== null) {
+      const customOverride = rolePermissions.find(
+        (rp) => rp.role === user.customRoleId && rp.resource === resource && rp.action === action
+      );
+      if (customOverride !== undefined) {
         return customOverride.isAllowed;
       }
     }
 
-    // 2. Check database for specific override of the base role
-    const override = await prisma.rolePermission.findFirst({
-      where: {
-        agencyId: user.agencyId,
-        role: user.role,
-        resource: resource,
-        action: action,
-      },
-    });
-
-    if (override !== null) {
-      return override.isAllowed;
+    // 2. Check database for base role override
+    const baseOverride = rolePermissions.find(
+      (rp) => rp.role === user.role && rp.resource === resource && rp.action === action
+    );
+    if (baseOverride !== undefined) {
+      return baseOverride.isAllowed;
     }
 
-    // 3. Fall back to the default static permission matrix
+    // 3. Fall back to static permission matrix
     const roleDefaultRules = DEFAULT_PERMISSIONS[user.role];
     if (!roleDefaultRules) {
       return false;

@@ -6,6 +6,8 @@ import { SelectWithAdd, type SelectOption } from "@/components/ui/SelectWithAdd"
 import { formatCurrency, formatDate, getDaysUntilRenewal, getRenewalStatus } from "@/lib/utils";
 import { Plus, AlertTriangle, Car, Building2, Wallet, Trash2 } from "lucide-react";
 import { createExpense, createAsset, deleteAsset } from "@/app/actions/expenses";
+import { AddExpenseModal } from "@/components/expenses/AddExpenseModal";
+import { ExpenseCategoriesClient } from "../expense-categories/ExpenseCategoriesClient";
 import type { VehicleAgencyAsset } from "@/generated/prisma";
 import { cn } from "@/lib/utils";
 import { DateRangePicker } from "@/components/ui/DateRangePicker";
@@ -24,9 +26,13 @@ interface ExpensesClientProps {
   initialAssets: VehicleAgencyAsset[];
   canEdit: boolean;
   userId: string;
+  user?: { name: string; email?: string; role: string };
+  categories?: any[];
+  budgetData?: any[];
+  uncategorizedSpend?: number;
 }
 
-const TABS = ["Expenses", "Vehicle & Agency"] as const;
+const TABS = ["Expenses Ledger", "Expense Categories & Budgets", "Vehicle & Agency"] as const;
 
 const EXPENSE_CATEGORY_OPTIONS: SelectOption[] = [
   { value: "GENERAL",     label: "General" },
@@ -36,8 +42,17 @@ const EXPENSE_CATEGORY_OPTIONS: SelectOption[] = [
   { value: "OTHER",       label: "Other" },
 ];
 
-export function ExpensesClient({ initialExpenses, initialAssets, canEdit, userId }: ExpensesClientProps) {
-  const [activeTab, setActiveTab] = useState<typeof TABS[number]>("Expenses");
+export function ExpensesClient({
+  initialExpenses,
+  initialAssets,
+  canEdit,
+  userId,
+  user,
+  categories,
+  budgetData = [],
+  uncategorizedSpend = 0,
+}: ExpensesClientProps) {
+  const [activeTab, setActiveTab] = useState<typeof TABS[number]>("Expenses Ledger");
   const [expenses, setExpenses] = useState(initialExpenses);
   const [assets, setAssets] = useState(initialAssets);
   const [expenseModal, setExpenseModal] = useState(false);
@@ -134,7 +149,7 @@ export function ExpensesClient({ initialExpenses, initialAssets, canEdit, userId
         ))}
       </div>
 
-      {activeTab === "Expenses" && (
+      {activeTab === "Expenses Ledger" && (
         <>
           <div className="flex justify-between items-center mb-4 flex-wrap gap-4">
             <div className="flex items-center gap-4 flex-wrap">
@@ -182,6 +197,15 @@ export function ExpensesClient({ initialExpenses, initialAssets, canEdit, userId
             </div>
           </div>
         </>
+      )}
+
+      {activeTab === "Expense Categories & Budgets" && (
+        <ExpenseCategoriesClient
+          budgetData={budgetData}
+          uncategorizedSpend={uncategorizedSpend}
+          categories={categories || []}
+          expenses={expenses as any}
+        />
       )}
 
       {activeTab === "Vehicle & Agency" && (
@@ -247,38 +271,26 @@ export function ExpensesClient({ initialExpenses, initialAssets, canEdit, userId
         </>
       )}
 
-      {/* Expense Modal */}
-      <Modal open={expenseModal} onClose={() => setExpenseModal(false)} title="Add Expense" size="sm">
-        <form onSubmit={handleExpense} className="space-y-4">
-          {error && <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-lg text-sm">{error}</div>}
-          <div>
-            <label className="block text-sm font-semibold text-slate-700 mb-1.5">Description *</label>
-            <input value={expenseForm.description} onChange={(e) => setExpenseForm({ ...expenseForm, description: e.target.value })} placeholder="e.g., Vehicle fuel, Office supplies" className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-1.5">Amount (₹) *</label>
-              <input type="number" min="0.01" value={expenseForm.amount} onChange={(e) => setExpenseForm({ ...expenseForm, amount: e.target.value })} placeholder="0.00" className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-            </div>
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-1.5">Category</label>
-              <SelectWithAdd
-                value={expenseForm.category}
-                onChange={(val) => setExpenseForm({ ...expenseForm, category: val })}
-                options={categoryOptions}
-                addLabel="Category"
-                onAdd={(label, value) =>
-                  setCategoryOptions((prev) => [...prev, { value, label }])
-                }
-              />
-            </div>
-          </div>
-          <div className="flex justify-end gap-3 pt-1">
-            <button type="button" onClick={() => setExpenseModal(false)} className="px-5 py-2.5 rounded-xl text-sm font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 transition">Cancel</button>
-            <button type="submit" disabled={isPending} className="px-5 py-2.5 rounded-xl text-sm font-semibold text-white bg-blue-700 hover:bg-blue-800 disabled:opacity-60 transition">{isPending ? "Saving..." : "Add Expense"}</button>
-          </div>
-        </form>
-      </Modal>
+      {/* Expense Entry Modal */}
+      <AddExpenseModal
+        open={expenseModal}
+        onClose={() => setExpenseModal(false)}
+        user={user || { name: "Admin User", role: "ADMIN" }}
+        categories={categories}
+        onSuccess={(newExp) => {
+          setExpenses((prev) => [
+            {
+              id: newExp.id,
+              date: newExp.expenseDate,
+              description: `[${newExp.categoryLabel}] ${newExp.note || "No note"}`,
+              amount: newExp.amount,
+              category: newExp.categoryLabel,
+              addedBy: { name: user?.name || "Admin User" },
+            },
+            ...prev,
+          ]);
+        }}
+      />
 
       {/* Asset Modal */}
       <Modal open={assetModal} onClose={() => setAssetModal(false)} title="Add Vehicle / Agency Asset" size="lg">

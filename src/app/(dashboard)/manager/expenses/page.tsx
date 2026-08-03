@@ -2,39 +2,50 @@ import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { BarChart3 } from "lucide-react";
-import { ExpensesClient } from "@/app/(dashboard)/admin/expenses/ExpensesClient";
+import { Receipt } from "lucide-react";
+import { getAgencyEmployeeExpensesForManager } from "@/app/actions/expenses";
+import { getBudgetVsActual } from "@/app/actions/expense-categories";
+import ExpenseApprovalsClient from "./ExpenseApprovalsClient";
 
-import { checkPermission } from "@/lib/rbac";
+export const dynamic = "force-dynamic";
 
 export default async function ManagerExpensesPage() {
   const session = await getSession();
-  if (!session || session.role !== "MANAGER") redirect("/login");
+  if (!session || !["MANAGER", "ADMIN"].includes(session.role) || !session.agencyId) {
+    redirect("/login");
+  }
 
-  const isAllowed = await checkPermission(session.userId, "expenses", "read");
-  if (!isAllowed) redirect("/manager");
+  // Fetch user profile info
+  const user = await prisma.user.findUnique({
+    where: { id: session.userId },
+    select: { name: true, email: true, role: true },
+  });
 
-  const [expenses, assets] = await Promise.all([
-    prisma.expense.findMany({
-      orderBy: { date: "desc" },
-      take: 100,
-      include: { addedBy: { select: { name: true } } },
+  if (!user) redirect("/login");
+
+  // Fetch categories, team approval requests & category budget calculations
+  const [categories, { expenses: teamExpenses }, budgetResult] = await Promise.all([
+    prisma.expenseCategory.findMany({
+      where: { agencyId: session.agencyId, isActive: true },
+      orderBy: { name: "asc" },
     }),
-    prisma.vehicleAgencyAsset.findMany({ where: { isActive: true }, orderBy: { createdAt: "desc" } }),
+    getAgencyEmployeeExpensesForManager(),
+    getBudgetVsActual(),
   ]);
 
   return (
-    <div>
+    <div className="space-y-6">
       <PageHeader
-        title="Expenses & Vehicles"
-        subtitle="Track daily expenses and asset renewal schedule"
-        icon={<BarChart3 className="w-5 h-5" />}
+        title="Employee Expense Approvals & Budgets"
+        subtitle="Review, approve, or reject expense claims and track category spending"
+        icon={<Receipt className="w-5 h-5 text-blue-600" />}
       />
-      <ExpensesClient
-        initialExpenses={expenses as Parameters<typeof ExpensesClient>[0]["initialExpenses"]}
-        initialAssets={assets}
-        canEdit={false}
-        userId={session.userId}
+      <ExpenseApprovalsClient
+        initialExpenses={teamExpenses as any}
+        user={{ name: user.name, email: user.email, role: user.role }}
+        categories={categories as any}
+        budgetData={budgetResult.data}
+        uncategorizedSpend={budgetResult.uncategorizedSpend ?? 0}
       />
     </div>
   );

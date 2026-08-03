@@ -103,8 +103,16 @@ export async function getBudgetVsActual(month?: number, year?: number) {
   const spendMap = new Map<string, number>();
   let uncategorizedSpend = 0;
   expenses.forEach((e) => {
-    if (e.categoryId) {
-      spendMap.set(e.categoryId, (spendMap.get(e.categoryId) ?? 0) + e.amount);
+    let catId = e.categoryId;
+    if (!catId && e.category) {
+      const match = categories.find(
+        (c) => c.name.toLowerCase() === e.category.toLowerCase()
+      );
+      if (match) catId = match.id;
+    }
+
+    if (catId) {
+      spendMap.set(catId, (spendMap.get(catId) ?? 0) + e.amount);
     } else {
       uncategorizedSpend += e.amount;
     }

@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { StatsCard } from "@/components/ui/StatsCard";
 import { StatusBadge } from "@/components/ui/StatusBadge";
-import { formatDate, formatDateTime } from "@/lib/utils";
+import { formatDate, formatDateTime, ROLE_LABELS } from "@/lib/utils";
 import { ClipboardCheck, Users, Package, ChevronRight, ArrowRight, ShieldAlert } from "lucide-react";
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
@@ -101,7 +101,7 @@ export default async function ManagerDashboard() {
                 ) : recentSummaries.map((s) => (
                   <tr key={s.id}>
                     <td className="text-[13px] font-medium" style={{ color: "#18181B" }}>{s.submittedBy.name}</td>
-                    <td className="muted text-[12px]">{tRoles(s.submittedBy.role as keyof typeof tRoles | any)}</td>
+                    <td className="muted text-[12px]">{ROLE_LABELS[s.submittedBy.role] || s.submittedBy.role}</td>
                     <td className="muted text-[12px]">{formatDate(s.date)}</td>
                     <td><StatusBadge status={s.status} /></td>
                     <td><Link href={`/manager/approvals?id=${s.id}`} className="text-[12px] font-medium" style={{ color: "#2563EB" }}>{tDash("reviewApprovals")}</Link></td>

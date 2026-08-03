@@ -58,7 +58,19 @@ export default async function RootLayout({
           {children}
         </NextIntlClientProvider>
         <Script id="register-sw" strategy="afterInteractive">
-          {`if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js'))}`}
+          {`
+            if ('serviceWorker' in navigator) {
+              if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+                window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js'));
+              } else {
+                navigator.serviceWorker.getRegistrations().then(function(registrations) {
+                  for (let registration of registrations) {
+                    registration.unregister();
+                  }
+                });
+              }
+            }
+          `}
         </Script>
       </body>
     </html>
