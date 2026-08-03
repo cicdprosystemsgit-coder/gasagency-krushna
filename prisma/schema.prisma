@@ -487,6 +487,13 @@ model DeliveryRecord {
   deliveryLat   Float?
   deliveryLng   Float?
   deliveryAccuracy Float?
+
+  // ── Delivery Proof Photos (Phase 1 — Cloudinary) ──────────────
+  paymentReceiptUrl   String?   // Cloudinary URL — payment receipt (mandatory)
+  customerCardUrl     String?   // Cloudinary URL — customer gas book/card (mandatory)
+  additionalImageUrl  String?   // Cloudinary URL — extra proof photo (optional)
+  photosCapturedAt    DateTime? // Client-side timestamp when photos were taken
+
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 }

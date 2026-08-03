@@ -88,6 +88,13 @@ export async function createDeliveryRecord(formData: FormData) {
         deliveryLat,
         deliveryLng,
         deliveryAccuracy,
+        // ── Delivery Proof Photos ──────────────────────────────
+        paymentReceiptUrl: (formData.get("paymentReceiptUrl") as string) || null,
+        customerCardUrl:   (formData.get("customerCardUrl") as string) || null,
+        additionalImageUrl:(formData.get("additionalImageUrl") as string) || null,
+        photosCapturedAt:  formData.get("photosCapturedAt")
+          ? new Date(formData.get("photosCapturedAt") as string)
+          : null,
       },
       include: {
         customer: { select: { name: true, phone: true, address: true, type: true, customerCode: true } },
