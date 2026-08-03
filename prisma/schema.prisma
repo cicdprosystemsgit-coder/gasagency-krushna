@@ -210,6 +210,9 @@ model Agency {
   dailyCashReconciliations DailyCashReconciliation[]
   fdLoans                 FdLoanRecord[]
   vendorLedgers           VendorLedger[]
+
+  // Phase 2 — S3 backup relations
+  deliveryPhotoBackups    DeliveryPhotoBackup[]
 }
 
 model User {
@@ -303,6 +306,9 @@ model User {
   dailyCashReconciliations DailyCashReconciliation[]
   fdLoans                  FdLoanRecord[]
   vendorLedgerEntries      VendorLedgerEntry[]
+
+  // Phase 2 — S3 backup
+  deliveryPhotoBackups     DeliveryPhotoBackup[] @relation("DeliveryPhotoBackupUser")
 }
 
 model Product {
@@ -478,6 +484,12 @@ model DeliveryRecord {
   deliveryAccuracy Float?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+
+  // ── Delivery Proof Photos (Phase 1 + Phase 2) ─────────────────────────────
+  paymentReceiptUrl   String?   // Cloudinary URL — payment receipt photo
+  customerCardUrl     String?   // Cloudinary URL — customer gas card entry
+  additionalImageUrl  String?   // Cloudinary URL — optional extra proof photo
+  photosCapturedAt    DateTime? // When photos were taken (set on first upload)
 }
 
 model CommercialSale {
@@ -1644,4 +1656,27 @@ model VendorLedgerEntry {
   updatedAt   DateTime     @updatedAt
 
   @@index([vendorId, date])
+}
+
+// ── Phase 2: Delivery Photo S3 Backup Log ────────────────────────────────────
+model DeliveryPhotoBackup {
+  id              String    @id @default(cuid())
+  agencyId        String
+  agency          Agency    @relation(fields: [agencyId], references: [id])
+  triggeredById   String
+  triggeredBy     User      @relation("DeliveryPhotoBackupUser", fields: [triggeredById], references: [id])
+  status          String    // RUNNING | COMPLETED | FAILED
+  totalPhotos     Int       @default(0)
+  copiedPhotos    Int       @default(0)
+  failedPhotos    Int       @default(0)
+  skippedPhotos   Int       @default(0)    // Already in S3 (idempotent skip)
+  fromDate        DateTime  // Start of 15-day window
+  toDate          DateTime  // End of 15-day window (= triggered date)
+  s3Bucket        String?   // S3 bucket used
+  s3Prefix        String?   // e.g. agencies/abc123/2026-08
+  errorMessage    String?   @db.Text
+  startedAt       DateTime  @default(now())
+  finishedAt      DateTime?
+
+  @@index([agencyId, startedAt])
 }

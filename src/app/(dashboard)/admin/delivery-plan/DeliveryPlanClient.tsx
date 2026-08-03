@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import React, { useState, useMemo } from "react";
 import dynamic from "next/dynamic";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { formatCurrency } from "@/lib/utils";
@@ -18,6 +18,9 @@ import {
   List,
   Navigation,
 } from "lucide-react";
+
+import { DeliveryPhotoBackupPanel } from "@/components/delivery/DeliveryPhotoBackupPanel";
+import { Camera, Image as ImageIcon, ChevronDown, ChevronUp, Eye, ExternalLink } from "lucide-react";
 
 const AdminDeliveryMap = dynamic(
   () => import("@/components/attendance/AdminDeliveryMap"),
@@ -51,6 +54,11 @@ interface Delivery {
   deliveryLat: number | null;
   deliveryLng: number | null;
   deliveryAccuracy: number | null;
+  // ── Delivery Proof Photos (Phase 1 + 2) ──
+  paymentReceiptUrl?: string | null;
+  customerCardUrl?: string | null;
+  additionalImageUrl?: string | null;
+  photosCapturedAt?: string | Date | null;
 }
 
 interface DeliveryPlanClientProps {
@@ -67,6 +75,10 @@ export function DeliveryPlanClient({ deliveries, selectedDate }: DeliveryPlanCli
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [paymentFilter, setPaymentFilter] = useState("ALL");
   const [gpsFilter, setGpsFilter] = useState("ALL"); // ALL | WITH_GPS | NO_GPS
+
+  // Proof Photos interaction state
+  const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
 
   // Get unique lists for filter options based on current date's deliveries
   const productOptions = useMemo(() => {
@@ -195,6 +207,9 @@ export function DeliveryPlanClient({ deliveries, selectedDate }: DeliveryPlanCli
 
   return (
     <div className="space-y-6">
+      {/* ── Phase 2: AWS S3 Photo Backup Panel ── */}
+      <DeliveryPhotoBackupPanel />
+
       {/* Stats Widget (dynamically updates with filters) */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 transition hover:shadow-md">
@@ -394,21 +409,22 @@ export function DeliveryPlanClient({ deliveries, selectedDate }: DeliveryPlanCli
                 <tr className="bg-slate-50/80 border-b border-slate-100 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
                   <th className="px-5 py-3.5 text-left font-semibold">Customer</th>
                   <th className="px-5 py-3.5 text-left font-semibold">Product</th>
-                  <th className="px-5 py-3.5 text-center font-semibold w-24">Delivered</th>
-                  <th className="px-5 py-3.5 text-center font-semibold w-24">Returned</th>
-                  <th className="px-5 py-3.5 text-center font-semibold w-24">Pending</th>
-                  <th className="px-5 py-3.5 text-right font-semibold w-28">Cash</th>
-                  <th className="px-5 py-3.5 text-right font-semibold w-28">Online</th>
-                  <th className="px-5 py-3.5 text-right font-semibold w-28">Udhari</th>
+                  <th className="px-5 py-3.5 text-center font-semibold w-20">Delivered</th>
+                  <th className="px-5 py-3.5 text-center font-semibold w-20">Returned</th>
+                  <th className="px-5 py-3.5 text-center font-semibold w-20">Pending</th>
+                  <th className="px-5 py-3.5 text-right font-semibold w-24">Cash</th>
+                  <th className="px-5 py-3.5 text-right font-semibold w-24">Online</th>
+                  <th className="px-5 py-3.5 text-right font-semibold w-24">Udhari</th>
                   <th className="px-5 py-3.5 text-left font-semibold">Delivery Boy</th>
-                  <th className="px-5 py-3.5 text-center font-semibold w-20">GPS</th>
+                  <th className="px-5 py-3.5 text-center font-semibold w-24">Proof Photos</th>
+                  <th className="px-5 py-3.5 text-center font-semibold w-16">GPS</th>
                   <th className="px-5 py-3.5 text-left font-semibold">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {filteredDeliveries.length === 0 ? (
                   <tr>
-                    <td colSpan={11} className="px-5 py-16 text-center text-slate-400">
+                    <td colSpan={12} className="px-5 py-16 text-center text-slate-400">
                       <Truck className="w-12 h-12 mx-auto mb-3 opacity-20" />
                       <p className="font-semibold text-slate-600">No records found matching filters</p>
                       <p className="text-xs text-slate-400 mt-1">Try relaxing your search terms or clearing the dropdown selections</p>
@@ -440,51 +456,174 @@ export function DeliveryPlanClient({ deliveries, selectedDate }: DeliveryPlanCli
                       onlineVal = d.cashCollected;
                     }
 
+                    const hasPhotos = !!(d.paymentReceiptUrl || d.customerCardUrl || d.additionalImageUrl);
+                    const photoCount = (d.paymentReceiptUrl ? 1 : 0) + (d.customerCardUrl ? 1 : 0) + (d.additionalImageUrl ? 1 : 0);
+                    const isExpanded = expandedRowId === d.id;
+
                     return (
-                      <tr key={d.id} className="hover:bg-slate-50/40 transition-colors">
-                        <td className="px-5 py-3.5">
-                          <p className="font-bold text-slate-800 text-[13px]">{d.customer.name}</p>
-                          <p className="text-xs text-slate-400 mt-0.5">{d.customer.phone}</p>
-                        </td>
-                        <td className="px-5 py-3.5 text-slate-600 font-medium text-[13px]">{d.product.name}</td>
-                        <td className="px-5 py-3.5 text-center font-bold text-blue-700 text-[14px]">
-                          {d.deliveredQty}
-                        </td>
-                        <td className="px-5 py-3.5 text-center text-slate-600 font-medium text-[13px]">
-                          {d.returnedQty}
-                        </td>
-                        <td className="px-5 py-3.5 text-center text-orange-600 font-bold text-[13px]">
-                          {d.pendingQty}
-                        </td>
-                        <td className="px-5 py-3.5 text-right font-bold text-green-700">
-                          {cashVal > 0 ? formatCurrency(cashVal) : "—"}
-                        </td>
-                        <td className="px-5 py-3.5 text-right font-bold text-purple-700">
-                          {onlineVal > 0 ? formatCurrency(onlineVal) : "—"}
-                        </td>
-                        <td className="px-5 py-3.5 text-right font-bold text-amber-700">
-                          {creditVal > 0 ? formatCurrency(creditVal) : "—"}
-                        </td>
-                        <td className="px-5 py-3.5 text-slate-600 font-medium text-[13px]">{d.deliveredBy.name}</td>
-                        <td className="px-5 py-3.5 text-center">
-                          {d.deliveryLat && d.deliveryLng ? (
-                            <a
-                              href={`https://www.google.com/maps?q=${d.deliveryLat},${d.deliveryLng}`}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="inline-flex items-center justify-center p-1 rounded bg-emerald-50 hover:bg-emerald-100 transition border border-emerald-200"
-                              title={`Accuracy: ±${d.deliveryAccuracy?.toFixed(0)}m`}
-                            >
-                              <Navigation className="w-3.5 h-3.5 style={{ color: '#16A34A' }}" />
-                            </a>
-                          ) : (
-                            <span className="text-slate-300 font-bold">—</span>
-                          )}
-                        </td>
-                        <td className="px-5 py-3.5">
-                          <StatusBadge status={d.status} />
-                        </td>
-                      </tr>
+                      <React.Fragment key={d.id}>
+                        <tr className="hover:bg-slate-50/40 transition-colors">
+                          <td className="px-5 py-3.5">
+                            <p className="font-bold text-slate-800 text-[13px]">{d.customer.name}</p>
+                            <p className="text-xs text-slate-400 mt-0.5">{d.customer.phone}</p>
+                          </td>
+                          <td className="px-5 py-3.5 text-slate-600 font-medium text-[13px]">{d.product.name}</td>
+                          <td className="px-5 py-3.5 text-center font-bold text-blue-700 text-[14px]">
+                            {d.deliveredQty}
+                          </td>
+                          <td className="px-5 py-3.5 text-center text-slate-600 font-medium text-[13px]">
+                            {d.returnedQty}
+                          </td>
+                          <td className="px-5 py-3.5 text-center text-orange-600 font-bold text-[13px]">
+                            {d.pendingQty}
+                          </td>
+                          <td className="px-5 py-3.5 text-right font-bold text-green-700">
+                            {cashVal > 0 ? formatCurrency(cashVal) : "—"}
+                          </td>
+                          <td className="px-5 py-3.5 text-right font-bold text-purple-700">
+                            {onlineVal > 0 ? formatCurrency(onlineVal) : "—"}
+                          </td>
+                          <td className="px-5 py-3.5 text-right font-bold text-amber-700">
+                            {creditVal > 0 ? formatCurrency(creditVal) : "—"}
+                          </td>
+                          <td className="px-5 py-3.5 text-slate-600 font-medium text-[13px]">{d.deliveredBy.name}</td>
+
+                          {/* Proof Photos Cell */}
+                          <td className="px-5 py-3.5 text-center">
+                            {hasPhotos ? (
+                              <button
+                                type="button"
+                                onClick={() => setExpandedRowId(isExpanded ? null : d.id)}
+                                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition-all border ${
+                                  isExpanded
+                                    ? "bg-blue-600 text-white border-blue-600"
+                                    : "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
+                                }`}
+                              >
+                                <Camera className="w-3.5 h-3.5" />
+                                {photoCount} Proof{photoCount > 1 ? "s" : ""}
+                                {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                              </button>
+                            ) : (
+                              <span className="text-slate-300 text-xs font-medium">—</span>
+                            )}
+                          </td>
+
+                          {/* GPS Cell */}
+                          <td className="px-5 py-3.5 text-center">
+                            {d.deliveryLat && d.deliveryLng ? (
+                              <a
+                                href={`https://www.google.com/maps?q=${d.deliveryLat},${d.deliveryLng}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center justify-center p-1 rounded bg-emerald-50 hover:bg-emerald-100 transition border border-emerald-200"
+                                title={`Accuracy: ±${d.deliveryAccuracy?.toFixed(0)}m`}
+                              >
+                                <Navigation className="w-3.5 h-3.5 text-emerald-600" />
+                              </a>
+                            ) : (
+                              <span className="text-slate-300 font-bold">—</span>
+                            )}
+                          </td>
+                          <td className="px-5 py-3.5">
+                            <StatusBadge status={d.status} />
+                          </td>
+                        </tr>
+
+                        {/* Expanded Proof Photos Drawer */}
+                        {isExpanded && hasPhotos && (
+                          <tr className="bg-slate-50/80 border-y border-slate-200">
+                            <td colSpan={12} className="px-6 py-4">
+                              <div className="space-y-3">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-2">
+                                    <ImageIcon className="w-4 h-4 text-blue-600" />
+                                    <span className="text-xs font-bold text-slate-800">
+                                      Verified Delivery Proof Photos — {d.customer.name}
+                                    </span>
+                                  </div>
+                                  {d.photosCapturedAt && (
+                                    <span className="text-[11px] font-medium text-slate-500">
+                                      Captured at: {new Date(d.photosCapturedAt).toLocaleString("en-IN")}
+                                    </span>
+                                  )}
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                  {d.paymentReceiptUrl && (
+                                    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-xs">
+                                      <div className="p-2 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+                                        <span className="text-[11px] font-bold text-slate-700">1. Payment Receipt</span>
+                                        <button
+                                          onClick={() => setLightboxUrl(d.paymentReceiptUrl!)}
+                                          className="text-xs text-blue-600 font-semibold flex items-center gap-1 hover:underline"
+                                        >
+                                          <Eye className="w-3 h-3" /> Zoom
+                                        </button>
+                                      </div>
+                                      <div
+                                        onClick={() => setLightboxUrl(d.paymentReceiptUrl!)}
+                                        className="aspect-video bg-slate-900 cursor-pointer overflow-hidden relative group"
+                                      >
+                                        <img src={d.paymentReceiptUrl} alt="Payment Receipt" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-bold gap-1">
+                                          <Eye className="w-4 h-4" /> Expand
+                                        </div>
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {d.customerCardUrl && (
+                                    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-xs">
+                                      <div className="p-2 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+                                        <span className="text-[11px] font-bold text-slate-700">2. Customer Card Entry</span>
+                                        <button
+                                          onClick={() => setLightboxUrl(d.customerCardUrl!)}
+                                          className="text-xs text-blue-600 font-semibold flex items-center gap-1 hover:underline"
+                                        >
+                                          <Eye className="w-3 h-3" /> Zoom
+                                        </button>
+                                      </div>
+                                      <div
+                                        onClick={() => setLightboxUrl(d.customerCardUrl!)}
+                                        className="aspect-video bg-slate-900 cursor-pointer overflow-hidden relative group"
+                                      >
+                                        <img src={d.customerCardUrl} alt="Customer Card" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-bold gap-1">
+                                          <Eye className="w-4 h-4" /> Expand
+                                        </div>
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {d.additionalImageUrl && (
+                                    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-xs">
+                                      <div className="p-2 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+                                        <span className="text-[11px] font-bold text-slate-700">3. Additional Photo</span>
+                                        <button
+                                          onClick={() => setLightboxUrl(d.additionalImageUrl!)}
+                                          className="text-xs text-blue-600 font-semibold flex items-center gap-1 hover:underline"
+                                        >
+                                          <Eye className="w-3 h-3" /> Zoom
+                                        </button>
+                                      </div>
+                                      <div
+                                        onClick={() => setLightboxUrl(d.additionalImageUrl!)}
+                                        className="aspect-video bg-slate-900 cursor-pointer overflow-hidden relative group"
+                                      >
+                                        <img src={d.additionalImageUrl} alt="Additional Photo" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-bold gap-1">
+                                          <Eye className="w-4 h-4" /> Expand
+                                        </div>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
                     );
                   })
                 )}
@@ -507,7 +646,7 @@ export function DeliveryPlanClient({ deliveries, selectedDate }: DeliveryPlanCli
                     <td className="px-5 py-4 text-right text-amber-700 text-[14px]">
                       {totals.udhari > 0 ? formatCurrency(totals.udhari) : "—"}
                     </td>
-                    <td colSpan={3} />
+                    <td colSpan={4} />
                   </tr>
                 </tfoot>
               )}
@@ -515,6 +654,36 @@ export function DeliveryPlanClient({ deliveries, selectedDate }: DeliveryPlanCli
           </div>
         )}
       </div>
+
+      {/* Lightbox Modal for high-res photo viewing */}
+      {lightboxUrl && (
+        <div
+          className="fixed inset-0 z-50 bg-black/90 backdrop-blur-xs flex items-center justify-center p-4"
+          onClick={() => setLightboxUrl(null)}
+        >
+          <div className="relative max-w-4xl max-h-[90vh] overflow-hidden rounded-2xl bg-black border border-white/20 shadow-2xl">
+            <button
+              onClick={() => setLightboxUrl(null)}
+              className="absolute top-4 right-4 z-10 p-2 rounded-full bg-black/60 text-white hover:bg-black/80 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <img src={lightboxUrl} alt="Delivery Proof Watermarked Full" className="max-w-full max-h-[85vh] object-contain mx-auto" />
+            <div className="p-3 bg-slate-900 text-white text-xs flex items-center justify-between">
+              <span className="font-semibold text-slate-300">Watermarked Delivery Proof Photo</span>
+              <a
+                href={lightboxUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="text-blue-400 hover:text-blue-300 flex items-center gap-1 font-bold"
+                onClick={(e) => e.stopPropagation()}
+              >
+                Open Full Resolution <ExternalLink className="w-3.5 h-3.5" />
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

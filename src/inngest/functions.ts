@@ -1,5 +1,6 @@
 import { inngest } from "./client";
 import { prisma } from "@/lib/prisma";
+import { backupDeliveryPhotos } from "@/lib/s3-backup";
 
 // ── Job 1: Daily Stock Snapshot ───────────────────────────────────────────────
 export const dailyStockSnapshot = inngest.createFunction(
@@ -315,6 +316,110 @@ export const dailyAttendanceAlert = inngest.createFunction(
   }
 );
 
+// ── Job 8: Delivery Photo S3 Backup (event-driven) ────────────────────────────
+export const deliveryPhotoBackupJob = inngest.createFunction(
+  {
+    id: "delivery-photo-backup",
+    triggers: [{ event: "backup/delivery-photos.requested" }],
+    // Retry up to 2 times on failure
+    retries: 2,
+  },
+  async ({ event, step }: { event: any; step: any }) => {
+    const { backupId, agencyId, fromDate, toDate } = event.data as {
+      backupId: string;
+      agencyId: string;
+      fromDate: string;
+      toDate: string;
+    };
+
+    try {
+      // Step 1: Fetch all DeliveryRecords in the 15-day window that have at least one photo
+      const records = await step.run("fetch-delivery-records", async () => {
+        return prisma.deliveryRecord.findMany({
+          where: {
+            agencyId,
+            date: {
+              gte: new Date(fromDate),
+              lte: new Date(toDate),
+            },
+            OR: [
+              { paymentReceiptUrl: { not: null } },
+              { customerCardUrl: { not: null } },
+              { additionalImageUrl: { not: null } },
+            ],
+          },
+          select: {
+            id: true,
+            agencyId: true,
+            date: true,
+            paymentReceiptUrl: true,
+            customerCardUrl: true,
+            additionalImageUrl: true,
+          },
+        });
+      });
+
+      // Update log: how many records found
+      const totalEstimate = records.reduce((n: number, r: { paymentReceiptUrl: string | null; customerCardUrl: string | null; additionalImageUrl: string | null }) => {
+        return n
+          + (r.paymentReceiptUrl ? 1 : 0)
+          + (r.customerCardUrl ? 1 : 0)
+          + (r.additionalImageUrl ? 1 : 0);
+      }, 0);
+
+      await step.run("update-log-total", async () => {
+        await prisma.deliveryPhotoBackup.update({
+          where: { id: backupId },
+          data: { totalPhotos: totalEstimate },
+        });
+      });
+
+      // Step 2: Copy all photos to S3 in batches of 20
+      const results = await step.run("copy-photos-to-s3", async () => {
+        return backupDeliveryPhotos(records as any[], {
+          batchSize: 20,
+          bucket: process.env.AWS_S3_BACKUP_BUCKET,
+        });
+      });
+
+      // Step 3: Finalize backup log as COMPLETED
+      await step.run("finalize-backup-log", async () => {
+        await prisma.deliveryPhotoBackup.update({
+          where: { id: backupId },
+          data: {
+            status: "COMPLETED",
+            totalPhotos: results.total,
+            copiedPhotos: results.copied,
+            skippedPhotos: results.skipped,
+            failedPhotos: results.failed,
+            finishedAt: new Date(),
+          },
+        });
+      });
+
+      return {
+        backupId,
+        total: results.total,
+        copied: results.copied,
+        skipped: results.skipped,
+        failed: results.failed,
+      };
+    } catch (err) {
+      // Mark backup as FAILED
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      await prisma.deliveryPhotoBackup.update({
+        where: { id: backupId },
+        data: {
+          status: "FAILED",
+          finishedAt: new Date(),
+          errorMessage: errorMsg,
+        },
+      }).catch(() => {}); // Swallow secondary error
+      throw err; // Re-throw so Inngest can retry
+    }
+  }
+);
+
 export const functions = [
   dailyStockSnapshot,
   documentExpiryReminder,
@@ -323,4 +428,5 @@ export const functions = [
   lowStockAlert,
   bulkSalarySlipDispatch,
   dailyAttendanceAlert,
+  deliveryPhotoBackupJob, // Job 8 — S3 photo backup
 ];

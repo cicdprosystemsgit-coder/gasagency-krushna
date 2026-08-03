@@ -68,6 +68,14 @@ export async function createDeliveryRecord(formData: FormData) {
   const deliveryLng = deliveryLngRaw && !isNaN(Number(deliveryLngRaw)) ? Number(deliveryLngRaw) : null;
   const deliveryAccuracy = deliveryAccuracyRaw && !isNaN(Number(deliveryAccuracyRaw)) ? Number(deliveryAccuracyRaw) : null;
 
+  // ── Delivery Proof Photo URLs (Phase 1 + Phase 2) ─────────────────────────
+  const paymentReceiptUrl = (formData.get("paymentReceiptUrl") as string) || null;
+  const customerCardUrl = (formData.get("customerCardUrl") as string) || null;
+  const additionalImageUrl = (formData.get("additionalImageUrl") as string) || null;
+  const photosCapturedAt = (paymentReceiptUrl || customerCardUrl || additionalImageUrl)
+    ? new Date()
+    : null;
+
   // ── Transactionally create delivery + optional credit ledger entry ────────
   const [delivery] = await prisma.$transaction(async (tx) => {
     const d = await tx.deliveryRecord.create({
@@ -88,6 +96,11 @@ export async function createDeliveryRecord(formData: FormData) {
         deliveryLat,
         deliveryLng,
         deliveryAccuracy,
+        // ── Photo proof URLs ──
+        paymentReceiptUrl,
+        customerCardUrl,
+        additionalImageUrl,
+        photosCapturedAt,
       },
       include: {
         customer: { select: { name: true, phone: true, address: true, type: true, customerCode: true } },
