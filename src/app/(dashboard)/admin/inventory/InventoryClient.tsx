@@ -444,9 +444,78 @@ export function InventoryClient({ initialProducts, isAdmin, dashboardData }: Inv
             )}
           </div>
 
-          {/* Table */}
-          <div className="rounded-lg overflow-hidden" style={{ background: "#fff", border: "1px solid #E4E4E7", boxShadow: "0 1px 2px 0 rgba(0,0,0,0.04)" }}>
-            <div className="overflow-x-auto">
+          {/* Product Cards (Mobile <768px) and Table (Desktop >=768px) */}
+          <div className="rounded-xl overflow-hidden" style={{ background: "#fff", border: "1px solid #E4E4E7", boxShadow: "0 1px 2px 0 rgba(0,0,0,0.04)" }}>
+            
+            {/* MOBILE CARDS VIEW (<768px) */}
+            <div className="block md:hidden divide-y divide-zinc-100">
+              {filteredProducts.length === 0 ? (
+                <div className="py-12 text-center text-zinc-400">
+                  <Package className="w-8 h-8 mx-auto mb-2 opacity-40" />
+                  <p className="text-[13px] font-semibold text-zinc-600">No products found</p>
+                  {isAdmin && <button onClick={openAdd} className="text-[12px] font-bold text-blue-600 mt-1">Add your first item →</button>}
+                </div>
+              ) : (
+                filteredProducts.map((p) => (
+                  <div key={`mob-prod-${p.id}`} className="p-4 space-y-2.5">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2.5">
+                        {isAdmin && (
+                          <input
+                            type="checkbox"
+                            checked={selected.has(p.id)}
+                            onChange={() => toggleSelect(p.id)}
+                            className="w-4 h-4 rounded accent-blue-600 flex-shrink-0"
+                          />
+                        )}
+                        <div>
+                          <p className="text-sm font-bold text-zinc-900 leading-snug">{p.name}</p>
+                          <span className="text-[10px] text-zinc-400 font-mono">HSN: {p.hsnCode ?? "—"}</span>
+                        </div>
+                      </div>
+                      <span className={`badge ${p.isActive ? "badge-approved" : "badge-neutral"}`}>
+                        {p.isActive ? "Active" : "Inactive"}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2 bg-zinc-50 p-2.5 rounded-lg text-center text-xs border border-zinc-100">
+                      <div>
+                        <span className="text-[9px] text-zinc-400 uppercase font-bold block">Cost</span>
+                        <span className="font-semibold text-zinc-600">{formatCurrency(p.unitCost)}</span>
+                      </div>
+                      <div>
+                        <span className="text-[9px] text-zinc-400 uppercase font-bold block">Sale Rate</span>
+                        <span className="font-bold text-zinc-900">{formatCurrency(p.saleRate)}</span>
+                      </div>
+                      <div>
+                        <span className="text-[9px] text-zinc-400 uppercase font-bold block">Margin</span>
+                        <span className="font-bold text-emerald-600">{formatCurrency(p.margin)}</span>
+                      </div>
+                    </div>
+
+                    {isAdmin && (
+                      <div className="flex items-center justify-end gap-2 pt-1 border-t border-zinc-100">
+                        <button
+                          onClick={() => openEdit(p)}
+                          className="px-3 py-1 text-xs font-bold text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handleDeleteSingle(p.id, p.name)}
+                          className="px-3 py-1 text-xs font-bold text-rose-600 bg-rose-50 rounded-lg hover:bg-rose-100 transition"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* DESKTOP TABLE VIEW (>=768px) */}
+            <div className="hidden md:block overflow-x-auto">
               <table className="table">
                 <thead>
                   <tr>
@@ -568,6 +637,7 @@ export function InventoryClient({ initialProducts, isAdmin, dashboardData }: Inv
                   type="number"
                   min="0"
                   step="0.01"
+                  inputMode="decimal"
                   value={form[f.key as keyof typeof form]}
                   onChange={(e) => setForm({ ...form, [f.key]: e.target.value })}
                   placeholder="0"

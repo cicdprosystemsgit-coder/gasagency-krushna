@@ -1,6 +1,6 @@
 "use client";
 
-import { LogOut, AlertTriangle } from "lucide-react";
+import { LogOut, AlertTriangle, Menu } from "lucide-react";
 import { logoutAction } from "@/app/actions/auth";
 import Link from "next/link";
 import { NotificationBell } from "@/components/layout/NotificationBell";
@@ -13,6 +13,7 @@ interface NavbarProps {
   role: string;
   renewalAlerts?: number;
   sidebarCollapsed: boolean;
+  onOpenMobileMenu?: () => void;
 }
 
 const ROLE_LABELS: Record<string, string> = {
@@ -20,19 +21,33 @@ const ROLE_LABELS: Record<string, string> = {
   GODOWN_KEEPER: "Godown Keeper", STAFF: "Staff", DELIVERY_BOY: "Delivery Boy",
 };
 
-export function Navbar({ userName, role, renewalAlerts = 0, sidebarCollapsed }: NavbarProps) {
+export function Navbar({ userName, role, renewalAlerts = 0, sidebarCollapsed, onOpenMobileMenu }: NavbarProps) {
   return (
     <header
-      className="fixed top-0 right-0 z-30 flex items-center h-[52px] transition-all duration-200"
+      className="fixed top-0 right-0 z-30 flex items-center h-[52px] transition-all duration-200 left-0 md:left-[220px]"
       style={{
-        left: sidebarCollapsed ? 52 : 220,
+        left: typeof window !== "undefined" && window.innerWidth < 768 ? 0 : (sidebarCollapsed ? 52 : 220),
         background: "var(--color-surface)",
         borderBottom: "1px solid var(--color-border)",
-        padding: "0 20px",
+        padding: "0 12px",
       }}
     >
+      {/* Mobile Menu Trigger */}
+      {onOpenMobileMenu && (
+        <button
+          onClick={onOpenMobileMenu}
+          type="button"
+          aria-label="Open mobile menu"
+          className="md:hidden flex items-center justify-center w-8 h-8 mr-2 rounded-md text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+        >
+          <Menu className="w-5 h-5" />
+        </button>
+      )}
+
       {/* Live Global Search */}
-      <GlobalSearch />
+      <div className="flex-1 max-w-md">
+        <GlobalSearch />
+      </div>
 
 
       <div className="ml-auto flex items-center gap-1.5">

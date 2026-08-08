@@ -548,7 +548,7 @@ function PaySalaryModal({
             Amount (₹) *
             {profile && <span className="ml-2 text-xs text-slate-400 font-normal">Base: {formatCurrency(profile.monthlySalary)}</span>}
           </label>
-          <input type="number" min="0.01" step="0.01" value={form.amount}
+          <input type="number" min="0.01" step="0.01" inputMode="decimal" value={form.amount}
             onChange={(e) => setForm({ ...form, amount: e.target.value })} placeholder="0.00"
             className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
         </div>
@@ -560,6 +560,7 @@ function PaySalaryModal({
               <span className="ml-2 text-xs text-slate-400 font-normal">Max: {formatCurrency(totalPendingAdv)}</span>
             </label>
             <input type="number" min="0" step="0.01" max={totalPendingAdv}
+              inputMode="decimal"
               value={form.advanceRecoveryAmount}
               onChange={(e) => setForm({ ...form, advanceRecoveryAmount: e.target.value })}
               placeholder="0.00"

@@ -6,6 +6,8 @@ import { Warehouse, Truck, MapPin, Map } from "lucide-react";
 import { GodownClient } from "./GodownClient";
 import { InternalVehiclesClient } from "./InternalVehiclesClient";
 
+import { DateNavigationHeader } from "@/components/ui/DateNavigationHeader";
+
 // Dynamically import map component with SSR disabled
 const GodownTrackingMap = dynamic(
   () => import("@/components/attendance/GodownTrackingMap"),
@@ -59,43 +61,51 @@ export function GodownTabsContainer({
 
   return (
     <div className="space-y-6">
-      {/* Premium Tab bar */}
-      <div className="flex items-center gap-2 p-1.5 rounded-xl bg-slate-100/80 border border-slate-200/60 w-full sm:w-fit backdrop-blur-xs">
-        <button
-          onClick={() => setActiveTab("supply")}
-          className={`flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-[13px] font-semibold transition-all duration-200 ${
-            activeTab === "supply"
-              ? "bg-white text-blue-600 shadow-sm border border-slate-200/50"
-              : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/50"
-          }`}
-        >
-          <Warehouse className="w-4 h-4" />
-          <span>Supply Vehicles</span>
-        </button>
+      {/* Header bar with Tab selection and Date selector */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-3 rounded-2xl bg-white border border-slate-200/80 shadow-xs">
+        <div className="flex items-center gap-1.5 p-1 rounded-xl bg-slate-100/80 border border-slate-200/60 w-full sm:w-fit backdrop-blur-xs">
+          <button
+            onClick={() => setActiveTab("supply")}
+            className={`flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-[13px] font-semibold transition-all duration-200 ${
+              activeTab === "supply"
+                ? "bg-white text-blue-600 shadow-sm border border-slate-200/50"
+                : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/50"
+            }`}
+          >
+            <Warehouse className="w-4 h-4" />
+            <span>Supply Vehicles</span>
+          </button>
 
-        <button
-          onClick={() => setActiveTab("fleet")}
-          className={`flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-[13px] font-semibold transition-all duration-200 ${
-            activeTab === "fleet"
-              ? "bg-white text-emerald-600 shadow-sm border border-slate-200/50"
-              : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/50"
-          }`}
-        >
-          <Truck className="w-4 h-4" />
-          <span>Internal Fleet</span>
-        </button>
+          <button
+            onClick={() => setActiveTab("fleet")}
+            className={`flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-[13px] font-semibold transition-all duration-200 ${
+              activeTab === "fleet"
+                ? "bg-white text-emerald-600 shadow-sm border border-slate-200/50"
+                : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/50"
+            }`}
+          >
+            <Truck className="w-4 h-4" />
+            <span>Internal Fleet</span>
+          </button>
 
-        <button
-          onClick={() => setActiveTab("live")}
-          className={`flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-[13px] font-semibold transition-all duration-200 ${
-            activeTab === "live"
-              ? "bg-white text-purple-600 shadow-sm border border-slate-200/50"
-              : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/50"
-          }`}
-        >
-          <Map className="w-4 h-4 animate-pulse" />
-          <span>Live GPS Tracking</span>
-        </button>
+          <button
+            onClick={() => setActiveTab("live")}
+            className={`flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-[13px] font-semibold transition-all duration-200 ${
+              activeTab === "live"
+                ? "bg-white text-purple-600 shadow-sm border border-slate-200/50"
+                : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/50"
+            }`}
+          >
+            <Map className="w-4 h-4 animate-pulse" />
+            <span>Live GPS Tracking</span>
+          </button>
+        </div>
+
+        {/* Date Selector Integration */}
+        <div className="flex items-center gap-2 self-stretch sm:self-auto justify-between sm:justify-end border-t sm:border-t-0 pt-2 sm:pt-0 border-slate-100">
+          <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Date:</span>
+          <DateNavigationHeader selectedDate={selectedDate} />
+        </div>
       </div>
 
       {/* Tab Panels */}
@@ -115,6 +125,7 @@ export function GodownTabsContainer({
               isAdmin={isAdmin}
               userId={userId}
               cylinderTypes={cylinderTypes}
+              selectedDate={selectedDate}
             />
           </div>
         )}
@@ -134,6 +145,7 @@ export function GodownTabsContainer({
               isAdmin={isAdmin}
               userId={userId}
               cylinderTypes={cylinderTypes}
+              selectedDate={selectedDate}
             />
           </div>
         )}

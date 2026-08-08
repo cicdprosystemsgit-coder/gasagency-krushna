@@ -602,7 +602,7 @@ function Step2DeliveryDetails({
               <div>
                 <label className="block text-[11px] font-medium mb-1" style={{ color: "#4F46E5" }}>Booking Cylinder</label>
                 <input
-                  type="number" min="0"
+                  type="number" inputMode="numeric" min="0"
                   value={form.bookingQty || "1"}
                   onChange={(e) => {
                     const bVal = Number(e.target.value) || 0;
@@ -620,7 +620,7 @@ function Step2DeliveryDetails({
               <div>
                 <label className="block text-[11px] font-medium mb-1" style={{ color: "#2563EB" }}>Delivered</label>
                 <input
-                  type="number" min="0"
+                  type="number" inputMode="numeric" min="0"
                   value={form.deliveredQty}
                   onChange={(e) => {
                     const dVal = Number(e.target.value) || 0;
@@ -640,7 +640,7 @@ function Step2DeliveryDetails({
               <div>
                 <label className="block text-[11px] font-medium mb-1" style={{ color: "#16A34A" }}>Empty Returned</label>
                 <input
-                  type="number" min="0"
+                  type="number" inputMode="numeric" min="0"
                   value={form.returnedQty}
                   onChange={(e) => {
                     const rVal = Number(e.target.value) || 0;
@@ -658,7 +658,7 @@ function Step2DeliveryDetails({
               <div>
                 <label className="block text-[11px] font-medium mb-1" style={{ color: "#7C3AED" }}>Empty Pending</label>
                 <input
-                  type="number" disabled readOnly
+                  type="number" inputMode="numeric" disabled readOnly
                   value={form.emptyPending}
                   className="w-full px-3 py-2 rounded-lg text-[15px] font-bold text-center border outline-none select-none cursor-not-allowed opacity-80 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                   style={{ borderColor: "#D4D4D8", background: "#EDE9FE", color: "#7C3AED" }}
@@ -670,7 +670,7 @@ function Step2DeliveryDetails({
               <div>
                 <label className="block text-[11px] font-medium mb-1" style={{ color: "#D97706" }}>Not Delivered</label>
                 <input
-                  type="number" disabled readOnly
+                  type="number" inputMode="numeric" disabled readOnly
                   value={form.pendingQty}
                   className="w-full px-3 py-2 rounded-lg text-[15px] font-bold text-center border outline-none select-none cursor-not-allowed opacity-80 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                   style={{ borderColor: "#D4D4D8", background: "#FFFBEB", color: "#D97706" }}
@@ -685,7 +685,7 @@ function Step2DeliveryDetails({
               <div>
                 <label className="block text-[11px] font-medium mb-1" style={{ color: "#4F46E5" }}>Booking Cylinder</label>
                 <input
-                  type="number" min="0"
+                  type="number" inputMode="numeric" min="0"
                   value={form.bookingQty || "1"}
                   onChange={(e) => {
                     const bVal = Number(e.target.value) || 0;
@@ -703,7 +703,7 @@ function Step2DeliveryDetails({
               <div>
                 <label className="block text-[11px] font-medium mb-1" style={{ color: "#2563EB" }}>Delivered</label>
                 <input
-                  type="number" min="0"
+                  type="number" inputMode="numeric" min="0"
                   value={form.deliveredQty}
                   onChange={(e) => {
                     const dVal = Number(e.target.value) || 0;
@@ -721,7 +721,7 @@ function Step2DeliveryDetails({
               <div>
                 <label className="block text-[11px] font-medium mb-1" style={{ color: "#16A34A" }}>Empty Returned</label>
                 <input
-                  type="number" min="0"
+                  type="number" inputMode="numeric" min="0"
                   value={form.returnedQty}
                   onChange={(e) => onChange({ returnedQty: e.target.value })}
                   className="w-full px-2 py-2 rounded-lg text-[15px] font-bold text-center border outline-none transition-colors focus:border-green-500"
@@ -734,7 +734,7 @@ function Step2DeliveryDetails({
               <div>
                 <label className="block text-[11px] font-medium mb-1" style={{ color: "#D97706" }}>Not Delivered</label>
                 <input
-                  type="number" disabled readOnly
+                  type="number" inputMode="numeric" disabled readOnly
                   value={form.pendingQty}
                   className="w-full px-3 py-2 rounded-lg text-[15px] font-bold text-center border outline-none select-none cursor-not-allowed opacity-80 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                   style={{ borderColor: "#D4D4D8", background: "#FFFBEB", color: "#D97706" }}

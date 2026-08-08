@@ -399,88 +399,167 @@ function DomesticTable({
   onView: (c: Customer) => void;
 }) {
   return (
-    <div className="rounded-xl overflow-hidden" style={{ border: "1px solid #E4E4E7" }}>
-      <table className="w-full text-[13px]">
-        <thead>
-          <tr style={{ background: "#F8F8F8", borderBottom: "1px solid #E4E4E7" }}>
-            {["Name & Phone", "Address", "Connection No.", "Status", "Actions"].map((h) => (
-              <th key={h} className="px-4 py-3 text-left font-medium" style={{ color: "#71717A" }}>{h}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {customers.map((c, i) => (
-            <tr
-              key={c.id}
-              style={{ background: i % 2 === 0 ? "#FFFFFF" : "#FAFAFA", borderBottom: "1px solid #F4F4F5" }}
-            >
-              <td className="px-4 py-3">
-                <button onClick={() => onView(c)} className="text-left hover:underline font-medium" style={{ color: "#18181B" }}>
+    <div>
+      {/* MOBILE STACKED CARDS (<768px) */}
+      <div className="block md:hidden space-y-3">
+        {customers.map((c) => (
+          <div
+            key={`mob-dom-${c.id}`}
+            className="p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-xs space-y-3"
+          >
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <button
+                  onClick={() => onView(c)}
+                  className="font-bold text-zinc-900 dark:text-zinc-100 text-sm text-left hover:underline"
+                >
                   {c.name}
                 </button>
-                <div className="flex items-center gap-1 mt-0.5" style={{ color: "#71717A" }}>
-                  <Phone className="w-3 h-3" />
-                  <span className="text-[12px]">{c.phone}</span>
+                <div className="flex items-center gap-1 text-xs text-zinc-500 mt-0.5">
+                  <Phone className="w-3 h-3 text-zinc-400" />
+                  <a href={`tel:${c.phone}`} className="text-blue-600 dark:text-blue-400 hover:underline">
+                    {c.phone}
+                  </a>
                 </div>
-              </td>
-              <td className="px-4 py-3">
-                {c.address ? (
-                  <div className="flex items-start gap-1 max-w-[180px]">
-                    <MapPin className="w-3 h-3 mt-0.5 flex-shrink-0" style={{ color: "#A1A1AA" }} />
-                    <span className="text-[12px] line-clamp-2" style={{ color: "#52525B" }}>{c.address}</span>
-                  </div>
-                ) : <span style={{ color: "#A1A1AA" }}>—</span>}
-              </td>
-              <td className="px-4 py-3">
-                {c.customerCode ? (
-                  <div className="flex items-center gap-1">
-                    <Hash className="w-3 h-3" style={{ color: "#A1A1AA" }} />
-                    <span className="font-mono text-[12px]" style={{ color: "#2563EB" }}>{c.customerCode}</span>
-                  </div>
-                ) : <span style={{ color: "#A1A1AA" }}>Not assigned</span>}
-              </td>
-              <td className="px-4 py-3">
-                <span
-                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium"
-                  style={c.isActive
-                    ? { background: "#DCFCE7", color: "#16A34A" }
-                    : { background: "#FEE2E2", color: "#DC2626" }}
+              </div>
+              <span
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold"
+                style={c.isActive
+                  ? { background: "#DCFCE7", color: "#16A34A" }
+                  : { background: "#FEE2E2", color: "#DC2626" }}
+              >
+                {c.isActive ? <CheckCircle className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
+                {c.isActive ? "Active" : "Inactive"}
+              </span>
+            </div>
+
+            {c.address && (
+              <div className="flex items-start gap-1.5 text-xs text-zinc-600 dark:text-zinc-400">
+                <MapPin className="w-3.5 h-3.5 mt-0.5 text-zinc-400 shrink-0" />
+                <span>{c.address}</span>
+              </div>
+            )}
+
+            {c.customerCode && (
+              <div className="flex items-center gap-1.5 text-xs font-mono text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40 p-2 rounded-lg border border-blue-100 dark:border-blue-900/40">
+                <Hash className="w-3.5 h-3.5 text-blue-500" />
+                <span>Connection: {c.customerCode}</span>
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-zinc-100 dark:border-zinc-800">
+              <button
+                onClick={() => onEdit(c)}
+                title="Edit"
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200"
+              >
+                <Edit2 className="w-3.5 h-3.5 inline mr-1" /> Edit
+              </button>
+              <button
+                onClick={() => onToggle(c.id)}
+                title={c.isActive ? "Deactivate" : "Activate"}
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200"
+              >
+                <RefreshCw className="w-3.5 h-3.5 inline mr-1" /> {c.isActive ? "Deactivate" : "Activate"}
+              </button>
+              {onDelete && (
+                <button
+                  onClick={() => onDelete(c)}
+                  title="Delete"
+                  className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-red-50 text-red-600 hover:bg-red-100"
                 >
-                  {c.isActive ? <CheckCircle className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
-                  {c.isActive ? "Active" : "Inactive"}
-                </span>
-              </td>
-              <td className="px-4 py-3">
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => onEdit(c)}
-                    title="Edit"
-                    className="btn-action btn-action-primary"
-                  >
-                    <Edit2 className="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    onClick={() => onToggle(c.id)}
-                    title={c.isActive ? "Deactivate" : "Activate"}
-                    className="btn-action"
-                  >
-                    <RefreshCw className="w-3.5 h-3.5" />
-                  </button>
-                  {onDelete && (
-                    <button
-                      onClick={() => onDelete(c)}
-                      title="Delete"
-                      className="btn-action btn-action-danger"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-                </div>
-              </td>
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* DESKTOP TABLE (>=768px) */}
+      <div className="hidden md:block rounded-xl overflow-hidden" style={{ border: "1px solid #E4E4E7" }}>
+        <table className="w-full text-[13px]">
+          <thead>
+            <tr style={{ background: "#F8F8F8", borderBottom: "1px solid #E4E4E7" }}>
+              {["Name & Phone", "Address", "Connection No.", "Status", "Actions"].map((h) => (
+                <th key={h} className="px-4 py-3 text-left font-medium" style={{ color: "#71717A" }}>{h}</th>
+              ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {customers.map((c, i) => (
+              <tr
+                key={c.id}
+                style={{ background: i % 2 === 0 ? "#FFFFFF" : "#FAFAFA", borderBottom: "1px solid #F4F4F5" }}
+              >
+                <td className="px-4 py-3">
+                  <button onClick={() => onView(c)} className="text-left hover:underline font-medium" style={{ color: "#18181B" }}>
+                    {c.name}
+                  </button>
+                  <div className="flex items-center gap-1 mt-0.5" style={{ color: "#71717A" }}>
+                    <Phone className="w-3 h-3" />
+                    <span className="text-[12px]">{c.phone}</span>
+                  </div>
+                </td>
+                <td className="px-4 py-3">
+                  {c.address ? (
+                    <div className="flex items-start gap-1 max-w-[180px]">
+                      <MapPin className="w-3 h-3 mt-0.5 flex-shrink-0" style={{ color: "#A1A1AA" }} />
+                      <span className="text-[12px] line-clamp-2" style={{ color: "#52525B" }}>{c.address}</span>
+                    </div>
+                  ) : <span style={{ color: "#A1A1AA" }}>—</span>}
+                </td>
+                <td className="px-4 py-3">
+                  {c.customerCode ? (
+                    <div className="flex items-center gap-1">
+                      <Hash className="w-3 h-3" style={{ color: "#A1A1AA" }} />
+                      <span className="font-mono text-[12px]" style={{ color: "#2563EB" }}>{c.customerCode}</span>
+                    </div>
+                  ) : <span style={{ color: "#A1A1AA" }}>Not assigned</span>}
+                </td>
+                <td className="px-4 py-3">
+                  <span
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium"
+                    style={c.isActive
+                      ? { background: "#DCFCE7", color: "#16A34A" }
+                      : { background: "#FEE2E2", color: "#DC2626" }}
+                  >
+                    {c.isActive ? <CheckCircle className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
+                    {c.isActive ? "Active" : "Inactive"}
+                  </span>
+                </td>
+                <td className="px-4 py-3">
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => onEdit(c)}
+                      title="Edit"
+                      className="btn-action btn-action-primary"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => onToggle(c.id)}
+                      title={c.isActive ? "Deactivate" : "Activate"}
+                      className="btn-action"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                    </button>
+                    {onDelete && (
+                      <button
+                        onClick={() => onDelete(c)}
+                        title="Delete"
+                        className="btn-action btn-action-danger"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
@@ -496,115 +575,211 @@ function CommercialTable({
   onView: (c: Customer) => void;
 }) {
   return (
-    <div className="rounded-xl overflow-hidden" style={{ border: "1px solid #E4E4E7" }}>
-      <table className="w-full text-[13px]">
-        <thead>
-          <tr style={{ background: "#F8F8F8", borderBottom: "1px solid #E4E4E7" }}>
-            {["Firm / Business", "Contact", "GST Number", "Reg. Number", "Type", "Status", "Actions"].map((h) => (
-              <th key={h} className="px-4 py-3 text-left font-medium" style={{ color: "#71717A" }}>{h}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {customers.map((c, i) => (
-            <tr
-              key={c.id}
-              style={{ background: i % 2 === 0 ? "#FFFFFF" : "#FAFAFA", borderBottom: "1px solid #F4F4F5" }}
-            >
-              <td className="px-4 py-3">
-                <button onClick={() => onView(c)} className="text-left hover:underline font-medium" style={{ color: "#18181B" }}>
+    <div>
+      {/* MOBILE STACKED CARDS (<768px) */}
+      <div className="block md:hidden space-y-3">
+        {customers.map((c) => (
+          <div
+            key={`mob-com-${c.id}`}
+            className="p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-xs space-y-3"
+          >
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <button
+                  onClick={() => onView(c)}
+                  className="font-bold text-zinc-900 dark:text-zinc-100 text-sm text-left hover:underline"
+                >
                   {c.name}
                 </button>
-                {c.address && (
-                  <div className="flex items-center gap-1 mt-0.5" style={{ color: "#71717A" }}>
-                    <MapPin className="w-3 h-3" />
-                    <span className="text-[12px] truncate max-w-[160px]">{c.address}</span>
-                  </div>
-                )}
-              </td>
-              <td className="px-4 py-3">
-                <div>
-                  {c.contactPerson && (
-                    <div className="flex items-center gap-1">
-                      <User className="w-3 h-3" style={{ color: "#A1A1AA" }} />
-                      <span style={{ color: "#52525B" }}>{c.contactPerson}</span>
-                    </div>
-                  )}
-                  <div className="flex items-center gap-1 mt-0.5">
-                    <Phone className="w-3 h-3" style={{ color: "#A1A1AA" }} />
-                    <span className="text-[12px]" style={{ color: "#71717A" }}>{c.phone}</span>
-                  </div>
-                  {c.email && (
-                    <div className="flex items-center gap-1 mt-0.5">
-                      <Mail className="w-3 h-3" style={{ color: "#A1A1AA" }} />
-                      <span className="text-[12px]" style={{ color: "#71717A" }}>{c.email}</span>
-                    </div>
-                  )}
-                </div>
-              </td>
-              <td className="px-4 py-3">
-                {c.gstNumber ? (
-                  <span className="font-mono text-[12px]" style={{ color: "#7C3AED" }}>{c.gstNumber}</span>
-                ) : <span style={{ color: "#A1A1AA" }}>—</span>}
-              </td>
-              <td className="px-4 py-3">
-                {c.customerCode ? (
-                  <div className="flex items-center gap-1">
-                    <Hash className="w-3 h-3" style={{ color: "#A1A1AA" }} />
-                    <span className="font-mono text-[12px]" style={{ color: "#2563EB" }}>{c.customerCode}</span>
-                  </div>
-                ) : <span style={{ color: "#A1A1AA" }}>—</span>}
-              </td>
-              <td className="px-4 py-3">
-                {c.businessType ? (
-                  <span className="px-2 py-0.5 rounded-full text-[11px] font-medium"
-                    style={{ background: "#F3F4F6", color: "#374151" }}>
+                {c.businessType && (
+                  <span className="ml-2 px-2 py-0.5 rounded-full text-[10px] font-medium bg-purple-50 text-purple-700">
                     {c.businessType}
                   </span>
-                ) : <span style={{ color: "#A1A1AA" }}>—</span>}
-              </td>
-              <td className="px-4 py-3">
-                <span
-                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium"
-                  style={c.isActive
-                    ? { background: "#DCFCE7", color: "#16A34A" }
-                    : { background: "#FEE2E2", color: "#DC2626" }}
-                >
-                  {c.isActive ? <CheckCircle className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
-                  {c.isActive ? "Active" : "Inactive"}
-                </span>
-              </td>
-              <td className="px-4 py-3">
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => onEdit(c)}
-                    title="Edit"
-                    className="btn-action btn-action-primary"
-                  >
-                    <Edit2 className="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    onClick={() => onToggle(c.id)}
-                    title={c.isActive ? "Deactivate" : "Activate"}
-                    className="btn-action"
-                  >
-                    <RefreshCw className="w-3.5 h-3.5" />
-                  </button>
-                  {onDelete && (
-                    <button
-                      onClick={() => onDelete(c)}
-                      title="Delete"
-                      className="btn-action btn-action-danger"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  )}
+                )}
+              </div>
+              <span
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold"
+                style={c.isActive
+                  ? { background: "#DCFCE7", color: "#16A34A" }
+                  : { background: "#FEE2E2", color: "#DC2626" }}
+              >
+                {c.isActive ? <CheckCircle className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
+                {c.isActive ? "Active" : "Inactive"}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 text-xs text-zinc-600 dark:text-zinc-400">
+              {c.contactPerson && (
+                <div>
+                  <span className="text-[10px] text-zinc-400 block font-semibold uppercase">Contact</span>
+                  <span className="font-semibold text-zinc-800 dark:text-zinc-200">{c.contactPerson}</span>
                 </div>
-              </td>
+              )}
+              <div>
+                <span className="text-[10px] text-zinc-400 block font-semibold uppercase">Phone</span>
+                <a href={`tel:${c.phone}`} className="text-blue-600 dark:text-blue-400 hover:underline font-semibold">
+                  {c.phone}
+                </a>
+              </div>
+            </div>
+
+            {(c.gstNumber || c.customerCode) && (
+              <div className="grid grid-cols-2 gap-2 text-xs font-mono bg-zinc-50 dark:bg-zinc-800/50 p-2 rounded-lg">
+                {c.gstNumber && (
+                  <div>
+                    <span className="text-[10px] text-purple-600 font-sans block">GSTIN</span>
+                    <span className="font-semibold">{c.gstNumber}</span>
+                  </div>
+                )}
+                {c.customerCode && (
+                  <div>
+                    <span className="text-[10px] text-blue-600 font-sans block">Reg No</span>
+                    <span className="font-semibold">{c.customerCode}</span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-zinc-100 dark:border-zinc-800">
+              <button
+                onClick={() => onEdit(c)}
+                title="Edit"
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200"
+              >
+                <Edit2 className="w-3.5 h-3.5 inline mr-1" /> Edit
+              </button>
+              <button
+                onClick={() => onToggle(c.id)}
+                title={c.isActive ? "Deactivate" : "Activate"}
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200"
+              >
+                <RefreshCw className="w-3.5 h-3.5 inline mr-1" /> {c.isActive ? "Deactivate" : "Activate"}
+              </button>
+              {onDelete && (
+                <button
+                  onClick={() => onDelete(c)}
+                  title="Delete"
+                  className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-red-50 text-red-600 hover:bg-red-100"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* DESKTOP TABLE (>=768px) */}
+      <div className="hidden md:block rounded-xl overflow-hidden" style={{ border: "1px solid #E4E4E7" }}>
+        <table className="w-full text-[13px]">
+          <thead>
+            <tr style={{ background: "#F8F8F8", borderBottom: "1px solid #E4E4E7" }}>
+              {["Firm / Business", "Contact", "GST Number", "Reg. Number", "Type", "Status", "Actions"].map((h) => (
+                <th key={h} className="px-4 py-3 text-left font-medium" style={{ color: "#71717A" }}>{h}</th>
+              ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {customers.map((c, i) => (
+              <tr
+                key={c.id}
+                style={{ background: i % 2 === 0 ? "#FFFFFF" : "#FAFAFA", borderBottom: "1px solid #F4F4F5" }}
+              >
+                <td className="px-4 py-3">
+                  <button onClick={() => onView(c)} className="text-left hover:underline font-medium" style={{ color: "#18181B" }}>
+                    {c.name}
+                  </button>
+                  {c.address && (
+                    <div className="flex items-center gap-1 mt-0.5" style={{ color: "#71717A" }}>
+                      <MapPin className="w-3 h-3" />
+                      <span className="text-[12px] truncate max-w-[160px]">{c.address}</span>
+                    </div>
+                  )}
+                </td>
+                <td className="px-4 py-3">
+                  <div>
+                    {c.contactPerson && (
+                      <div className="flex items-center gap-1">
+                        <User className="w-3 h-3" style={{ color: "#A1A1AA" }} />
+                        <span style={{ color: "#52525B" }}>{c.contactPerson}</span>
+                      </div>
+                    )}
+                    <div className="flex items-center gap-1 mt-0.5">
+                      <Phone className="w-3 h-3" style={{ color: "#A1A1AA" }} />
+                      <span className="text-[12px]" style={{ color: "#71717A" }}>{c.phone}</span>
+                    </div>
+                    {c.email && (
+                      <div className="flex items-center gap-1 mt-0.5">
+                        <Mail className="w-3 h-3" style={{ color: "#A1A1AA" }} />
+                        <span className="text-[12px]" style={{ color: "#71717A" }}>{c.email}</span>
+                      </div>
+                    )}
+                  </div>
+                </td>
+                <td className="px-4 py-3">
+                  {c.gstNumber ? (
+                    <span className="font-mono text-[12px]" style={{ color: "#7C3AED" }}>{c.gstNumber}</span>
+                  ) : <span style={{ color: "#A1A1AA" }}>—</span>}
+                </td>
+                <td className="px-4 py-3">
+                  {c.customerCode ? (
+                    <div className="flex items-center gap-1">
+                      <Hash className="w-3 h-3" style={{ color: "#A1A1AA" }} />
+                      <span className="font-mono text-[12px]" style={{ color: "#2563EB" }}>{c.customerCode}</span>
+                    </div>
+                  ) : <span style={{ color: "#A1A1AA" }}>—</span>}
+                </td>
+                <td className="px-4 py-3">
+                  {c.businessType ? (
+                    <span className="px-2 py-0.5 rounded-full text-[11px] font-medium"
+                      style={{ background: "#F3F4F6", color: "#374151" }}>
+                      {c.businessType}
+                    </span>
+                  ) : <span style={{ color: "#A1A1AA" }}>—</span>}
+                </td>
+                <td className="px-4 py-3">
+                  <span
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium"
+                    style={c.isActive
+                      ? { background: "#DCFCE7", color: "#16A34A" }
+                      : { background: "#FEE2E2", color: "#DC2626" }}
+                  >
+                    {c.isActive ? <CheckCircle className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
+                    {c.isActive ? "Active" : "Inactive"}
+                  </span>
+                </td>
+                <td className="px-4 py-3">
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => onEdit(c)}
+                      title="Edit"
+                      className="btn-action btn-action-primary"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => onToggle(c.id)}
+                      title={c.isActive ? "Deactivate" : "Activate"}
+                      className="btn-action"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                    </button>
+                    {onDelete && (
+                      <button
+                        onClick={() => onDelete(c)}
+                        title="Delete"
+                        className="btn-action btn-action-danger"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

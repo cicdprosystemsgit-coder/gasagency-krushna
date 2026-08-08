@@ -267,10 +267,97 @@ export function StaffManagementClient({ initialStaff }: { initialStaff: Staff[] 
         </div>
       </div>
 
-      {/* Table */}
+      {/* Table & Cards Container */}
       <div className="rounded-lg overflow-hidden"
         style={{ background:"#fff", border:"1px solid #E4E4E7", boxShadow:"0 1px 2px rgba(0,0,0,0.04)" }}>
-        <div className="overflow-x-auto">
+        {/* MOBILE STACKED CARDS (<768px) */}
+        <div className="block md:hidden divide-y divide-zinc-100">
+          {staff.length === 0 ? (
+            <div className="py-12 text-center">
+              <Users className="w-8 h-8 mx-auto mb-2" style={{ color:"#D4D4D8" }} />
+              <p className="text-[13px]" style={{ color:"#A1A1AA" }}>No staff members yet</p>
+            </div>
+          ) : (
+            staff.map((s) => {
+              const rc = ROLE_COLORS[s.role] ?? { bg:"#F4F4F5", color:"#52525B" };
+              return (
+                <div key={`mob-staff-${s.id}`} className="p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2.5">
+                      <Avatar s={s} />
+                      <div>
+                        <p className="text-xs font-semibold text-zinc-900">{s.name}</p>
+                        <p className="text-[10px] text-zinc-400">{s.email}</p>
+                      </div>
+                    </div>
+                    <span className="badge text-[10px]" style={{ background:rc.bg, color:rc.color, border:"none" }}>
+                      {s.customRole || (ROLE_LABEL[s.role] ?? s.role)}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 text-xs bg-zinc-50 p-2.5 rounded-lg border border-zinc-100">
+                    <div>
+                      <span className="text-[10px] text-zinc-400 uppercase font-bold block">Contact</span>
+                      <span className="text-zinc-700">{s.phone ?? "—"}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-zinc-400 uppercase font-bold block">Joined</span>
+                      <span className="text-zinc-700">{formatDate(s.createdAt)}</span>
+                    </div>
+                    {s.bankName && (
+                      <div className="col-span-2 text-[11px] text-zinc-500">
+                        <span className="font-bold">Bank:</span> {s.bankName} ({s.bankAccountNo})
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-between pt-1">
+                    <button onClick={() => handleToggle(s.id, s.isActive)} disabled={isPending}
+                      style={{
+                        display:"inline-flex", alignItems:"center", gap:4, padding:"3px 8px",
+                        borderRadius:16, cursor:isPending?"not-allowed":"pointer",
+                        border: s.isActive ? "1px solid #86EFAC" : "1px solid #E4E4E7",
+                        background: s.isActive ? "#F0FDF4" : "#F4F4F5",
+                        fontSize:10, fontWeight:600,
+                        color: s.isActive ? "#16A34A" : "#71717A",
+                      }}>
+                      {s.isActive ? <><ToggleRight className="w-3.5 h-3.5"/>Active</> : <><ToggleLeft className="w-3.5 h-3.5"/>Inactive</>}
+                    </button>
+
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        onClick={() => setViewTarget(s)}
+                        title="View Profile"
+                        className="btn-action btn-action-success"
+                      >
+                        <Eye className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => { setEditError(""); setEditStep(1); setEditTarget(s); setEditForm(toFormState(s)); setEditOpen(true); }}
+                        title="Edit"
+                        className="btn-action btn-action-primary"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                      {s.role !== "ADMIN" && (
+                        <button
+                          onClick={() => { setDeleteError(""); setDeleteTarget(s); }}
+                          title="Delete"
+                          className="btn-action btn-action-danger"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* DESKTOP TABLE (>=768px) */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="table">
             <thead>
               <tr>

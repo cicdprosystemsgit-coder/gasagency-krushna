@@ -77,6 +77,7 @@ interface GodownClientProps {
   isAdmin: boolean;
   userId: string;
   cylinderTypes: Product[];
+  selectedDate?: string;
 }
 
 /* â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
@@ -380,11 +381,16 @@ export function GodownClient({
   isAdmin,
   userId,
   cylinderTypes,
+  selectedDate,
 }: GodownClientProps) {
   const [records, setRecords] = useState(initialRecords);
   const [products, setProducts] = useState<Product[]>(cylinderTypes);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    setRecords(initialRecords);
+  }, [initialRecords]);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"ALL" | "PENDING" | "APPROVED" | "PENDING_EXIT">("ALL");
@@ -745,9 +751,96 @@ export function GodownClient({
         </div>
       </div>
 
-      {/* Records Table */}
+      {/* Records Section */}
       <div className="rounded-xl border shadow-sm overflow-hidden bg-white" style={{ borderColor: "var(--color-border)" }}>
-        <div className="overflow-x-auto">
+        {/* MOBILE STACKED CARDS (<768px) */}
+        <div className="block md:hidden divide-y divide-slate-100">
+          {filteredRecords.length === 0 ? (
+            <div className="py-12 text-center">
+              <Truck className="w-10 h-10 mx-auto mb-2 text-slate-300" />
+              <p className="font-semibold text-slate-700 text-xs">No records found</p>
+            </div>
+          ) : (
+            paginatedRecords.map((r) => {
+              const exited = hasExited(r);
+              const exitDt = getExitDate(r);
+              return (
+                <div key={`mob-gdn-${r.id}`} className="p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="font-mono text-xs font-bold text-slate-800 px-2.5 py-1 rounded bg-slate-100 border">
+                      {r.vehicleNo}
+                    </span>
+                    <StatusBadge status={r.status} />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 text-xs bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                    <div>
+                      <span className="text-[10px] text-slate-400 uppercase font-bold block">Filled Received</span>
+                      <span className="font-bold text-blue-600 text-sm">{r.filledCylindersReceived}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-400 uppercase font-bold block">Empty Returned</span>
+                      <span className="font-bold text-amber-600 text-sm">{r.emptyCylindersReturned}</span>
+                    </div>
+                    <div className="col-span-2 text-[11px] text-slate-500">
+                      <span className="font-bold">Entry:</span> {formatDateTime(r.entryDate)}
+                    </div>
+                    {exitDt && (
+                      <div className="col-span-2 text-[11px] text-emerald-600 font-semibold">
+                        <span className="font-bold">Exit:</span> {formatDateTime(exitDt)}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-between pt-1">
+                    <span className="text-xs text-slate-500 font-medium">By: {r.submittedBy.name}</span>
+                    <div className="flex items-center gap-1.5">
+                      {r.status === "PENDING" && (
+                        <>
+                          <button
+                            onClick={() => handleApprove(r.id)}
+                            disabled={isPending}
+                            className="btn text-[11px] py-1 px-2 border border-emerald-300 bg-emerald-50 text-emerald-700 font-bold"
+                          >
+                            Approve
+                          </button>
+                          <button
+                            onClick={() => openModifyEntry(r)}
+                            disabled={isPending}
+                            className="btn text-[11px] py-1 px-2 border border-blue-300 bg-blue-50 text-blue-700 font-bold"
+                          >
+                            Edit
+                          </button>
+                        </>
+                      )}
+                      {r.status === "APPROVED" && !exited && (
+                        <button
+                          onClick={() => {
+                            setError("");
+                            setExitRecordId(r.id);
+                            const eItems = getEntryItems(r);
+                            if (eItems.length > 0) {
+                              setExitItems(eItems.map((it) => ({ id: makeId(), productId: it.productId, productName: it.productName, qty: it.qty })));
+                            } else if (products.length > 0) {
+                              setExitItems([newRow(products)]);
+                            }
+                            setExitOpen(true);
+                          }}
+                          className="btn text-[11px] py-1 px-2.5 bg-amber-500 text-white font-bold rounded-lg"
+                        >
+                          Record Exit
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* DESKTOP TABLE (>=768px) */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="table">
             <thead>
               <tr className="bg-slate-50 border-b">
