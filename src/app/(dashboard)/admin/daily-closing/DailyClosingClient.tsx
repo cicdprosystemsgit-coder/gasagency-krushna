@@ -382,9 +382,67 @@ export function DailyClosingClient({ initialClosings, role }: DailyClosingClient
         </button>
       </div>
 
-      {/* Closings List Table */}
+      {/* Closings List (Mobile Cards & Desktop Table) */}
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
+        {/* MOBILE STACKED CARDS (<768px) */}
+        <div className="block md:hidden divide-y divide-slate-100">
+          {filteredClosings.length === 0 ? (
+            <div className="px-5 py-12 text-center">
+              <ClipboardCheck className="w-10 h-10 mx-auto mb-3 text-slate-300" />
+              <p className="text-slate-400 text-xs">No daily closing records found</p>
+            </div>
+          ) : (
+            filteredClosings.map((c) => (
+              <div key={`mob-dc-${c.id}`} className="p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-slate-800 text-sm">{formatDate(c.date)}</span>
+                  <StatusBadge status={c.status === "PENDING" && c.managerApprovedAt ? "MANAGER_APPROVED" : c.status} />
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-xs bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                  <div>
+                    <span className="text-[10px] text-slate-400 uppercase font-bold block">Deliveries</span>
+                    <span className="font-bold text-blue-700">{c.totalDeliveries} cylinders</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 uppercase font-bold block">Cash Handover</span>
+                    <span className="font-bold text-green-700">{formatCurrency(c.cashOnHand)}</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 uppercase font-bold block">Online</span>
+                    <span className="font-bold text-purple-700">{formatCurrency(c.totalOnlinePayment)}</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 uppercase font-bold block">Udhari</span>
+                    <span className="font-bold text-amber-700">{formatCurrency(c.totalUdhari)}</span>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between pt-1">
+                  <div className="text-xs">
+                    <span className="text-[10px] text-slate-400 uppercase font-bold mr-1">Difference:</span>
+                    {c.shortageAmount > 0 ? (
+                      <span className="text-rose-600 font-bold">-{formatCurrency(c.shortageAmount)}</span>
+                    ) : c.excessAmount > 0 ? (
+                      <span className="text-emerald-600 font-bold">+{formatCurrency(c.excessAmount)}</span>
+                    ) : (
+                      <span className="text-slate-500 font-bold">Balanced</span>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => setDetailClosing(c)}
+                    className="text-xs text-blue-700 hover:text-blue-800 font-bold bg-blue-50 px-3 py-1.5 rounded-lg transition"
+                  >
+                    View Details
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* DESKTOP TABLE (>=768px) */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-100 text-slate-500 font-bold uppercase text-[11px] tracking-wider">

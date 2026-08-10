@@ -8,25 +8,43 @@ import { getAgencyTodayRange } from "@/lib/utils";
 
 import { checkPermission } from "@/lib/rbac";
 
-export default async function GodownKeeperGodownPage() {
+interface PageProps {
+  searchParams?: Promise<{ date?: string }>;
+}
+
+export default async function GodownKeeperGodownPage({ searchParams }: PageProps) {
   const session = await getSession();
   if (!session || session.role !== "GODOWN_KEEPER") redirect("/login");
 
   const isAllowed = await checkPermission(session.userId, "godown", "read");
   if (!isAllowed) redirect("/godown-keeper");
 
-  const { todayStart, todayEnd } = getAgencyTodayRange();
+  const params = (await searchParams) || {};
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const selectedDate = params.date || todayStr;
+
+  const targetDate = new Date(selectedDate);
+  const dateStart = new Date(targetDate);
+  dateStart.setHours(0, 0, 0, 0);
+  const dateEnd = new Date(targetDate);
+  dateEnd.setHours(23, 59, 59, 999);
 
   const [records, totals, deliveryVehicles, deliveryBoys, todayTripLogs, cylinderTypes] = await Promise.all([
     prisma.godownRecord.findMany({
-      where: { agencyId: session.agencyId! },
+      where: {
+        agencyId: session.agencyId!,
+        entryDate: { gte: dateStart, lte: dateEnd },
+      },
       orderBy: { entryDate: "desc" },
-      take: 50,
       include: { submittedBy: { select: { name: true } } },
     }),
     prisma.godownRecord.aggregate({
       _sum: { filledCylindersReceived: true, emptyCylindersReturned: true },
-      where: { agencyId: session.agencyId!, status: "APPROVED" },
+      where: {
+        agencyId: session.agencyId!,
+        status: "APPROVED",
+        entryDate: { gte: dateStart, lte: dateEnd },
+      },
     }),
     prisma.deliveryVehicle.findMany({
       where: { agencyId: session.agencyId! },
@@ -39,7 +57,7 @@ export default async function GodownKeeperGodownPage() {
       orderBy: { name: "asc" },
     }),
     prisma.vehicleTripLog.findMany({
-      where: { agencyId: session.agencyId!, date: { gte: todayStart, lte: todayEnd } },
+      where: { agencyId: session.agencyId!, date: { gte: dateStart, lte: dateEnd } },
       orderBy: { createdAt: "desc" },
       include: {
         vehicle: { select: { vehicleNo: true, vehicleName: true, assignedTo: { select: { name: true } } } },
@@ -68,6 +86,7 @@ export default async function GodownKeeperGodownPage() {
         initialVehicles={deliveryVehicles}
         initialTripLogs={todayTripLogs}
         deliveryBoys={deliveryBoys}
+        selectedDate={selectedDate}
       />
     </Suspense>
   );

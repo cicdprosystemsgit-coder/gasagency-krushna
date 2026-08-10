@@ -1,65 +1,76 @@
+/**
+ * src/lib/watermark.ts
+ * Server-side IST timestamp watermarking using Sharp.
+ * Burns a tamper-evident text band at the bottom of every delivery proof photo.
+ */
+
 import sharp from "sharp";
 
-/**
- * Burns a permanent timestamp bar at the bottom of the image.
- * The watermark contains date/time (IST) + agency name.
- *
- * This runs server-side before Cloudinary upload — the pixel data
- * is permanently modified, making it tamper-evident proof.
- */
-export async function burnTimestamp(
-  buffer: Buffer,
-  agencyName: string,
-  capturedAt: Date
-): Promise<Buffer> {
-  const image = sharp(buffer);
-  const meta = await image.metadata();
-  const W = meta.width ?? 1080;
+interface WatermarkOptions {
+  agencyName?: string;
+}
 
-  // Format: "03 Aug 2026  18:14:32 IST"
-  const timestamp = capturedAt.toLocaleString("en-IN", {
+/**
+ * Burns an IST timestamp + agency name text onto the bottom of an image buffer.
+ * Returns a new JPEG buffer with the watermark permanently embedded.
+ */
+export async function burnWatermark(
+  inputBuffer: Buffer,
+  options: WatermarkOptions = {}
+): Promise<Buffer> {
+  const agencyName = options.agencyName ?? "Gas Agency";
+
+  // Format current time as IST
+  const now = new Date();
+  const istString = now.toLocaleString("en-IN", {
     timeZone: "Asia/Kolkata",
     day: "2-digit",
-    month: "short",
+    month: "2-digit",
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
-    hour12: false,
-  }) + " IST";
+    hour12: true,
+  });
 
-  // Truncate agency name if too long
-  const agencyLabel = agencyName.length > 40
-    ? agencyName.slice(0, 37) + "..."
-    : agencyName;
+  const watermarkText = `VERIFIED DELIVERY PROOF  |  ${istString} IST  |  ${agencyName}`;
 
-  // SVG bar — 52px tall black semi-transparent band, white text
-  const barH = 52;
+  // Get image dimensions
+  const meta = await sharp(inputBuffer).metadata();
+  const width = meta.width ?? 800;
+  const height = meta.height ?? 600;
+
+  // Bar height = 10% of image height, minimum 40px, maximum 80px
+  const barHeight = Math.min(80, Math.max(40, Math.round(height * 0.10)));
+  const fontSize = Math.max(14, Math.round(barHeight * 0.38));
+
+  // Create SVG overlay with black semi-transparent bar + white text
   const svgOverlay = Buffer.from(`
-    <svg width="${W}" height="${barH}" xmlns="http://www.w3.org/2000/svg">
-      <rect width="${W}" height="${barH}" fill="rgba(0,0,0,0.80)"/>
+    <svg width="${width}" height="${barHeight}" xmlns="http://www.w3.org/2000/svg">
+      <rect width="${width}" height="${barHeight}" fill="rgba(0,0,0,0.75)" />
       <text
-        x="14" y="22"
-        font-family="'Courier New', monospace"
-        font-size="15"
+        x="${width / 2}"
+        y="${barHeight / 2 + fontSize / 3}"
+        font-family="Arial, sans-serif"
+        font-size="${fontSize}"
         font-weight="bold"
-        fill="#FFFFFF"
-      >&#128197; ${timestamp}</text>
-      <text
-        x="14" y="43"
-        font-family="'Courier New', monospace"
-        font-size="12"
-        fill="#BBBBBB"
-      >${agencyLabel}</text>
+        fill="white"
+        text-anchor="middle"
+        dominant-baseline="middle"
+      >${watermarkText}</text>
     </svg>
   `);
 
-  return sharp(buffer)
-    .composite([{
-      input: svgOverlay,
-      gravity: "south",   // bottom of image
-      blend: "over",
-    }])
-    .jpeg({ quality: 82 })
+  // Composite the SVG bar at the bottom of the image
+  const watermarked = await sharp(inputBuffer)
+    .jpeg({ quality: 88 })
+    .composite([
+      {
+        input: svgOverlay,
+        gravity: "south", // bottom of image
+      },
+    ])
     .toBuffer();
+
+  return watermarked;
 }

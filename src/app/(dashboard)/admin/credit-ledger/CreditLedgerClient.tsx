@@ -969,6 +969,7 @@ export function CreditLedgerClient({ customers, initialEntries, canEdit, userId 
               type="number"
               min="0.01"
               step="0.01"
+              inputMode="decimal"
               value={form.amount}
               onChange={(e) => setForm({ ...form, amount: e.target.value })}
               placeholder="0.00"

@@ -178,58 +178,100 @@ export default async function AdminDashboard() {
               {t("common.viewAll")} <ArrowRight className="w-3 h-3" />
             </Link>
           </div>
-          <table className="table">
-            <thead>
-              <tr>
-                <th>{t("dashboard.employee")}</th>
-                <th>{t("dashboard.role")}</th>
-                <th>{t("dashboard.date")}</th>
-                <th>{t("dashboard.status")}</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {recentSummaries.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="py-10 text-center text-[13px]" style={{ color: "#A1A1AA" }}>
-                    {t("common.noData")}
-                  </td>
-                </tr>
-              ) : recentSummaries.map((s) => (
-                <tr key={s.id}>
-                  <td>
-                    <div className="flex items-center gap-2.5">
-                      <div
-                        className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold text-white flex-shrink-0"
-                        style={{ background: "#2563EB" }}
-                      >
-                        {s.submittedBy.name.charAt(0)}
-                      </div>
-                      <span className="text-[13px] font-medium" style={{ color: "#18181B" }}>
-                        {s.submittedBy.name}
-                      </span>
-                    </div>
-                  </td>
-                  <td className="muted text-[12px]">
-                    {t.has(`roles.${s.submittedBy.role}`)
-                      ? t(`roles.${s.submittedBy.role}`)
-                      : s.submittedBy.role.replace(/_/g, " ")}
-                  </td>
-                  <td className="muted text-[12px]">{formatDate(s.date)}</td>
-                  <td><StatusBadge status={s.status} /></td>
-                  <td>
-                    <Link
-                      href={`/admin/approvals?id=${s.id}`}
-                      className="text-[12px] font-medium transition-colors"
-                      style={{ color: "#2563EB" }}
+          {/* MOBILE CARDS VIEW (<768px) */}
+          <div className="block md:hidden divide-y divide-zinc-100 dark:divide-zinc-800">
+            {recentSummaries.length === 0 ? (
+              <div className="py-8 text-center text-xs text-zinc-400">
+                {t("common.noData")}
+              </div>
+            ) : recentSummaries.map((s) => (
+              <div key={`mob-sum-${s.id}`} className="p-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div
+                      className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold text-white flex-shrink-0"
+                      style={{ background: "#2563EB" }}
                     >
-                      {t("common.review")}
-                    </Link>
-                  </td>
+                      {s.submittedBy.name.charAt(0)}
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">{s.submittedBy.name}</p>
+                      <p className="text-[10px] text-zinc-400">
+                        {t.has(`roles.${s.submittedBy.role}`)
+                          ? t(`roles.${s.submittedBy.role}`)
+                          : s.submittedBy.role.replace(/_/g, " ")} • {formatDate(s.date)}
+                      </p>
+                    </div>
+                  </div>
+                  <StatusBadge status={s.status} />
+                </div>
+                <div className="flex justify-end pt-1">
+                  <Link
+                    href={`/admin/approvals?id=${s.id}`}
+                    className="text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline"
+                  >
+                    {t("common.review")} →
+                  </Link>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* DESKTOP TABLE VIEW (>=768px) */}
+          <div className="hidden md:block">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>{t("dashboard.employee")}</th>
+                  <th>{t("dashboard.role")}</th>
+                  <th>{t("dashboard.date")}</th>
+                  <th>{t("dashboard.status")}</th>
+                  <th></th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {recentSummaries.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="py-10 text-center text-[13px]" style={{ color: "#A1A1AA" }}>
+                      {t("common.noData")}
+                    </td>
+                  </tr>
+                ) : recentSummaries.map((s) => (
+                  <tr key={s.id}>
+                    <td>
+                      <div className="flex items-center gap-2.5">
+                        <div
+                          className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold text-white flex-shrink-0"
+                          style={{ background: "#2563EB" }}
+                        >
+                          {s.submittedBy.name.charAt(0)}
+                        </div>
+                        <span className="text-[13px] font-medium" style={{ color: "#18181B" }}>
+                          {s.submittedBy.name}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="muted text-[12px]">
+                      {t.has(`roles.${s.submittedBy.role}`)
+                        ? t(`roles.${s.submittedBy.role}`)
+                        : s.submittedBy.role.replace(/_/g, " ")}
+                    </td>
+                    <td className="muted text-[12px]">{formatDate(s.date)}</td>
+                    <td><StatusBadge status={s.status} /></td>
+                    <td>
+                      <Link
+                        href={`/admin/approvals?id=${s.id}`}
+                        className="text-[12px] font-medium transition-colors"
+                        style={{ color: "#2563EB" }}
+                      >
+                        {t("common.review")}
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
 
         {/* Right column */}

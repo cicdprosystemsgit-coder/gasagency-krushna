@@ -9,7 +9,7 @@ import {
   CheckCircle2, XCircle, ChevronRight, ChevronLeft, User,
   Building2, Phone, MapPin, FileText, Cylinder, IndianRupee,
   Barcode, RotateCcw, Clock, CalendarDays, CreditCard,
-  AlertCircle, Check, Camera, ImagePlus, Loader2,
+  AlertCircle, Check, Camera, UploadCloud, Loader2,
 } from "lucide-react";
 import { createDeliveryRecord } from "@/app/actions/deliveries";
 import { CalendarPicker } from "@/components/ui/CalendarPicker";
@@ -450,20 +450,16 @@ interface DeliveryForm {
   deliveredQty: string;
   returnedQty: string;
   pendingQty: string;
-  emptyPending: string;
-  bookingQty: string;
+  emptyPending: string;            // Empty cylinders not yet returned by commercial customer
+  bookingQty: string;              // Number of cylinders booked (default 1)
   cashCollected: string;
   creditAmount: string;
   paymentMode: string;
-  partialCollectionMode: string;
-  partialCollectionOther: string;
+  partialCollectionMode: string;   // How the cash part of PARTIAL was collected
+  partialCollectionOther: string;  // Custom app name if partialCollectionMode === "Others"
   notes: string;
   date: string;
-  otherPaymentApp?: string;
-  // ── Delivery Proof Photo URLs (Cloudinary) ──
-  paymentReceiptUrl: string;
-  customerCardUrl: string;
-  additionalImageUrl: string;
+  otherPaymentApp?: string;        // Custom app name for main "Others" payment mode
 }
 
 function Step2DeliveryDetails({
@@ -472,20 +468,18 @@ function Step2DeliveryDetails({
   form,
   onChange,
   error,
-  onPhotoUpload,
+  proofPhotos,
   photoUploading,
-  photoError,
-  deliveryTempId,
+  onUploadPhoto,
 }: {
   customer: CustomerRecord;
   products: ProductRecord[];
   form: DeliveryForm;
   onChange: (f: Partial<DeliveryForm>) => void;
   error: string;
-  onPhotoUpload: (proofType: string, url: string) => void;
-  photoUploading: Record<string, boolean>;
-  photoError: string;
-  deliveryTempId: string;
+  proofPhotos: { paymentReceiptUrl: string | null; customerCardUrl: string | null; additionalImageUrl: string | null };
+  photoUploading: { payment_receipt: boolean; customer_card: boolean; additional: boolean };
+  onUploadPhoto: (file: File, type: "payment_receipt" | "customer_card" | "additional") => void;
 }) {
   const selectedProduct = products.find((p) => p.id === form.productId);
   const totalValue = selectedProduct && selectedProduct.saleRate > 0
@@ -608,7 +602,7 @@ function Step2DeliveryDetails({
               <div>
                 <label className="block text-[11px] font-medium mb-1" style={{ color: "#4F46E5" }}>Booking Cylinder</label>
                 <input
-                  type="number" min="0"
+                  type="number" inputMode="numeric" min="0"
                   value={form.bookingQty || "1"}
                   onChange={(e) => {
                     const bVal = Number(e.target.value) || 0;
@@ -626,7 +620,7 @@ function Step2DeliveryDetails({
               <div>
                 <label className="block text-[11px] font-medium mb-1" style={{ color: "#2563EB" }}>Delivered</label>
                 <input
-                  type="number" min="0"
+                  type="number" inputMode="numeric" min="0"
                   value={form.deliveredQty}
                   onChange={(e) => {
                     const dVal = Number(e.target.value) || 0;
@@ -646,7 +640,7 @@ function Step2DeliveryDetails({
               <div>
                 <label className="block text-[11px] font-medium mb-1" style={{ color: "#16A34A" }}>Empty Returned</label>
                 <input
-                  type="number" min="0"
+                  type="number" inputMode="numeric" min="0"
                   value={form.returnedQty}
                   onChange={(e) => {
                     const rVal = Number(e.target.value) || 0;
@@ -664,7 +658,7 @@ function Step2DeliveryDetails({
               <div>
                 <label className="block text-[11px] font-medium mb-1" style={{ color: "#7C3AED" }}>Empty Pending</label>
                 <input
-                  type="number" disabled readOnly
+                  type="number" inputMode="numeric" disabled readOnly
                   value={form.emptyPending}
                   className="w-full px-3 py-2 rounded-lg text-[15px] font-bold text-center border outline-none select-none cursor-not-allowed opacity-80 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                   style={{ borderColor: "#D4D4D8", background: "#EDE9FE", color: "#7C3AED" }}
@@ -676,7 +670,7 @@ function Step2DeliveryDetails({
               <div>
                 <label className="block text-[11px] font-medium mb-1" style={{ color: "#D97706" }}>Not Delivered</label>
                 <input
-                  type="number" disabled readOnly
+                  type="number" inputMode="numeric" disabled readOnly
                   value={form.pendingQty}
                   className="w-full px-3 py-2 rounded-lg text-[15px] font-bold text-center border outline-none select-none cursor-not-allowed opacity-80 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                   style={{ borderColor: "#D4D4D8", background: "#FFFBEB", color: "#D97706" }}
@@ -691,7 +685,7 @@ function Step2DeliveryDetails({
               <div>
                 <label className="block text-[11px] font-medium mb-1" style={{ color: "#4F46E5" }}>Booking Cylinder</label>
                 <input
-                  type="number" min="0"
+                  type="number" inputMode="numeric" min="0"
                   value={form.bookingQty || "1"}
                   onChange={(e) => {
                     const bVal = Number(e.target.value) || 0;
@@ -709,7 +703,7 @@ function Step2DeliveryDetails({
               <div>
                 <label className="block text-[11px] font-medium mb-1" style={{ color: "#2563EB" }}>Delivered</label>
                 <input
-                  type="number" min="0"
+                  type="number" inputMode="numeric" min="0"
                   value={form.deliveredQty}
                   onChange={(e) => {
                     const dVal = Number(e.target.value) || 0;
@@ -727,7 +721,7 @@ function Step2DeliveryDetails({
               <div>
                 <label className="block text-[11px] font-medium mb-1" style={{ color: "#16A34A" }}>Empty Returned</label>
                 <input
-                  type="number" min="0"
+                  type="number" inputMode="numeric" min="0"
                   value={form.returnedQty}
                   onChange={(e) => onChange({ returnedQty: e.target.value })}
                   className="w-full px-2 py-2 rounded-lg text-[15px] font-bold text-center border outline-none transition-colors focus:border-green-500"
@@ -740,7 +734,7 @@ function Step2DeliveryDetails({
               <div>
                 <label className="block text-[11px] font-medium mb-1" style={{ color: "#D97706" }}>Not Delivered</label>
                 <input
-                  type="number" disabled readOnly
+                  type="number" inputMode="numeric" disabled readOnly
                   value={form.pendingQty}
                   className="w-full px-3 py-2 rounded-lg text-[15px] font-bold text-center border outline-none select-none cursor-not-allowed opacity-80 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                   style={{ borderColor: "#D4D4D8", background: "#FFFBEB", color: "#D97706" }}
@@ -1071,92 +1065,39 @@ function Step2DeliveryDetails({
           </div>
         </div>
 
-        {/* ── STEP G: Delivery Proof Photos ────────────────────────────── */}
-        <div className="rounded-xl p-4 space-y-3" style={{ background: "#FFF7ED", border: "1.5px solid #FED7AA" }}>
-          <div className="flex items-center gap-2 mb-1">
-            <Camera className="w-4 h-4" style={{ color: "#EA580C" }} />
-            <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "#EA580C" }}>⑦ Delivery Proof Photos</p>
+        {/* ── STEP G: Delivery Proof Photos (Phase 1 + Phase 2) ─────────── */}
+        <div className="rounded-xl p-4 space-y-3" style={{ background: "#F8F8F8", border: "1px solid #E4E4E7" }}>
+          <div className="flex items-center justify-between">
+            <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "#71717A" }}>
+              ⑦ Delivery Proof Photos
+            </p>
+            <span className="text-[10px] font-medium text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-200">
+              IST Timestamp Watermarked
+            </span>
           </div>
-          <p className="text-[11px] mb-2" style={{ color: "#92400E" }}>Payment Receipt &amp; Customer Card are <strong>mandatory</strong>.</p>
 
-          {([
-            { key: "paymentReceiptUrl",  label: "Payment Receipt",    icon: "🧾", required: true,  hint: "Cash receipt or UPI screenshot" },
-            { key: "customerCardUrl",    label: "Customer Card Entry", icon: "📋", required: true,  hint: "Gas book / connection card" },
-            { key: "additionalImageUrl", label: "Additional Image",    icon: "🖼️", required: false, hint: "Any other proof (optional)" },
-          ] as const).map(({ key, label, icon, required, hint }) => {
-            const url  = form[key as keyof DeliveryForm] as string;
-            const busy = photoUploading[key] || url === "__uploading__";
-            const done = !!url && url !== "__uploading__";
-            return (
-              <div key={key} className="rounded-lg p-3" style={{ background: "#FFFFFF", border: done ? "1.5px solid #16A34A" : "1.5px dashed #FED7AA" }}>
-                <div className="flex items-center gap-3">
-                  <div className="w-14 h-14 rounded-lg overflow-hidden flex-shrink-0 flex items-center justify-center"
-                    style={{ background: done ? "#000" : "#FFF7ED", border: "1px solid #FED7AA" }}>
-                    {done ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={url} alt={label} className="w-full h-full object-cover" />
-                    ) : busy ? (
-                      <Loader2 className="w-6 h-6 animate-spin" style={{ color: "#EA580C" }} />
-                    ) : (
-                      <span className="text-2xl">{icon}</span>
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[12px] font-semibold" style={{ color: "#18181B" }}>
-                      {label}{required && <span style={{ color: "#DC2626" }}> *</span>}
-                    </p>
-                    <p className="text-[10px] mt-0.5" style={{ color: "#92400E" }}>{hint}</p>
-                    {done && <p className="text-[10px] mt-1 font-medium" style={{ color: "#16A34A" }}>✅ Uploaded successfully</p>}
-                  </div>
-                  <label className="cursor-pointer flex-shrink-0">
-                    <input
-                      type="file"
-                      accept="image/jpeg,image/png,image/webp"
-                      capture="environment"
-                      className="hidden"
-                      disabled={busy}
-                      onChange={async (e) => {
-                        const file = e.target.files?.[0];
-                        if (!file) return;
-                        e.target.value = "";
-                        const proofTypeMap: Record<string, string> = {
-                          paymentReceiptUrl: "payment-receipt",
-                          customerCardUrl: "customer-card",
-                          additionalImageUrl: "additional",
-                        };
-                        const fd = new FormData();
-                        fd.append("file", file);
-                        fd.append("proofType", proofTypeMap[key]);
-                        fd.append("tempId", deliveryTempId);
-                        fd.append("capturedAt", new Date().toISOString());
-                        onPhotoUpload(key, "__uploading__");
-                        try {
-                          const res = await fetch("/api/upload-delivery-proof", { method: "POST", body: fd });
-                          const data = await res.json();
-                          if (!res.ok) throw new Error(data.error || "Upload failed");
-                          onPhotoUpload(key, data.url);
-                        } catch (err: any) {
-                          onPhotoUpload(key, "");
-                          alert(err.message || "Photo upload failed. Please try again.");
-                        }
-                      }}
-                    />
-                    <div className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-[11px] font-semibold transition-all"
-                      style={{
-                        background: busy ? "#F4F4F5" : done ? "#ECFDF5" : "#EA580C",
-                        color: busy ? "#A1A1AA" : done ? "#065F46" : "#FFFFFF",
-                      }}>
-                      {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : done ? <RotateCcw className="w-3.5 h-3.5" /> : <Camera className="w-3.5 h-3.5" />}
-                      {busy ? "Uploading" : done ? "Retake" : "Capture"}
-                    </div>
-                  </label>
-                </div>
-              </div>
-            );
-          })}
-          {photoError && (
-            <p className="text-[11px] font-medium mt-1" style={{ color: "#DC2626" }}>⚠️ {photoError}</p>
-          )}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <PhotoSlot
+              label="1. Payment Receipt"
+              required
+              value={proofPhotos.paymentReceiptUrl}
+              uploading={photoUploading.payment_receipt}
+              onCapture={(file) => onUploadPhoto(file, "payment_receipt")}
+            />
+            <PhotoSlot
+              label="2. Customer Card Entry"
+              required
+              value={proofPhotos.customerCardUrl}
+              uploading={photoUploading.customer_card}
+              onCapture={(file) => onUploadPhoto(file, "customer_card")}
+            />
+            <PhotoSlot
+              label="3. Extra Photo"
+              value={proofPhotos.additionalImageUrl}
+              uploading={photoUploading.additional}
+              onCapture={(file) => onUploadPhoto(file, "additional")}
+            />
+          </div>
         </div>
 
       </div>
@@ -1164,8 +1105,98 @@ function Step2DeliveryDetails({
   );
 }
 
-// ─── Step 3: Review & Confirm ─────────────────────────────────────────────────
+// ─── Photo Upload Slot ────────────────────────────────────────────────────────
 
+function PhotoSlot({
+  label,
+  required,
+  value,
+  uploading,
+  onCapture,
+}: {
+  label: string;
+  required?: boolean;
+  value: string | null;
+  uploading: boolean;
+  onCapture: (file: File) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  return (
+    <div
+      className="rounded-xl border-2 transition-all p-3 space-y-2"
+      style={{
+        borderColor: value ? "#16A34A" : required ? "#FCA5A5" : "#D4D4D8",
+        background: value ? "#F0FDF4" : "#FAFAFA",
+      }}
+    >
+      <div className="flex items-center justify-between">
+        <span className="text-[12px] font-bold" style={{ color: "#18181B" }}>
+          {label} {required && <span style={{ color: "#DC2626" }}>*</span>}
+        </span>
+        {value ? (
+          <span
+            className="text-[10px] font-bold px-2 py-0.5 rounded-full"
+            style={{ background: "#DCFCE7", color: "#16A34A" }}
+          >
+            ✅ Uploaded
+          </span>
+        ) : required ? (
+          <span className="text-[10px] font-semibold" style={{ color: "#DC2626" }}>Required</span>
+        ) : (
+          <span className="text-[10px]" style={{ color: "#A1A1AA" }}>Optional</span>
+        )}
+      </div>
+
+      {/* Preview thumbnail */}
+      {value && (
+        <div className="rounded-lg overflow-hidden" style={{ aspectRatio: "16/9", background: "#18181B" }}>
+          <img src={value} alt={label} className="w-full h-full object-cover" />
+        </div>
+      )}
+
+      {/* Camera button */}
+      <button
+        type="button"
+        disabled={uploading}
+        onClick={() => inputRef.current?.click()}
+        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg transition-all"
+        style={{
+          background: uploading ? "#F4F4F5" : value ? "#DCFCE7" : "#EFF6FF",
+          color: uploading ? "#A1A1AA" : value ? "#16A34A" : "#2563EB",
+          border: `1px solid ${uploading ? "#D4D4D8" : value ? "#86EFAC" : "#93C5FD"}`,
+          fontSize: "12px",
+          fontWeight: 600,
+          cursor: uploading ? "not-allowed" : "pointer",
+        }}
+      >
+        {uploading ? (
+          <><Loader2 className="w-4 h-4 animate-spin" /> Uploading...</>
+        ) : value ? (
+          <><Camera className="w-4 h-4" /> Retake Photo</>
+        ) : (
+          <><Camera className="w-4 h-4" /> {required ? "Take Photo" : "Add Photo (Optional)"}</>
+        )}
+      </button>
+
+      {/* Hidden file input — opens rear camera on mobile */}
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) {
+            onCapture(file);
+            e.target.value = ""; // reset so same file can be re-selected
+          }
+        }}
+      />
+    </div>
+  );
+}
 
 // ─── Step 3: Review & Confirm ─────────────────────────────────────────────────
 
@@ -1175,10 +1206,12 @@ function Step3Review({
   customer,
   form,
   product,
+  proofPhotos,
 }: {
   customer: CustomerRecord;
   form: DeliveryForm;
   product: ProductRecord | undefined;
+  proofPhotos: { paymentReceiptUrl: string | null; customerCardUrl: string | null; additionalImageUrl: string | null };
 }) {
   const isDomestic = customer.type === "DOMESTIC";
   const collectionLabel = form.partialCollectionMode === "Others"
@@ -1256,27 +1289,30 @@ function Step3Review({
         ))}
       </div>
 
-      {/* Photo proof thumbnails */}
-      {(form.paymentReceiptUrl || form.customerCardUrl || form.additionalImageUrl) && (
-        <div className="mt-4 rounded-xl p-3" style={{ background: "#F0FDF4", border: "1px solid #A7F3D0" }}>
-          <p className="text-[11px] font-semibold mb-2 flex items-center gap-1" style={{ color: "#065F46" }}>
-            <Camera className="w-3.5 h-3.5" /> Delivery Proof Photos Attached
-          </p>
-          <div className="flex gap-2 flex-wrap">
-            {[
-              { url: form.paymentReceiptUrl,  label: "Receipt" },
-              { url: form.customerCardUrl,    label: "Card"    },
-              { url: form.additionalImageUrl, label: "Extra"   },
-            ].filter(p => p.url && p.url !== "__uploading__").map(({ url, label }) => (
-              <div key={label} className="text-center">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={url} alt={label} className="w-20 h-20 rounded-lg object-cover border-2" style={{ borderColor: "#34D399" }} />
-                <p className="text-[10px] mt-1 font-medium" style={{ color: "#065F46" }}>{label}</p>
-              </div>
-            ))}
-          </div>
+      {/* Proof Photo Thumbnails preview */}
+      <div className="mt-4 p-3 rounded-xl bg-gray-50 border border-gray-200">
+        <p className="text-[11px] font-bold uppercase tracking-wider text-gray-500 mb-2">📸 Verified Proof Photos Attached</p>
+        <div className="grid grid-cols-3 gap-2">
+          {proofPhotos.paymentReceiptUrl && (
+            <div className="rounded-lg overflow-hidden border border-gray-300 relative aspect-video bg-black">
+              <img src={proofPhotos.paymentReceiptUrl} alt="Receipt" className="w-full h-full object-cover" />
+              <span className="absolute bottom-0 inset-x-0 bg-black/70 text-white text-[9px] font-medium text-center py-0.5">Receipt</span>
+            </div>
+          )}
+          {proofPhotos.customerCardUrl && (
+            <div className="rounded-lg overflow-hidden border border-gray-300 relative aspect-video bg-black">
+              <img src={proofPhotos.customerCardUrl} alt="Card" className="w-full h-full object-cover" />
+              <span className="absolute bottom-0 inset-x-0 bg-black/70 text-white text-[9px] font-medium text-center py-0.5">Customer Card</span>
+            </div>
+          )}
+          {proofPhotos.additionalImageUrl && (
+            <div className="rounded-lg overflow-hidden border border-gray-300 relative aspect-video bg-black">
+              <img src={proofPhotos.additionalImageUrl} alt="Extra" className="w-full h-full object-cover" />
+              <span className="absolute bottom-0 inset-x-0 bg-black/70 text-white text-[9px] font-medium text-center py-0.5">Extra Photo</span>
+            </div>
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 }
@@ -1373,19 +1409,50 @@ export function MyDeliveriesClient({
     notes: "",
     date: todayStr(),
     otherPaymentApp: "",
-    paymentReceiptUrl: "",
-    customerCardUrl: "",
-    additionalImageUrl: "",
   });
-  // Photo uploading state: tracks per-slot loading
-  const [photoUploading, setPhotoUploading] = useState<Record<string, boolean>>({});
-  const [photoError, setPhotoError] = useState("");
-  // Stable temp ID for this delivery session (for Cloudinary public_id)
-  const deliveryTempId = useRef(`del_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`);
   const [formError, setFormError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [, startTransition] = useTransition();
   const [historyExpanded, setHistoryExpanded] = useState(false);
+
+  // ── Delivery Proof Photos state ──────────────────────────────────────────────
+  const [proofPhotos, setProofPhotos] = useState<{
+    paymentReceiptUrl: string | null;
+    customerCardUrl: string | null;
+    additionalImageUrl: string | null;
+  }>({ paymentReceiptUrl: null, customerCardUrl: null, additionalImageUrl: null });
+
+  const [photoUploading, setPhotoUploading] = useState<{
+    payment_receipt: boolean;
+    customer_card: boolean;
+    additional: boolean;
+  }>({ payment_receipt: false, customer_card: false, additional: false });
+
+  async function uploadProofPhoto(
+    file: File,
+    type: "payment_receipt" | "customer_card" | "additional"
+  ) {
+    setPhotoUploading((prev) => ({ ...prev, [type]: true }));
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("deliveryId", "pending");
+      fd.append("type", type);
+      const res = await fetch("/api/upload-delivery-proof", { method: "POST", body: fd });
+      const data = await res.json();
+      if (!res.ok || !data.url) throw new Error(data.error ?? "Upload failed");
+      const key = type === "payment_receipt"
+        ? "paymentReceiptUrl"
+        : type === "customer_card"
+        ? "customerCardUrl"
+        : "additionalImageUrl";
+      setProofPhotos((prev) => ({ ...prev, [key]: data.url as string }));
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : "Photo upload failed. Try again.");
+    } finally {
+      setPhotoUploading((prev) => ({ ...prev, [type]: false }));
+    }
+  }
 
   const [gps, setGps] = useState<{
     lat: number | null;
@@ -1470,12 +1537,11 @@ export function MyDeliveriesClient({
   function openWizard() {
     setStep(1);
     setSelectedCustomer(null);
-    setForm({ productId: "", deliveredQty: "0", returnedQty: "0", pendingQty: "1", emptyPending: "0", bookingQty: "1", cashCollected: "", creditAmount: "", paymentMode: "CASH", partialCollectionMode: "CASH", partialCollectionOther: "", notes: "", date: todayStr(), otherPaymentApp: "", paymentReceiptUrl: "", customerCardUrl: "", additionalImageUrl: "" });
+    setForm({ productId: "", deliveredQty: "0", returnedQty: "0", pendingQty: "1", emptyPending: "0", bookingQty: "1", cashCollected: "", creditAmount: "", paymentMode: "CASH", partialCollectionMode: "CASH", partialCollectionOther: "", notes: "", date: todayStr(), otherPaymentApp: "" });
     setFormError("");
-    setPhotoError("");
-    setPhotoUploading({});
-    deliveryTempId.current = `del_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
     setGps({ lat: null, lng: null, accuracy: null, loading: false, error: null });
+    setProofPhotos({ paymentReceiptUrl: null, customerCardUrl: null, additionalImageUrl: null });
+    setPhotoUploading({ payment_receipt: false, customer_card: false, additional: false });
     setWizardOpen(true);
   }
 
@@ -1508,16 +1574,16 @@ export function MyDeliveriesClient({
         return;
       }
     }
-    // ── Photo validation (mandatory) ──
-    if (!form.paymentReceiptUrl) {
-      setFormError("Please upload the Payment Receipt photo before proceeding.");
+    // Photo validation — both mandatory photos required
+    if (!proofPhotos.paymentReceiptUrl) {
+      setFormError("📸 Payment Receipt photo is required. Please take a photo of the payment receipt.");
       return;
     }
-    if (!form.customerCardUrl) {
-      setFormError("Please upload the Customer Card Entry photo before proceeding.");
+    if (!proofPhotos.customerCardUrl) {
+      setFormError("📋 Customer Card Entry photo is required. Please photograph the gas book entry.");
       return;
     }
-    // Location check
+    // Location check: Warn if GPS not captured yet
     if (!gps.lat && !gps.loading) {
       setFormError("Mandatory: We need to capture your GPS location. Click retry below.");
       captureGps();
@@ -1559,11 +1625,10 @@ export function MyDeliveriesClient({
     if (gps.lat) fd.append("deliveryLat", gps.lat.toString());
     if (gps.lng) fd.append("deliveryLng", gps.lng.toString());
     if (gps.accuracy) fd.append("deliveryAccuracy", gps.accuracy.toString());
-    // ── Delivery proof photo URLs ──
-    if (form.paymentReceiptUrl)  fd.append("paymentReceiptUrl",  form.paymentReceiptUrl);
-    if (form.customerCardUrl)    fd.append("customerCardUrl",    form.customerCardUrl);
-    if (form.additionalImageUrl) fd.append("additionalImageUrl", form.additionalImageUrl);
-    fd.append("photosCapturedAt", new Date().toISOString());
+    // ── Append proof photo URLs ──
+    if (proofPhotos.paymentReceiptUrl) fd.append("paymentReceiptUrl", proofPhotos.paymentReceiptUrl);
+    if (proofPhotos.customerCardUrl) fd.append("customerCardUrl", proofPhotos.customerCardUrl);
+    if (proofPhotos.additionalImageUrl) fd.append("additionalImageUrl", proofPhotos.additionalImageUrl);
 
     startTransition(async () => {
       const res = await createDeliveryRecord(fd);
@@ -1796,15 +1861,9 @@ export function MyDeliveriesClient({
                 form={form}
                 onChange={(f) => setForm((prev) => ({ ...prev, ...f }))}
                 error={formError}
-                onPhotoUpload={(key, url) => {
-                  setPhotoUploading((prev) => ({ ...prev, [key]: url === "__uploading__" }));
-                  if (url !== "__uploading__") {
-                    setForm((prev) => ({ ...prev, [key]: url }));
-                  }
-                }}
+                proofPhotos={proofPhotos}
                 photoUploading={photoUploading}
-                photoError={photoError}
-                deliveryTempId={deliveryTempId.current}
+                onUploadPhoto={uploadProofPhoto}
               />
               <div className="flex gap-3 mt-6">
                 <button type="button" onClick={() => { setStep(1); setFormError(""); }}
@@ -1824,7 +1883,7 @@ export function MyDeliveriesClient({
           {step === 3 && selectedCustomer && (
             <>
               <GpsStatusBox gps={gps} onRetry={captureGps} />
-              <Step3Review customer={selectedCustomer} form={form} product={selectedProduct} />
+              <Step3Review customer={selectedCustomer} form={form} product={selectedProduct} proofPhotos={proofPhotos} />
               {formError && (
                 <div className="mt-3 flex items-center gap-2 px-3 py-2 rounded-lg"
                   style={{ background: "#FEF2F2", border: "1px solid #FCA5A5" }}>

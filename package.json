@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.2",
+    "@aws-sdk/client-s3": "^3.1101.0",
     "@hookform/resolvers": "^5.4.0",
     "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^7.8.0",
@@ -66,6 +67,11 @@
     "winston": "^3.19.0",
     "winston-daily-rotate-file": "^5.0.0",
     "zod": "^4.4.3"
+  },
+  "overrides": {
+    "postcss": "^8.4.49",
+    "sharp": "^0.35.0",
+    "uuid": "^11.1.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

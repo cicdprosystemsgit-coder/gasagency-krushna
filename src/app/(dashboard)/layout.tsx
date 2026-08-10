@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Navbar } from "@/components/layout/Navbar";
 import { SessionGuard } from "@/components/layout/SessionGuard";
+import { MobileBottomNav } from "@/components/layout/MobileBottomNav";
 
 interface SessionData {
   name: string;
@@ -37,6 +38,7 @@ function adjustColorBrightness(hex: string, percent: number) {
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
   const [session, setSession] = useState<SessionData | null>(null);
   const router = useRouter();
 
@@ -100,21 +102,30 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         logoBase64={session.logoBase64}
         customRoleName={session.customRole}
         customRolePermissions={session.customRolePermissions}
+        mobileOpen={mobileOpen}
+        onCloseMobile={() => setMobileOpen(false)}
       />
       <Navbar
         userName={session.name}
         role={session.role}
         sidebarCollapsed={collapsed}
+        onOpenMobileMenu={() => setMobileOpen(true)}
       />
+
       <main
-        className="transition-all duration-200"
+        className="transition-all duration-200 ml-0 md:ml-[220px]"
         style={{
-          marginLeft: collapsed ? 52 : 220,
           paddingTop: 52,
         }}
       >
-        <div className="p-6 animate-fade-up">{children}</div>
+        <div className="p-3.5 sm:p-5 lg:p-6 pb-20 md:pb-6 animate-fade-up">{children}</div>
       </main>
+
+      {/* Touch-Friendly Mobile Bottom Navigation Bar */}
+      <MobileBottomNav
+        role={session.role}
+        onOpenMobileMenu={() => setMobileOpen(true)}
+      />
     </div>
   );
 }

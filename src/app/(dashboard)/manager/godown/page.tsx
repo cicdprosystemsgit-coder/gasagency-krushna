@@ -7,14 +7,26 @@ import { GodownTabsContainer } from "@/app/(dashboard)/admin/godown/GodownTabsCo
 import { getAgencyTodayRange } from "@/lib/utils";
 import { checkPermission } from "@/lib/rbac";
 
-export default async function ManagerGodownPage() {
+interface PageProps {
+  searchParams?: Promise<{ date?: string }>;
+}
+
+export default async function ManagerGodownPage({ searchParams }: PageProps) {
   const session = await getSession();
   if (!session || session.role !== "MANAGER") redirect("/login");
 
   const isAllowed = await checkPermission(session.userId, "godown", "read");
   if (!isAllowed) redirect("/manager");
 
-  const { todayStart, todayEnd } = getAgencyTodayRange();
+  const params = (await searchParams) || {};
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const selectedDate = params.date || todayStr;
+
+  const targetDate = new Date(selectedDate);
+  const dateStart = new Date(targetDate);
+  dateStart.setHours(0, 0, 0, 0);
+  const dateEnd = new Date(targetDate);
+  dateEnd.setHours(23, 59, 59, 999);
 
   const [
     records,
@@ -26,14 +38,20 @@ export default async function ManagerGodownPage() {
     todayMovements,
   ] = await Promise.all([
     prisma.godownRecord.findMany({
-      where: { agencyId: session.agencyId! },
+      where: {
+        agencyId: session.agencyId!,
+        entryDate: { gte: dateStart, lte: dateEnd },
+      },
       orderBy: { entryDate: "desc" },
-      take: 50,
       include: { submittedBy: { select: { name: true } } },
     }),
     prisma.godownRecord.aggregate({
       _sum: { filledCylindersReceived: true, emptyCylindersReturned: true },
-      where: { agencyId: session.agencyId!, status: "APPROVED" },
+      where: {
+        agencyId: session.agencyId!,
+        status: "APPROVED",
+        entryDate: { gte: dateStart, lte: dateEnd },
+      },
     }),
     prisma.deliveryVehicle.findMany({
       where: { agencyId: session.agencyId! },
@@ -46,7 +64,7 @@ export default async function ManagerGodownPage() {
       orderBy: { name: "asc" },
     }),
     prisma.vehicleTripLog.findMany({
-      where: { agencyId: session.agencyId!, date: { gte: todayStart, lte: todayEnd } },
+      where: { agencyId: session.agencyId!, date: { gte: dateStart, lte: dateEnd } },
       orderBy: { createdAt: "desc" },
       include: {
         vehicle: { select: { vehicleNo: true, vehicleName: true, assignedTo: { select: { name: true } } } },
@@ -59,7 +77,7 @@ export default async function ManagerGodownPage() {
       orderBy: { name: "asc" },
     }),
     prisma.godownInventory.findMany({
-      where: { agencyId: session.agencyId!, date: { gte: todayStart, lte: todayEnd } },
+      where: { agencyId: session.agencyId!, date: { gte: dateStart, lte: dateEnd } },
       orderBy: { date: "desc" },
       include: {
         product: { select: { name: true } },
@@ -67,8 +85,6 @@ export default async function ManagerGodownPage() {
       },
     }),
   ]);
-
-  const todayStr = new Date().toISOString().slice(0, 10);
 
   return (
     <div>
@@ -91,7 +107,7 @@ export default async function ManagerGodownPage() {
         mapRecords={records}
         mapTrips={todayTripLogs}
         mapMovements={todayMovements}
-        selectedDate={todayStr}
+        selectedDate={selectedDate}
       />
     </div>
   );

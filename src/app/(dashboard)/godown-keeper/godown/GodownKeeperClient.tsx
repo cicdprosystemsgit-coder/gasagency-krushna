@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { Warehouse } from "lucide-react";
 import { GodownClient } from "../../admin/godown/GodownClient";
 import { InternalVehiclesClient } from "../../admin/godown/InternalVehiclesClient";
+import { DateNavigationHeader } from "@/components/ui/DateNavigationHeader";
 
 interface GodownKeeperClientProps {
   initialRecords: any[];
@@ -14,6 +15,7 @@ interface GodownKeeperClientProps {
   initialVehicles: any[];
   initialTripLogs: any[];
   deliveryBoys: any[];
+  selectedDate?: string;
 }
 
 export function GodownKeeperClient({
@@ -25,14 +27,21 @@ export function GodownKeeperClient({
   initialVehicles,
   initialTripLogs,
   deliveryBoys,
+  selectedDate = new Date().toISOString().slice(0, 10),
 }: GodownKeeperClientProps) {
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Godown Keeper Dashboard"
-        subtitle="Track company supply vehicles and manage internal delivery fleet operations"
-        icon={<Warehouse className="w-5 h-5 text-blue-600" />}
-      />
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <PageHeader
+          title="Godown Keeper Dashboard"
+          subtitle="Track company supply vehicles and manage internal delivery fleet operations"
+          icon={<Warehouse className="w-5 h-5 text-blue-600" />}
+        />
+        <div className="flex items-center gap-2 self-end sm:self-auto">
+          <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Date:</span>
+          <DateNavigationHeader selectedDate={selectedDate} />
+        </div>
+      </div>
 
       {/* Company Vehicle Section */}
       <div className="mb-2">
@@ -47,6 +56,7 @@ export function GodownKeeperClient({
           isAdmin={false}
           userId={userId}
           cylinderTypes={cylinderTypes}
+          selectedDate={selectedDate}
         />
       </div>
 
@@ -66,6 +76,7 @@ export function GodownKeeperClient({
           isAdmin={false}
           userId={userId}
           cylinderTypes={cylinderTypes}
+          selectedDate={selectedDate}
         />
       </div>
     </div>

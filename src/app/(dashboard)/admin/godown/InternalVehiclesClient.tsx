@@ -85,7 +85,7 @@ function getTripItems(t: TripLog): CylinderRowItem[] {
 }
 
 export function InternalVehiclesClient({
-  initialVehicles, initialTripLogs, deliveryBoys, isAdmin, userId, cylinderTypes = [],
+  initialVehicles, initialTripLogs, deliveryBoys, isAdmin, userId, cylinderTypes = [], selectedDate,
 }: {
   initialVehicles: DeliveryVehicle[];
   initialTripLogs: TripLog[];
@@ -93,9 +93,19 @@ export function InternalVehiclesClient({
   isAdmin: boolean;
   userId: string;
   cylinderTypes?: Product[];
+  selectedDate?: string;
 }) {
   const [vehicles, setVehicles] = useState(initialVehicles);
   const [tripLogs, setTripLogs] = useState(initialTripLogs);
+
+  useEffect(() => {
+    setTripLogs(initialTripLogs);
+  }, [initialTripLogs]);
+
+  useEffect(() => {
+    setVehicles(initialVehicles);
+  }, [initialVehicles]);
+
   const [activeTab, setActiveTab] = useState<"vehicles" | "trips">("trips");
   const [vehicleModal, setVehicleModal] = useState(false);
   const [tripModal, setTripModal] = useState(false);

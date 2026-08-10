@@ -10,7 +10,7 @@ import {
   BarChart3, PanelLeftClose, PanelLeft, Flame, Boxes, CreditCard,
   Banknote, CalendarDays, Car, TrendingUp, Clock, FolderOpen, MessageSquarePlus,
   ShieldCheck, Building2, KeyRound, FileDown, Palette, BadgeDollarSign, PieChart,
-  Activity, ArrowRightLeft, Layers, Percent,
+  Activity, ArrowRightLeft, Layers, Percent, X,
 } from "lucide-react";
 
 
@@ -24,6 +24,8 @@ interface SidebarProps {
   logoBase64?: string | null;
   customRoleName?: string | null;
   customRolePermissions?: { resource: string; action: string; isAllowed: boolean }[];
+  mobileOpen?: boolean;
+  onCloseMobile?: () => void;
 }
 
 interface NavItem {
@@ -317,6 +319,8 @@ export function Sidebar({
   logoBase64,
   customRoleName,
   customRolePermissions = [],
+  mobileOpen = false,
+  onCloseMobile,
 }: SidebarProps) {
   const pathname = usePathname();
   const base = getBase(role);
@@ -380,111 +384,142 @@ export function Sidebar({
   };
 
   return (
-    <aside
-      className="fixed inset-y-0 left-0 z-40 flex flex-col transition-all duration-200"
-      style={{
-        width: collapsed ? 52 : 220,
-        background: "var(--color-sidebar)",
-        borderRight: "1px solid var(--color-sidebar-border)",
-      }}
-    >
-      {/* Logo */}
-      <div
-        className="flex items-center h-[52px] flex-shrink-0"
-        style={{ padding: collapsed ? "0 14px" : "0 16px", borderBottom: "1px solid var(--color-sidebar-border)" }}
-      >
-        {logoBase64 ? (
-          <img
-            src={logoBase64}
-            alt={agencyName ?? "GasAgency"}
-            className="w-7 h-7 object-contain flex-shrink-0"
-          />
-        ) : (
-          <div
-            className="w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0"
-            style={{ backgroundColor: "var(--color-primary)" }}
-          >
-            <Flame className="w-4 h-4 text-white" />
-          </div>
-        )}
-        {!collapsed && (
-          <span className="ml-2.5 text-[14px] font-semibold text-zinc-900 tracking-tight truncate">
-            {agencyName ?? "GasAgency"}
-          </span>
-        )}
-      </div>
+    <>
+      {/* Mobile Off-Canvas Backdrop Overlay */}
+      {mobileOpen && (
+        <div
+          onClick={onCloseMobile}
+          className="md:hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-xs transition-opacity animate-fade-in"
+        />
+      )}
 
-      {/* Nav */}
-      <nav className="flex-1 overflow-y-auto py-3" style={{ padding: collapsed ? "12px 6px" : "12px 8px" }}>
-        {sections.map((section, si) => (
-          <div key={si} className={si > 0 ? "mt-4" : ""}>
-            {section.label && !collapsed && (
-              <p className="nav-section-label px-2">
-                {t.has(`nav.${getTranslationKey(section.label)}`)
-                  ? t(`nav.${getTranslationKey(section.label)}`)
-                  : section.label}
-              </p>
-            )}
-            {section.items.map((item) => {
-              const isActive = pathname === item.href ||
-                (item.href !== base && pathname.startsWith(item.href));
-              const translatedLabel = t.has(`nav.${getTranslationKey(item.label)}`)
-                ? t(`nav.${getTranslationKey(item.label)}`)
-                : item.label;
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  title={collapsed ? translatedLabel : undefined}
-                  className={cn(
-                    "nav-item",
-                    isActive && "active",
-                    collapsed && "justify-center px-0"
-                  )}
-                  style={{ height: 32 }}
-                >
-                  <span className="nav-icon flex-shrink-0">{item.icon}</span>
-                  {!collapsed && <span className="truncate">{translatedLabel}</span>}
-                </Link>
-              );
-            })}
-          </div>
-        ))}
-      </nav>
-
-      {/* User + collapse */}
-      <div
-        className="flex-shrink-0"
-        style={{ borderTop: "1px solid var(--color-sidebar-border)", padding: collapsed ? "8px 6px" : "8px" }}
-      >
-        {!collapsed && (
-          <div className="flex items-center gap-2.5 px-2 py-2 rounded-md mb-1" style={{ background: "var(--color-sidebar-hover)" }}>
-            <div
-              className="w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold text-white flex-shrink-0"
-              style={{ backgroundColor: "var(--color-primary)" }}
-            >
-              {userName.charAt(0).toUpperCase()}
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-[12px] font-medium text-zinc-900 truncate leading-none mb-0.5">{userName}</p>
-              <p className="text-[11px] leading-none truncate font-medium text-blue-600 mt-0.5" title={customRoleName || undefined}>
-                {customRoleName || (t.has(`roles.${role}`) ? t(`roles.${role}`) : (ROLE_LABELS[role] || role))}
-              </p>
-            </div>
-          </div>
+      {/* Sidebar: Desktop Fixed + Mobile Off-Canvas Drawer */}
+      <aside
+        className={cn(
+          "fixed inset-y-0 left-0 z-50 flex flex-col transition-all duration-200",
+          // Mobile state: slide drawer, Desktop state: static sidebar
+          mobileOpen ? "flex w-[260px]" : "hidden md:flex"
         )}
-        <button
-          onClick={onToggle}
-          className={cn("nav-item w-full", collapsed && "justify-center px-0")}
-          style={{ height: 30 }}
-          title={collapsed ? t("nav.collapse") : undefined}
+        style={{
+          width: mobileOpen ? 260 : (collapsed ? 52 : 220),
+          background: "var(--color-sidebar)",
+          borderRight: "1px solid var(--color-sidebar-border)",
+        }}
+      >
+        {/* Logo Header */}
+        <div
+          className="flex items-center justify-between h-[52px] flex-shrink-0"
+          style={{ padding: collapsed && !mobileOpen ? "0 14px" : "0 16px", borderBottom: "1px solid var(--color-sidebar-border)" }}
         >
-          {collapsed
-            ? <PanelLeft className="w-4 h-4 flex-shrink-0" />
-            : <><PanelLeftClose className="w-4 h-4 flex-shrink-0 nav-icon" /><span className="text-[12px]">{t("nav.collapse")}</span></>
-          }
-        </button>
-      </div>
-    </aside>
+          <div className="flex items-center min-w-0">
+            {logoBase64 ? (
+              <img
+                src={logoBase64}
+                alt={agencyName ?? "GasAgency"}
+                className="w-7 h-7 object-contain flex-shrink-0"
+              />
+            ) : (
+              <div
+                className="w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0"
+                style={{ backgroundColor: "var(--color-primary)" }}
+              >
+                <Flame className="w-4 h-4 text-white" />
+              </div>
+            )}
+            {(!collapsed || mobileOpen) && (
+              <span className="ml-2.5 text-[14px] font-semibold text-zinc-900 tracking-tight truncate">
+                {agencyName ?? "GasAgency"}
+              </span>
+            )}
+          </div>
+
+          {/* Close button for mobile drawer */}
+          {mobileOpen && (
+            <button
+              onClick={onCloseMobile}
+              type="button"
+              className="md:hidden p-1.5 rounded-md text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          )}
+        </div>
+
+        {/* Nav */}
+        <nav className="flex-1 overflow-y-auto py-3" style={{ padding: collapsed && !mobileOpen ? "12px 6px" : "12px 8px" }}>
+          {sections.map((section, si) => (
+            <div key={si} className={si > 0 ? "mt-4" : ""}>
+              {section.label && (!collapsed || mobileOpen) && (
+                <p className="nav-section-label px-2">
+                  {t.has(`nav.${getTranslationKey(section.label)}`)
+                    ? t(`nav.${getTranslationKey(section.label)}`)
+                    : section.label}
+                </p>
+              )}
+              {section.items.map((item) => {
+                const isActive = pathname === item.href ||
+                  (item.href !== base && pathname.startsWith(item.href));
+                const translatedLabel = t.has(`nav.${getTranslationKey(item.label)}`)
+                  ? t(`nav.${getTranslationKey(item.label)}`)
+                  : item.label;
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={() => {
+                      if (mobileOpen && onCloseMobile) onCloseMobile();
+                    }}
+                    title={collapsed && !mobileOpen ? translatedLabel : undefined}
+                    className={cn(
+                      "nav-item",
+                      isActive && "active",
+                      collapsed && !mobileOpen && "justify-center px-0"
+                    )}
+                    style={{ height: 32 }}
+                  >
+                    <span className="nav-icon flex-shrink-0">{item.icon}</span>
+                    {(!collapsed || mobileOpen) && <span className="truncate">{translatedLabel}</span>}
+                  </Link>
+                );
+              })}
+            </div>
+          ))}
+        </nav>
+
+        {/* User + collapse */}
+        <div
+          className="flex-shrink-0"
+          style={{ borderTop: "1px solid var(--color-sidebar-border)", padding: collapsed && !mobileOpen ? "8px 6px" : "8px" }}
+        >
+          {(!collapsed || mobileOpen) && (
+            <div className="flex items-center gap-2.5 px-2 py-2 rounded-md mb-1" style={{ background: "var(--color-sidebar-hover)" }}>
+              <div
+                className="w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold text-white flex-shrink-0"
+                style={{ backgroundColor: "var(--color-primary)" }}
+              >
+                {userName.charAt(0).toUpperCase()}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-[12px] font-medium text-zinc-900 truncate leading-none mb-0.5">{userName}</p>
+                <p className="text-[11px] leading-none truncate font-medium text-blue-600 mt-0.5" title={customRoleName || undefined}>
+                  {customRoleName || (t.has(`roles.${role}`) ? t(`roles.${role}`) : (ROLE_LABELS[role] || role))}
+                </p>
+              </div>
+            </div>
+          )}
+          <button
+            onClick={onToggle}
+            className={cn("hidden md:flex nav-item w-full", collapsed && "justify-center px-0")}
+            style={{ height: 30 }}
+            title={collapsed ? t("nav.collapse") : undefined}
+          >
+            {collapsed
+              ? <PanelLeft className="w-4 h-4 flex-shrink-0" />
+              : <><PanelLeftClose className="w-4 h-4 flex-shrink-0 nav-icon" /><span className="text-[12px]">{t("nav.collapse")}</span></>
+            }
+          </button>
+        </div>
+      </aside>
+    </>
   );
 }

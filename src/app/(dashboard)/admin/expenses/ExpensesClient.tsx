@@ -169,7 +169,35 @@ export function ExpensesClient({
             )}
           </div>
           <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-            <div className="overflow-x-auto">
+            {/* MOBILE STACKED CARDS (<768px) */}
+            <div className="block md:hidden divide-y divide-slate-100">
+              {filteredExpenses.length === 0 ? (
+                <div className="px-4 py-12 text-center text-slate-400 text-xs">
+                  No expense records found for this range
+                </div>
+              ) : (
+                filteredExpenses.map((e) => (
+                  <div key={`mob-exp-${e.id}`} className="p-4 space-y-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <p className="font-bold text-slate-800 text-sm">{e.description}</p>
+                        <span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full inline-block mt-1">
+                          {e.category}
+                        </span>
+                      </div>
+                      <span className="font-extrabold text-red-700 text-sm">{formatCurrency(e.amount)}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs text-slate-400 pt-1">
+                      <span>{formatDate(e.date)}</span>
+                      <span>By: {e.addedBy.name}</span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* DESKTOP TABLE (>=768px) */}
+            <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-100">
