@@ -95,6 +95,13 @@ enum SalaryRequestStatus {
   REJECTED        // Rejected by admin or manager
 }
 
+enum EmployeeExpenseStatus {
+  PENDING           // Awaiting manager review
+  MANAGER_APPROVED  // Manager approved, awaiting admin
+  APPROVED          // Admin approved — fully processed
+  REJECTED          // Rejected (by manager or admin)
+}
+
 enum LeaveType {
   CASUAL
   SICK
@@ -211,6 +218,8 @@ model Agency {
   fdLoans                 FdLoanRecord[]
   vendorLedgers           VendorLedger[]
 
+  employeeExpenses        EmployeeExpense[]
+
   // Phase 2 — S3 backup relations
   deliveryPhotoBackups    DeliveryPhotoBackup[]
 }
@@ -306,6 +315,10 @@ model User {
   dailyCashReconciliations DailyCashReconciliation[]
   fdLoans                  FdLoanRecord[]
   vendorLedgerEntries      VendorLedgerEntry[]
+
+  submittedEmployeeExpenses EmployeeExpense[] @relation("ExpenseSubmittedBy")
+  managerEmployeeExpenses   EmployeeExpense[] @relation("ExpenseManager")
+  adminEmployeeExpenses     EmployeeExpense[] @relation("ExpenseAdmin")
 
   // Phase 2 — S3 backup
   deliveryPhotoBackups     DeliveryPhotoBackup[] @relation("DeliveryPhotoBackupUser")
@@ -1056,6 +1069,7 @@ model ExpenseCategory {
   updatedAt     DateTime @updatedAt
 
   expenses      Expense[]                 // Linked actual expenses
+  employeeExpenses  EmployeeExpense[]
 
   @@unique([agencyId, name])
   @@index([agencyId, isActive])
@@ -1679,4 +1693,34 @@ model DeliveryPhotoBackup {
   finishedAt      DateTime?
 
   @@index([agencyId, startedAt])
+}
+
+model EmployeeExpense {
+  id                  String                @id @default(cuid())
+  agencyId            String
+  agency              Agency                @relation(fields: [agencyId], references: [id])
+  submittedById       String
+  submittedBy         User                  @relation("ExpenseSubmittedBy", fields: [submittedById], references: [id])
+  expenseDate         DateTime
+  categoryId          String?
+  expenseCategory     ExpenseCategory?      @relation(fields: [categoryId], references: [id])
+  categoryLabel       String
+  amount              Float
+  receiptUrl          String?
+  receiptPublicId     String?
+  note                String?
+  status              EmployeeExpenseStatus @default(PENDING)
+  managerId           String?
+  manager             User?                 @relation("ExpenseManager", fields: [managerId], references: [id])
+  managerNote         String?
+  managerReviewedAt   DateTime?
+  adminId             String?
+  admin               User?                 @relation("ExpenseAdmin", fields: [adminId], references: [id])
+  adminNote           String?
+  adminReviewedAt     DateTime?
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+
+  @@index([agencyId, status])
+  @@index([submittedById])
 }
