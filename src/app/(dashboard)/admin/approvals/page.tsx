@@ -1,4 +1,4 @@
-import { getSession } from "@/lib/auth";
+﻿import { getSessionWithFeatures, requireFeature } from "@/lib/feature-gate";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -8,8 +8,9 @@ import { ApprovalsClient } from "./ApprovalsClient";
 export const dynamic = "force-dynamic";
 
 export default async function ApprovalsPage() {
-  const session = await getSession();
+  const session = await getSessionWithFeatures();
   if (!session || !["ADMIN", "MANAGER"].includes(session.role)) redirect("/login");
+  requireFeature(session, "approvals");
 
   const [summaries, salaryRequests, leaveRequests, employeeExpenses] = await Promise.all([
     prisma.dailySummary.findMany({

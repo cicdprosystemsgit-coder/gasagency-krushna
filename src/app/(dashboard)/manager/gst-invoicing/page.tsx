@@ -1,4 +1,4 @@
-import { getSession } from "@/lib/auth";
+﻿import { getSessionWithFeatures, requireFeature } from "@/lib/feature-gate";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -6,8 +6,9 @@ import { FileText } from "lucide-react";
 import { GstInvoicingClient } from "@/app/(dashboard)/staff/gst-invoicing/GstInvoicingClient";
 
 export default async function ManagerGstInvoicingPage() {
-  const session = await getSession();
+  const session = await getSessionWithFeatures();
   if (!session || session.role !== "MANAGER" || !session.agencyId) redirect("/login");
+  requireFeature(session, "gst_invoicing");
 
   const [invoices, customers, products, agency] = await Promise.all([
     prisma.gstInvoice.findMany({

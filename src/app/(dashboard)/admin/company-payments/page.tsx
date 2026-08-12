@@ -1,4 +1,4 @@
-import { getSession } from "@/lib/auth";
+﻿import { getSessionWithFeatures, requireFeature } from "@/lib/feature-gate";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -6,7 +6,7 @@ import { Building2 } from "lucide-react";
 import { CompanyPaymentsClient } from "./CompanyPaymentsClient";
 
 export default async function CompanyPaymentsPage() {
-  const session = await getSession();
+  const session = await getSessionWithFeatures();
   if (!session || !["ADMIN", "MANAGER"].includes(session.role) || !session.agencyId) {
     redirect("/login");
   }

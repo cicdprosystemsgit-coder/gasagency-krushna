@@ -1,4 +1,4 @@
-import { getRegulatorRecords } from "@/app/actions/regulators";
+﻿import { getRegulatorRecords } from "@/app/actions/regulators";
 import { RegulatorsClient } from "./RegulatorsClient";
 
 export default async function AdminRegulatorsPage() {

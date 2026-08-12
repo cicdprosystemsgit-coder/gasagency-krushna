@@ -32,12 +32,13 @@ const labelStyle: React.CSSProperties = {
 };
 
 const CATEGORY_COLORS: Record<string, { bg: string; border: string; accent: string }> = {
-  Operations:    { bg: "#EFF6FF", border: "#BFDBFE", accent: "#2563EB" },
-  Accounts:      { bg: "#F0FDF4", border: "#BBF7D0", accent: "#16A34A" },
-  Finance:       { bg: "#FFFBEB", border: "#FDE68A", accent: "#D97706" },
-  People:        { bg: "#FDF4FF", border: "#E9D5FF", accent: "#9333EA" },
-  Intelligence:  { bg: "#FFF1F2", border: "#FECDD3", accent: "#E11D48" },
-  Enterprise:    { bg: "#F1F5F9", border: "#CBD5E1", accent: "#475569" },
+  Operations:        { bg: "#EFF6FF", border: "#BFDBFE", accent: "#2563EB" },
+  Accounts:          { bg: "#F0FDF4", border: "#BBF7D0", accent: "#16A34A" },
+  Finance:           { bg: "#FFFBEB", border: "#FDE68A", accent: "#D97706" },
+  "Personal Finance": { bg: "#ECFEFF", border: "#A5F3FC", accent: "#0891B2" },
+  People:            { bg: "#FDF4FF", border: "#E9D5FF", accent: "#9333EA" },
+  Intelligence:      { bg: "#FFF1F2", border: "#FECDD3", accent: "#E11D48" },
+  Enterprise:        { bg: "#F1F5F9", border: "#CBD5E1", accent: "#475569" },
 };
 
 export function NewAgencyForm() {

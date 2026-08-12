@@ -1,4 +1,4 @@
-import { getSession } from "@/lib/auth";
+﻿import { getSessionWithFeatures, requireFeature } from "@/lib/feature-gate";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -11,8 +11,9 @@ interface PageProps {
 }
 
 export default async function GodownPage({ searchParams }: PageProps) {
-  const session = await getSession();
+  const session = await getSessionWithFeatures();
   if (!session || !["ADMIN", "MANAGER"].includes(session.role)) redirect("/login");
+  requireFeature(session, "godown");
 
   const params = (await searchParams) || {};
   const todayStr = new Date().toISOString().slice(0, 10);

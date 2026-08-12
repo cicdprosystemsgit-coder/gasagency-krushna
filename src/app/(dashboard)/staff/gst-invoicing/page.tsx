@@ -1,4 +1,4 @@
-import { getSession } from "@/lib/auth";
+﻿import { getSessionWithFeatures, requireFeature } from "@/lib/feature-gate";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -9,8 +9,9 @@ import { getProductStockMap } from "@/app/actions/gst-invoicing";
 import { checkPermission } from "@/lib/rbac";
 
 export default async function StaffGstInvoicingPage() {
-  const session = await getSession();
+  const session = await getSessionWithFeatures();
   if (!session || session.role !== "STAFF" || !session.agencyId) redirect("/login");
+  requireFeature(session, "gst_invoicing");
 
   const isAllowed = await checkPermission(session.userId, "gstInvoices", "read");
   if (!isAllowed) redirect("/staff");

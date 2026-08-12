@@ -1,4 +1,4 @@
-import { getSession } from "@/lib/auth";
+﻿import { getSessionWithFeatures, requireFeature } from "@/lib/feature-gate";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -6,7 +6,7 @@ import { Truck } from "lucide-react";
 import { VehicleManagementClient } from "@/app/(dashboard)/admin/vehicle-management/VehicleManagementClient";
 
 export default async function ManagerVehicleManagementPage() {
-  const session = await getSession();
+  const session = await getSessionWithFeatures();
   if (!session || session.role !== "MANAGER" || !session.agencyId)
     redirect("/login");
 

@@ -1,4 +1,4 @@
-import { getSession } from "@/lib/auth";
+﻿import { getSessionWithFeatures, requireFeature } from "@/lib/feature-gate";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -9,8 +9,9 @@ import { CreditLedgerClient } from "./CreditLedgerClient";
 export const dynamic = "force-dynamic";
 
 export default async function CreditLedgerPage() {
-  const session = await getSession();
+  const session = await getSessionWithFeatures();
   if (!session || !["ADMIN", "MANAGER", "STAFF", "DELIVERY_BOY"].includes(session.role)) redirect("/login");
+  requireFeature(session, "credit_ledger");
 
   const [customers, entries] = await Promise.all([
     prisma.customer.findMany({

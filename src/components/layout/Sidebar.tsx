@@ -129,11 +129,11 @@ function getNavSections(
       {
         label: "Personal Finance",
         items: [
-          { label: "Finance Dashboard", href: `${base}/accounts/dashboard`, icon: <LayoutDashboard className="w-4 h-4" /> },
-          { label: "Personal Accounts", href: `${base}/accounts`,          icon: <Wallet className="w-4 h-4" /> },
-          { label: "Agency Account",    href: `${base}/accounts/agency-account`, icon: <Activity className="w-4 h-4" /> },
-          { label: "Fund Transfer",     href: `${base}/accounts/transfer`,       icon: <ArrowRightLeft className="w-4 h-4" /> },
-          { label: "Tax & ITR Summary", href: `${base}/accounts/tax-summary`, icon: <Percent className="w-4 h-4" /> },
+          { label: "Finance Dashboard", href: `${base}/accounts/dashboard`,      icon: <LayoutDashboard className="w-4 h-4" />, featureKey: "finance_dashboard" },
+          { label: "Personal Accounts", href: `${base}/accounts`,                icon: <Wallet className="w-4 h-4" />,         featureKey: "personal_accounts" },
+          { label: "Agency Account",    href: `${base}/accounts/agency-account`, icon: <Activity className="w-4 h-4" />,       featureKey: "agency_account"    },
+          { label: "Fund Transfer",     href: `${base}/accounts/transfer`,       icon: <ArrowRightLeft className="w-4 h-4" />, featureKey: "fund_transfer"     },
+          { label: "Tax & ITR Summary", href: `${base}/accounts/tax-summary`,    icon: <Percent className="w-4 h-4" />,        featureKey: "tax_itr_summary"   },
         ]
       }
     ] : [];
@@ -157,7 +157,7 @@ function getNavSections(
           { label: "Office Transactions", href: `${base}/office-transactions`, icon: <Receipt className="w-4 h-4" />,     featureKey: "office_transactions" },
           { label: "Commercial Sales",    href: `${base}/commercial-sales`,    icon: <ShoppingCart className="w-4 h-4" />,featureKey: "commercial_sales"    },
           { label: "Credit Ledger",       href: `${base}/credit-ledger`,       icon: <CreditCard className="w-4 h-4" />, featureKey: "credit_ledger"       },
-          { label: "Regulator Ledger",    href: `${base}/regulators`,          icon: <ShieldCheck className="w-4 h-4" /> },
+          { label: "Regulator Ledger",    href: `${base}/regulators`,          icon: <ShieldCheck className="w-4 h-4" />, featureKey: "regulator_ledger"    },
           { label: "GST Invoicing",       href: `${base}/gst-invoicing`,       icon: <FileText className="w-4 h-4" />,   featureKey: "gst_invoicing"       },
         ],
       },
@@ -238,7 +238,7 @@ function getNavSections(
           { label: "Office Transactions", href: `${base}/office-transactions`, icon: <Receipt className="w-4 h-4" />,      featureKey: "office_transactions" },
           { label: "Commercial Sales",    href: `${base}/commercial-sales`,    icon: <ShoppingCart className="w-4 h-4" />, featureKey: "commercial_sales"    },
           { label: "Credit Ledger",       href: `${base}/credit-ledger`,       icon: <CreditCard className="w-4 h-4" />,  featureKey: "credit_ledger"       },
-          { label: "Regulator Ledger",    href: `${base}/regulators`,          icon: <ShieldCheck className="w-4 h-4" /> },
+          { label: "Regulator Ledger",    href: `${base}/regulators`,          icon: <ShieldCheck className="w-4 h-4" />,  featureKey: "regulator_ledger"    },
           { label: "GST Invoicing",       href: `${base}/gst-invoicing`,       icon: <FileText className="w-4 h-4" />,    featureKey: "gst_invoicing"       },
           { label: "Office Stock",        href: `${base}/inventory`,           icon: <Boxes className="w-4 h-4" />,       featureKey: "inventory"           },
         ],
@@ -379,6 +379,8 @@ export function Sidebar({
       "Personal Accounts": "personal_accounts",
       "Agency Account": "agency_account",
       "Fund Transfer": "fund_transfer",
+      "Tax & ITR Summary": "tax_itr_summary",
+      "Regulator Ledger": "regulator_ledger",
     };
     return map[label] || label;
   };

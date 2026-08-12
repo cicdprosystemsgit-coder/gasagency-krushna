@@ -1,4 +1,4 @@
-import { getSession } from "@/lib/auth";
+﻿import { getSessionWithFeatures, requireFeature } from "@/lib/feature-gate";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -7,8 +7,9 @@ import { OfficeTransactionsClient } from "@/app/(dashboard)/admin/office-transac
 import { getProductStockMap } from "@/app/actions/gst-invoicing";
 
 export default async function ManagerOfficeTransactionsPage() {
-  const session = await getSession();
+  const session = await getSessionWithFeatures();
   if (!session || session.role !== "MANAGER") redirect("/login");
+  requireFeature(session, "office_transactions");
 
   const [transactions, products, stockMap, customers] = await Promise.all([
     prisma.officeTransaction.findMany({

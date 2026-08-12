@@ -1,4 +1,4 @@
-import { getSession } from "@/lib/auth";
+﻿import { getSessionWithFeatures, requireFeature } from "@/lib/feature-gate";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -6,8 +6,9 @@ import { Wallet } from "lucide-react";
 import { AccountsClient } from "./AccountsClient";
 
 export default async function AccountsPage() {
-  const session = await getSession();
+  const session = await getSessionWithFeatures();
   if (!session || session.role !== "ADMIN" || !session.agencyId) redirect("/login");
+  requireFeature(session, "personal_accounts");
 
   const accounts = await prisma.personalAccount.findMany({
     where: { agencyId: session.agencyId, isActive: true },

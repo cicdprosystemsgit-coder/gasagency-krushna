@@ -1,12 +1,13 @@
-import { getSession } from "@/lib/auth";
+﻿import { getSessionWithFeatures, requireFeature } from "@/lib/feature-gate";
 import { redirect } from "next/navigation";
 import { getBudgetVsActual, getExpenseCategories } from "@/app/actions/expense-categories";
 import { prisma } from "@/lib/prisma";
 import { ExpenseCategoriesClient } from "./ExpenseCategoriesClient";
 
 export default async function ExpenseCategoriesPage() {
-  const session = await getSession();
+  const session = await getSessionWithFeatures();
   if (!session || session.role !== "ADMIN" || !session.agencyId) redirect("/login");
+  requireFeature(session, "expense_categories");
 
   const [budgetResult, categoriesResult, recentExpenses] = await Promise.all([
     getBudgetVsActual(),

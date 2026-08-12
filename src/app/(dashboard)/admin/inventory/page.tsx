@@ -1,4 +1,4 @@
-import { getSession } from "@/lib/auth";
+﻿import { getSessionWithFeatures, requireFeature } from "@/lib/feature-gate";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -7,8 +7,9 @@ import { InventoryClient } from "./InventoryClient";
 import { OfficeInventorySection } from "@/components/ui/OfficeInventorySection";
 
 export default async function InventoryPage() {
-  const session = await getSession();
+  const session = await getSessionWithFeatures();
   if (!session || !["ADMIN", "MANAGER"].includes(session.role)) redirect("/login");
+  requireFeature(session, "inventory");
 
   const isAdmin = session.role === "ADMIN";
 

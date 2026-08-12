@@ -1,4 +1,4 @@
-import { getSession } from "@/lib/auth";
+﻿import { getSessionWithFeatures, requireFeature } from "@/lib/feature-gate";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { Truck } from "lucide-react";
@@ -10,8 +10,9 @@ interface PageProps {
 }
 
 export default async function DeliveryPlanPage({ searchParams }: PageProps) {
-  const session = await getSession();
+  const session = await getSessionWithFeatures();
   if (!session || !["ADMIN", "MANAGER"].includes(session.role)) redirect("/login");
+  requireFeature(session, "delivery_plan");
 
   const { date } = await searchParams;
   const selectedDate = date || new Date().toISOString().split("T")[0];

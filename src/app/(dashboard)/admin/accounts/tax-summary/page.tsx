@@ -1,4 +1,4 @@
-import { getSession } from "@/lib/auth";
+﻿import { getSessionWithFeatures, requireFeature } from "@/lib/feature-gate";
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Percent, ArrowLeft } from "lucide-react";
@@ -11,8 +11,9 @@ interface PageProps {
 }
 
 export default async function TaxSummaryPage({ searchParams }: PageProps) {
-  const session = await getSession();
+  const session = await getSessionWithFeatures();
   if (!session || session.role !== "ADMIN" || !session.agencyId) redirect("/login");
+  requireFeature(session, "tax_itr_summary");
 
   // Determine default financial year
   const now = new Date();

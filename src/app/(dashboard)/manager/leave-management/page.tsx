@@ -1,11 +1,12 @@
-import { getSession } from "@/lib/auth";
+﻿import { getSessionWithFeatures, requireFeature } from "@/lib/feature-gate";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { ManagerLeaveClient } from "./ManagerLeaveClient";
 
 export default async function ManagerLeavePage() {
-  const session = await getSession();
+  const session = await getSessionWithFeatures();
   if (!session || session.role !== "MANAGER" || !session.agencyId) redirect("/login");
+  requireFeature(session, "leave_management");
   const agencyId = session.agencyId;
 
   const [myLeaves, teamLeaves, employees] = await Promise.all([

@@ -1,4 +1,4 @@
-import { getSession } from "@/lib/auth";
+﻿import { getSessionWithFeatures, requireFeature } from "@/lib/feature-gate";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -8,7 +8,7 @@ import { CustomerManagementClient } from "@/app/(dashboard)/admin/customer-manag
 import { checkPermission } from "@/lib/rbac";
 
 export default async function StaffCustomerManagementPage() {
-  const session = await getSession();
+  const session = await getSessionWithFeatures();
   if (!session || session.role !== "STAFF" || !session.agencyId)
     redirect("/login");
 

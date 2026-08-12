@@ -1,4 +1,4 @@
-import { getSession } from "@/lib/auth";
+﻿import { getSessionWithFeatures, requireFeature } from "@/lib/feature-gate";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { EmployeeLeaveClient } from "@/app/(dashboard)/staff/leave-management/EmployeeLeaveClient";
@@ -6,8 +6,9 @@ import { EmployeeLeaveClient } from "@/app/(dashboard)/staff/leave-management/Em
 import { checkPermission } from "@/lib/rbac";
 
 export default async function GodownKeeperLeavePage() {
-  const session = await getSession();
+  const session = await getSessionWithFeatures();
   if (!session || session.role !== "GODOWN_KEEPER" || !session.agencyId) redirect("/login");
+  requireFeature(session, "leave_management");
 
   const isAllowed = await checkPermission(session.userId, "leaves", "read");
   if (!isAllowed) redirect("/godown-keeper");

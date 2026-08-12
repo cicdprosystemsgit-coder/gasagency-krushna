@@ -1,4 +1,4 @@
-import { getSession } from "@/lib/auth";
+﻿import { getSessionWithFeatures, requireFeature } from "@/lib/feature-gate";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
@@ -13,8 +13,9 @@ interface PageProps {
 }
 
 export default async function GodownKeeperGodownPage({ searchParams }: PageProps) {
-  const session = await getSession();
+  const session = await getSessionWithFeatures();
   if (!session || session.role !== "GODOWN_KEEPER") redirect("/login");
+  requireFeature(session, "godown");
 
   const isAllowed = await checkPermission(session.userId, "godown", "read");
   if (!isAllowed) redirect("/godown-keeper");

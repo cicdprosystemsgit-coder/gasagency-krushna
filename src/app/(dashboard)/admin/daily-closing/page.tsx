@@ -1,4 +1,4 @@
-import { getSession } from "@/lib/auth";
+﻿import { getSessionWithFeatures, requireFeature } from "@/lib/feature-gate";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -6,8 +6,9 @@ import { ClipboardCheck } from "lucide-react";
 import { DailyClosingClient } from "./DailyClosingClient";
 
 export default async function DailyClosingPage() {
-  const session = await getSession();
+  const session = await getSessionWithFeatures();
   if (!session || !["ADMIN", "MANAGER"].includes(session.role)) redirect("/login");
+  requireFeature(session, "daily_closing");
 
   const closings = await prisma.dailyClosing.findMany({
     where: { agencyId: session.agencyId! },

@@ -1,4 +1,4 @@
-import { getSession } from "@/lib/auth";
+﻿import { getSessionWithFeatures, requireFeature } from "@/lib/feature-gate";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -8,8 +8,9 @@ import { OfficeInventorySection } from "@/components/ui/OfficeInventorySection";
 import { checkPermission } from "@/lib/rbac";
 
 export default async function StaffInventoryPage() {
-  const session = await getSession();
+  const session = await getSessionWithFeatures();
   if (!session || session.role !== "STAFF" || !session.agencyId) redirect("/login");
+  requireFeature(session, "inventory");
 
   const isAllowed = await checkPermission(session.userId, "inventory", "read");
   if (!isAllowed) redirect("/staff");

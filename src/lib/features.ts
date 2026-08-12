@@ -7,40 +7,47 @@ export interface FeatureDef {
 
 export const ALL_FEATURES: FeatureDef[] = [
   // Operations
-  { key: "inventory",           label: "Inventory Management",    description: "Track office stock of cylinders and products",             category: "Operations"    },
-  { key: "godown",              label: "Godown Management",        description: "Manage godown stock and cylinder in/out movements",         category: "Operations"    },
-  { key: "vehicle_management",  label: "Vehicle Management",       description: "Track delivery vehicles, trips, and fleet status",          category: "Operations"    },
-  { key: "delivery_plan",       label: "Delivery Plan",            description: "Plan and schedule customer deliveries",                     category: "Operations"    },
+  { key: "inventory",           label: "Inventory Management",    description: "Track office stock of cylinders and products",                   category: "Operations"    },
+  { key: "godown",              label: "Godown Management",        description: "Manage godown stock and cylinder in/out movements",               category: "Operations"    },
+  { key: "vehicle_management",  label: "Vehicle Management",       description: "Track delivery vehicles, trips, and fleet status",                category: "Operations"    },
+  { key: "delivery_plan",       label: "Delivery Plan",            description: "Plan and schedule customer deliveries",                           category: "Operations"    },
   // Accounts
-  { key: "customer_management", label: "Customer Management",      description: "Manage domestic and commercial customer records",           category: "Accounts"      },
-  { key: "office_transactions", label: "Office Transactions",      description: "Record new connections, regulators, pipe sales",           category: "Accounts"      },
-  { key: "commercial_sales",    label: "Commercial Sales",         description: "Track hotel/restaurant bulk sales and udhari",              category: "Accounts"      },
-  { key: "credit_ledger",       label: "Credit Ledger",            description: "Per-customer udhari (credit) balance tracking",            category: "Accounts"      },
-  { key: "gst_invoicing",       label: "GST Invoicing",            description: "Generate GST-compliant invoices for commercial customers", category: "Accounts"      },
-  // Finance
-  { key: "salaries",            label: "Salaries & Drawings",      description: "Process employee salaries, advances, and owner drawings",  category: "Finance"       },
-  { key: "expenses",            label: "Expenses & Vehicles",      description: "Track operational expenses and vehicle/agency assets",      category: "Finance"       },
-  { key: "assets_management",   label: "Assets & Finance",         description: "Track agency assets, P&L, inventory valuation, and cash flow", category: "Finance"    },
-  { key: "expense_categories",  label: "Expense Categories",       description: "Organise expenses by category with monthly budgets",       category: "Finance"       },
-  { key: "daily_closing",       label: "Daily Closing",            description: "End-of-day cash and cylinder count closing",               category: "Finance"       },
+  { key: "customer_management", label: "Customer Management",      description: "Manage domestic and commercial customer records",                 category: "Accounts"      },
+  { key: "office_transactions", label: "Office Transactions",      description: "Record new connections, regulators, pipe sales",                 category: "Accounts"      },
+  { key: "commercial_sales",    label: "Commercial Sales",         description: "Track hotel/restaurant bulk sales and udhari",                    category: "Accounts"      },
+  { key: "credit_ledger",       label: "Credit Ledger",            description: "Per-customer udhari (credit) balance tracking",                  category: "Accounts"      },
+  { key: "regulator_ledger",    label: "Regulator Ledger",         description: "Track regulator deposit, return, and per-customer inventory",    category: "Accounts"      },
+  { key: "gst_invoicing",       label: "GST Invoicing",            description: "Generate GST-compliant invoices for commercial customers",       category: "Accounts"      },
+  { key: "salaries",            label: "Salaries & Drawings",      description: "Process employee salaries, advances, and owner drawings",        category: "Finance"          },
+  { key: "expenses",            label: "Expenses & Vehicles",      description: "Track operational expenses and vehicle/agency assets",            category: "Finance"          },
+  { key: "assets_management",   label: "Assets & Finance",         description: "Track agency assets, P&L, inventory valuation, and cash flow",  category: "Finance"          },
+  { key: "expense_categories",  label: "Expense Categories",       description: "Organise expenses by category with monthly budgets",             category: "Finance"          },
+  { key: "daily_closing",       label: "Daily Closing",            description: "End-of-day cash and cylinder count closing",                     category: "Finance"          },
+  { key: "company_payments",    label: "Company Payments",         description: "Track HP Gas / oil company dues, payments, and receipts",        category: "Finance"          },
+  // Personal Finance (owner-level financial management)
+  { key: "finance_dashboard",   label: "Finance Dashboard",        description: "Owner finance overview — accounts, P&L, and cash summary",      category: "Personal Finance" },
+  { key: "personal_accounts",   label: "Personal Accounts",        description: "Personal wallets, cash, bank accounts and income tracking",      category: "Personal Finance" },
+  { key: "agency_account",      label: "Agency Account",           description: "Agency-level account ledger and balance sheet",                  category: "Personal Finance" },
+  { key: "fund_transfer",       label: "Fund Transfer",            description: "Transfer funds between personal accounts and agency",            category: "Personal Finance" },
+  { key: "tax_itr_summary",     label: "Tax & ITR Summary",        description: "Annual tax computation, ITR filing summary, and tax reports",    category: "Personal Finance" },
   // People
-  { key: "staff_management",    label: "Staff Management",         description: "Create and manage employee accounts and roles",            category: "People"        },
-  { key: "approvals",           label: "Approvals Workflow",       description: "Multi-level approval flow for daily summaries",            category: "People"        },
-  { key: "leave_management",    label: "Leave Management",         description: "Employee leave requests and approval",                     category: "People"        },
-  { key: "attendance",          label: "Attendance",               description: "Daily punch-in/out and attendance tracking",               category: "People"        },
+  { key: "staff_management",    label: "Staff Management",         description: "Create and manage employee accounts and roles",                  category: "People"        },
+  { key: "approvals",           label: "Approvals Workflow",       description: "Multi-level approval flow for daily summaries",                  category: "People"        },
+  { key: "leave_management",    label: "Leave Management",         description: "Employee leave requests and approval",                           category: "People"        },
+  { key: "attendance",          label: "Attendance",               description: "Daily punch-in/out and attendance tracking",                     category: "People"        },
   // Intelligence
-  { key: "analytics",           label: "Analytics & Reports",      description: "Business insights, charts, and performance reports",       category: "Intelligence"  },
-  { key: "payment_receipts",    label: "Payment Receipts",         description: "Formal receipts for customer cash/UPI payments",           category: "Intelligence"  },
-  { key: "documents",           label: "Documents",                description: "KYC, vehicle, and agency document storage",                category: "Intelligence"  },
-  { key: "complaints",          label: "Customer Complaints",      description: "Log and resolve customer complaints",                      category: "Intelligence"  },
-  { key: "export",              label: "Data Export",              description: "Export reports to Excel/PDF for offline use",              category: "Intelligence"  },
+  { key: "analytics",           label: "Analytics & Reports",      description: "Business insights, charts, and performance reports",             category: "Intelligence"  },
+  { key: "payment_receipts",    label: "Payment Receipts",         description: "Formal receipts for customer cash/UPI payments",                 category: "Intelligence"  },
+  { key: "documents",           label: "Documents",                description: "KYC, vehicle, and agency document storage",                      category: "Intelligence"  },
+  { key: "complaints",          label: "Customer Complaints",      description: "Log and resolve customer complaints",                            category: "Intelligence"  },
+  { key: "export",              label: "Data Export",              description: "Export reports to Excel/PDF for offline use",                    category: "Intelligence"  },
   // Enterprise
-  { key: "branches",            label: "Branch Management",        description: "Multi-branch setup for larger distributors",               category: "Enterprise"    },
-  { key: "api_gateway",         label: "API Gateway",              description: "API keys for third-party integrations",                    category: "Enterprise"    },
-  { key: "security",            label: "Security & 2FA",           description: "Two-factor authentication and security settings",          category: "Enterprise"    },
+  { key: "branches",            label: "Branch Management",        description: "Multi-branch setup for larger distributors",                     category: "Enterprise"    },
+  { key: "api_gateway",         label: "API Gateway",              description: "API keys for third-party integrations",                          category: "Enterprise"    },
+  { key: "security",            label: "Security & 2FA",           description: "Two-factor authentication and security settings",                category: "Enterprise"    },
 ];
 
-export const FEATURE_CATEGORIES = ["Operations", "Accounts", "Finance", "People", "Intelligence", "Enterprise"] as const;
+export const FEATURE_CATEGORIES = ["Operations", "Accounts", "Finance", "Personal Finance", "People", "Intelligence", "Enterprise"] as const;
 
 export const ALL_FEATURE_KEYS = ALL_FEATURES.map((f) => f.key);
 

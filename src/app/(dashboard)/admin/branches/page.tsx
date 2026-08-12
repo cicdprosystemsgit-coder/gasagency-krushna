@@ -1,12 +1,13 @@
-import { getSession } from "@/lib/auth";
+﻿import { getSessionWithFeatures, requireFeature } from "@/lib/feature-gate";
 import { redirect } from "next/navigation";
 import { getBranches, getBranchManagers } from "@/app/actions/branches";
 import { BranchesClient } from "./BranchesClient";
 import { prisma } from "@/lib/prisma";
 
 export default async function BranchesPage() {
-  const session = await getSession();
+  const session = await getSessionWithFeatures();
   if (!session || !["ADMIN", "MANAGER"].includes(session.role) || !session.agencyId) redirect("/login");
+  requireFeature(session, "branches");
 
   const [{ branches }, { managers }, products] = await Promise.all([
     getBranches(),

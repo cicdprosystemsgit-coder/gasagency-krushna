@@ -1,4 +1,4 @@
-import { getSession } from "@/lib/auth";
+﻿import { getSessionWithFeatures, requireFeature } from "@/lib/feature-gate";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { GodownInventoryClient } from "./GodownInventoryClient";
@@ -6,8 +6,9 @@ import { GodownInventoryClient } from "./GodownInventoryClient";
 import { checkPermission } from "@/lib/rbac";
 
 export default async function GodownInventoryPage() {
-  const session = await getSession();
+  const session = await getSessionWithFeatures();
   if (!session || session.role !== "GODOWN_KEEPER" || !session.agencyId) redirect("/login");
+  requireFeature(session, "inventory");
 
   const isAllowed = await checkPermission(session.userId, "inventory", "read");
   if (!isAllowed) redirect("/godown-keeper");

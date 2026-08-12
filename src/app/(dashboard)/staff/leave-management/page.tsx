@@ -1,11 +1,12 @@
-import { getSession } from "@/lib/auth";
+﻿import { getSessionWithFeatures, requireFeature } from "@/lib/feature-gate";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { EmployeeLeaveClient } from "./EmployeeLeaveClient";
 
 export default async function StaffLeavePage() {
-  const session = await getSession();
+  const session = await getSessionWithFeatures();
   if (!session || session.role !== "STAFF" || !session.agencyId) redirect("/login");
+  requireFeature(session, "leave_management");
 
   const leaves = await prisma.leaveRequest.findMany({
     where: { employeeId: session.userId, agencyId: session.agencyId },

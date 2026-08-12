@@ -1,4 +1,4 @@
-import { getSession } from "@/lib/auth";
+﻿import { getSessionWithFeatures, requireFeature } from "@/lib/feature-gate";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { SalariesClient } from "@/app/(dashboard)/admin/salaries/SalariesClient";
@@ -9,8 +9,9 @@ export const metadata = {
 };
 
 export default async function ManagerSalariesPage() {
-  const session = await getSession();
+  const session = await getSessionWithFeatures();
   if (!session || session.role !== "MANAGER") redirect("/login");
+  requireFeature(session, "salaries");
 
   const today = new Date();
   const currentMonth = today.getMonth() + 1;

@@ -1,4 +1,4 @@
-import { getSession } from "@/lib/auth";
+﻿import { getSessionWithFeatures, requireFeature } from "@/lib/feature-gate";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -7,8 +7,9 @@ import Link from "next/link";
 import { DashboardClient } from "./DashboardClient";
 
 export default async function AccountsDashboardPage() {
-  const session = await getSession();
+  const session = await getSessionWithFeatures();
   if (!session || session.role !== "ADMIN" || !session.agencyId) redirect("/login");
+  requireFeature(session, "finance_dashboard");
 
   // Fetch all active accounts
   const accounts = await prisma.personalAccount.findMany({

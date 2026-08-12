@@ -1,4 +1,4 @@
-import { getSession } from "@/lib/auth";
+﻿import { getSessionWithFeatures, requireFeature } from "@/lib/feature-gate";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -7,8 +7,9 @@ import Link from "next/link";
 import { TransferClient } from "./TransferClient";
 
 export default async function TransferPage() {
-  const session = await getSession();
+  const session = await getSessionWithFeatures();
   if (!session || session.role !== "ADMIN" || !session.agencyId) redirect("/login");
+  requireFeature(session, "fund_transfer");
 
   // Fetch active accounts of the agency
   const accounts = await prisma.personalAccount.findMany({

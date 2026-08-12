@@ -20,12 +20,13 @@ const ROLE_STYLE: Record<string, { bg: string; color: string }> = {
 };
 
 const CATEGORY_COLORS: Record<string, { bg: string; border: string; accent: string }> = {
-  Operations:   { bg: "#EFF6FF", border: "#BFDBFE", accent: "#2563EB" },
-  Accounts:     { bg: "#F0FDF4", border: "#BBF7D0", accent: "#16A34A" },
-  Finance:      { bg: "#FFFBEB", border: "#FDE68A", accent: "#D97706" },
-  People:       { bg: "#FDF4FF", border: "#E9D5FF", accent: "#9333EA" },
-  Intelligence: { bg: "#FFF1F2", border: "#FECDD3", accent: "#E11D48" },
-  Enterprise:   { bg: "#F1F5F9", border: "#CBD5E1", accent: "#475569" },
+  Operations:         { bg: "#EFF6FF", border: "#BFDBFE", accent: "#2563EB" },
+  Accounts:           { bg: "#F0FDF4", border: "#BBF7D0", accent: "#16A34A" },
+  Finance:            { bg: "#FFFBEB", border: "#FDE68A", accent: "#D97706" },
+  "Personal Finance": { bg: "#ECFEFF", border: "#A5F3FC", accent: "#0891B2" },
+  People:             { bg: "#FDF4FF", border: "#E9D5FF", accent: "#9333EA" },
+  Intelligence:       { bg: "#FFF1F2", border: "#FECDD3", accent: "#E11D48" },
+  Enterprise:         { bg: "#F1F5F9", border: "#CBD5E1", accent: "#475569" },
 };
 
 const inputStyle: React.CSSProperties = {
@@ -266,9 +267,7 @@ export function AgencyDetailClient({
             <LayoutGrid style={{ width: 15, height: 15, color: "#6366F1" }} />
             <p style={{ fontSize: 13, fontWeight: 600, color: "#0F172A" }}>Feature Access</p>
             <span style={{ fontSize: 11, color: "#94A3B8" }}>
-              {enabledFeatures.size === 0
-                ? "All features enabled (default)"
-                : `${enabledFeatures.size} of ${ALL_FEATURES.length} enabled`}
+              {enabledFeatures.size} of {ALL_FEATURES.length} enabled
             </span>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>

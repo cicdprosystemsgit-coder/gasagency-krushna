@@ -1,4 +1,4 @@
-import { getSession } from "@/lib/auth";
+﻿import { getSessionWithFeatures, requireFeature } from "@/lib/feature-gate";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -6,8 +6,9 @@ import { ShoppingCart } from "lucide-react";
 import { CommercialSalesClient } from "./CommercialSalesClient";
 
 export default async function CommercialSalesPage() {
-  const session = await getSession();
+  const session = await getSessionWithFeatures();
   if (!session || !["ADMIN", "MANAGER", "STAFF"].includes(session.role)) redirect("/login");
+  requireFeature(session, "commercial_sales");
 
   const [sales, customers, products, deliveryBoys, commercialDeliveries] = await Promise.all([
     prisma.commercialSale.findMany({

@@ -1,10 +1,10 @@
-import { getSession } from "@/lib/auth";
+﻿import { getSessionWithFeatures, requireFeature } from "@/lib/feature-gate";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { PaymentReceiptsClient } from "./PaymentReceiptsClient";
 
 export default async function PaymentReceiptsPage() {
-  const session = await getSession();
+  const session = await getSessionWithFeatures();
   if (!session || !["ADMIN", "MANAGER", "STAFF"].includes(session.role) || !session.agencyId) {
     redirect("/login");
   }

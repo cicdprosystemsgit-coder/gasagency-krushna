@@ -1,4 +1,4 @@
-import { getSession } from "@/lib/auth";
+﻿import { getSessionWithFeatures, requireFeature } from "@/lib/feature-gate";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -8,8 +8,9 @@ import { CreditLedgerClient } from "@/app/(dashboard)/admin/credit-ledger/Credit
 import { checkPermission } from "@/lib/rbac";
 
 export default async function DeliveryCreditLedgerPage() {
-  const session = await getSession();
+  const session = await getSessionWithFeatures();
   if (!session || session.role !== "DELIVERY_BOY") redirect("/login");
+  requireFeature(session, "credit_ledger");
 
   const isAllowed = await checkPermission(session.userId, "customers", "read");
   if (!isAllowed) redirect("/delivery-boy");

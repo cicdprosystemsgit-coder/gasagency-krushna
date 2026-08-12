@@ -1,4 +1,4 @@
-import { getSession } from "@/lib/auth";
+﻿import { getSessionWithFeatures, requireFeature } from "@/lib/feature-gate";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { DeliveryPlanHeader } from "@/app/(dashboard)/admin/delivery-plan/DeliveryPlanHeader";
@@ -9,8 +9,9 @@ interface PageProps {
 }
 
 export default async function ManagerDeliveryPlanPage({ searchParams }: PageProps) {
-  const session = await getSession();
+  const session = await getSessionWithFeatures();
   if (!session || session.role !== "MANAGER") redirect("/login");
+  requireFeature(session, "delivery_plan");
 
   const { date } = await searchParams;
   const selectedDate = date || new Date().toISOString().split("T")[0];

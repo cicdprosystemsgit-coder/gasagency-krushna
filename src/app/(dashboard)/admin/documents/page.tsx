@@ -1,11 +1,11 @@
-import { getSession } from "@/lib/auth";
+﻿import { getSessionWithFeatures, requireFeature } from "@/lib/feature-gate";
 import { redirect } from "next/navigation";
 import { getDocuments, getExpiringDocuments } from "@/app/actions/documents";
 import { prisma } from "@/lib/prisma";
 import { DocumentsPageClient } from "./DocumentsPageClient";
 
 export default async function DocumentsPage() {
-  const session = await getSession();
+  const session = await getSessionWithFeatures();
   if (!session || !["ADMIN", "MANAGER"].includes(session.role) || !session.agencyId) {
     redirect("/login");
   }

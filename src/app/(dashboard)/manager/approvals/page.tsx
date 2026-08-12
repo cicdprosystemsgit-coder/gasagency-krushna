@@ -1,4 +1,4 @@
-import { getSession } from "@/lib/auth";
+﻿import { getSessionWithFeatures, requireFeature } from "@/lib/feature-gate";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -9,8 +9,9 @@ import { checkPermission } from "@/lib/rbac";
 export const dynamic = "force-dynamic";
 
 export default async function ManagerApprovalsPage() {
-  const session = await getSession();
+  const session = await getSessionWithFeatures();
   if (!session || session.role !== "MANAGER") redirect("/login");
+  requireFeature(session, "approvals");
 
   const isAllowed = await checkPermission(session.userId, "approvals", "read");
   if (!isAllowed) redirect("/manager");
