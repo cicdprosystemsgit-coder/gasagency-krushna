@@ -1,4 +1,4 @@
-﻿import { getSessionWithFeatures, requireFeature } from "@/lib/feature-gate";
+import { getSessionWithFeatures, requireFeature } from "@/lib/feature-gate";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -11,17 +11,25 @@ export default async function AgencyAccountPage() {
   if (!session || session.role !== "ADMIN" || !session.agencyId) redirect("/login");
   requireFeature(session, "agency_account");
 
-  // Fetch the designated agency account
-  const agencyAccount = await prisma.personalAccount.findFirst({
+  // Fetch all designated agency accounts
+  const agencyAccounts = await prisma.personalAccount.findMany({
     where: { agencyId: session.agencyId, isAgencyAccount: true, isActive: true },
+    orderBy: { createdAt: "asc" },
   });
+
+  const agencyAccountIds = agencyAccounts.map((a) => a.id);
 
   let transactions: any[] = [];
   let ownerDrawings: any[] = [];
 
-  if (agencyAccount) {
+  if (agencyAccountIds.length > 0) {
     transactions = await prisma.personalTransaction.findMany({
-      where: { accountId: agencyAccount.id, agencyId: session.agencyId },
+      where: { accountId: { in: agencyAccountIds }, agencyId: session.agencyId },
+      include: {
+        account: {
+          select: { id: true, name: true, bankName: true, accountNo: true, color: true },
+        },
+      },
       orderBy: { date: "desc" },
     });
   }
@@ -62,14 +70,14 @@ export default async function AgencyAccountPage() {
       </div>
 
       <PageHeader
-        title="Agency Account Dashboard"
-        subtitle="Manage the primary bank account synced with LPG agency operations, salary payouts, and oil company transactions"
+        title="Agency Accounts Dashboard"
+        subtitle="Manage official bank accounts synced with LPG agency operations, salary payouts, and oil company transactions"
         icon={<Building2 className="w-5 h-5" />}
       />
 
       <AgencyAccountClient
-        agencyAccount={agencyAccount}
-        initialTransactions={transactions}
+        agencyAccounts={JSON.parse(JSON.stringify(agencyAccounts))}
+        initialTransactions={JSON.parse(JSON.stringify(transactions))}
         ownerDrawings={JSON.parse(JSON.stringify(ownerDrawings))}
       />
     </div>

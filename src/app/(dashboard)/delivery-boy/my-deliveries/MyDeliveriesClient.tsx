@@ -13,6 +13,8 @@ import {
 } from "lucide-react";
 import { createDeliveryRecord } from "@/app/actions/deliveries";
 import { CalendarPicker } from "@/components/ui/CalendarPicker";
+import { useLocation } from "@/hooks/useLocation";
+import { LocationStatusCard } from "@/components/ui/GpsStatusBox";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -61,6 +63,7 @@ export interface TodayTrip {
   departureTime: string | null;
   returnTime: string | null;
   tripStatus: string;
+  cylindersLoaded?: number;
 }
 
 interface Props {
@@ -70,6 +73,12 @@ interface Props {
   userId: string;
   assignedVehicle?: AssignedVehicle | null;
   todayTrip?: TodayTrip | null;
+  todayCountRequest?: {
+    id: string;
+    status: string;
+    totalRequested: number;
+    totalLoaded: number | null;
+  } | null;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -1317,64 +1326,9 @@ function Step3Review({
   );
 }
 
-// [ignoring loop detection]
-function GpsStatusBox({
-  gps,
-  onRetry,
-}: {
-  gps: { lat: number | null; lng: number | null; accuracy: number | null; loading: boolean; error: string | null };
-  onRetry: () => void;
-}) {
-  return (
-    <div className="mb-4 rounded-xl p-3 border text-xs" style={{
-      background: gps.loading ? "#F8F8F8" : gps.lat ? "#ECFDF5" : "#FEF2F2",
-      borderColor: gps.loading ? "#E4E4E7" : gps.lat ? "#A7F3D0" : "#FCA5A5",
-      color: gps.loading ? "#52525B" : gps.lat ? "#065F46" : "#991B1B"
-    }}>
-      <div className="flex items-center justify-between gap-2 flex-wrap">
-        <div className="flex items-center gap-2">
-          {gps.loading ? (
-            <>
-              <div className="w-3.5 h-3.5 border-2 border-zinc-500 border-t-transparent rounded-full animate-spin" />
-              <span className="font-semibold">Acquiring mandatory GPS coordinates...</span>
-            </>
-          ) : gps.lat ? (
-            <>
-              <span className="text-[14px]">📍</span>
-              <div>
-                <span className="font-bold">GPS Location Captured</span>
-                <span className="block text-[10px] opacity-75 font-mono">
-                  Lat: {gps.lat.toFixed(5)}, Lng: {gps.lng!.toFixed(5)} (±{gps.accuracy?.toFixed(0)}m)
-                </span>
-              </div>
-            </>
-          ) : (
-            <>
-              <span className="text-[14px]">⚠️</span>
-              <div>
-                <span className="font-bold">Location Required: </span>
-                <span>{gps.error || "Please allow location access to record this delivery."}</span>
-              </div>
-            </>
-          )}
-        </div>
-        {!gps.loading && (
-          <button
-            type="button"
-            onClick={onRetry}
-            className="px-2 py-1 rounded bg-white border font-bold text-[10px] uppercase shadow-sm transition hover:bg-zinc-50"
-            style={{
-              borderColor: gps.lat ? "#D1FAE5" : "#FCA5A5",
-              color: gps.lat ? "#047857" : "#DC2626"
-            }}
-          >
-            {gps.lat ? "Recapture" : "Retry GPS"}
-          </button>
-        )}
-      </div>
-    </div>
-  );
-}
+// GpsStatusBox is now in @/components/ui/GpsStatusBox as LocationStatusCard
+
+import Link from "next/link";
 
 // ─── Main Client Component ────────────────────────────────────────────────────
 
@@ -1385,6 +1339,7 @@ export function MyDeliveriesClient({
   userId,
   assignedVehicle,
   todayTrip,
+  todayCountRequest,
 }: Props) {
   const [deliveries, setDeliveries] = useState<DeliveryRecord[]>(initialDeliveries);
   
@@ -1454,44 +1409,8 @@ export function MyDeliveriesClient({
     }
   }
 
-  const [gps, setGps] = useState<{
-    lat: number | null;
-    lng: number | null;
-    accuracy: number | null;
-    loading: boolean;
-    error: string | null;
-  }>({ lat: null, lng: null, accuracy: null, loading: false, error: null });
-
-  const captureGps = () => {
-    if (typeof window === "undefined" || !navigator.geolocation) {
-      setGps((prev) => ({ ...prev, error: "Geolocation not supported by browser.", loading: false }));
-      return;
-    }
-    setGps((prev) => ({ ...prev, loading: true, error: null }));
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setGps({
-          lat: pos.coords.latitude,
-          lng: pos.coords.longitude,
-          accuracy: pos.coords.accuracy,
-          loading: false,
-          error: null,
-        });
-      },
-      (err) => {
-        let msg = "Unable to retrieve location.";
-        if (err.code === err.PERMISSION_DENIED) {
-          msg = "Location permission denied. Please allow location access in your browser.";
-        } else if (err.code === err.POSITION_UNAVAILABLE) {
-          msg = "Location information unavailable. Verify GPS is active.";
-        } else if (err.code === err.TIMEOUT) {
-          msg = "Location request timed out.";
-        }
-        setGps((prev) => ({ ...prev, error: msg, loading: false }));
-      },
-      { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
-    );
-  };
+  // ── Location (optional — captured fresh every time wizard opens) ─────────────
+  const { location, captureLocation, resetLocation } = useLocation({ timeout: 10000, highAccuracy: true });
 
   const todayDeliveries = deliveries.filter((d) => isToday(d.date));
   const pastDeliveries = deliveries.filter((d) => !isToday(d.date));
@@ -1539,17 +1458,19 @@ export function MyDeliveriesClient({
     setSelectedCustomer(null);
     setForm({ productId: "", deliveredQty: "0", returnedQty: "0", pendingQty: "1", emptyPending: "0", bookingQty: "1", cashCollected: "", creditAmount: "", paymentMode: "CASH", partialCollectionMode: "CASH", partialCollectionOther: "", notes: "", date: todayStr(), otherPaymentApp: "" });
     setFormError("");
-    setGps({ lat: null, lng: null, accuracy: null, loading: false, error: null });
+    resetLocation();
     setProofPhotos({ paymentReceiptUrl: null, customerCardUrl: null, additionalImageUrl: null });
     setPhotoUploading({ payment_receipt: false, customer_card: false, additional: false });
     setWizardOpen(true);
+    // Location is intentionally NOT auto-captured.
+    // The user must explicitly tap the location button every time.
   }
 
   function goStep2() {
     if (!selectedCustomer) { setFormError("Please find and select a customer first."); return; }
     setFormError("");
     setStep(2);
-    captureGps();
+    // Location is NOT auto-captured here — user must tap the button
   }
 
   function goStep3() {
@@ -1583,31 +1504,14 @@ export function MyDeliveriesClient({
       setFormError("📋 Customer Card Entry photo is required. Please photograph the gas book entry.");
       return;
     }
-    // Location check: Warn if GPS not captured yet
-    if (!gps.lat && !gps.loading) {
-      setFormError("Mandatory: We need to capture your GPS location. Click retry below.");
-      captureGps();
-      return;
-    }
-    if (gps.loading) {
-      setFormError("Acquiring GPS location lock... Please wait.");
-      return;
-    }
+    // Location is optional — proceed regardless of GPS status
     setFormError("");
     setStep(3);
   }
 
   function handleSubmit() {
     if (!selectedCustomer) return;
-    if (!gps.lat && !gps.loading) {
-      setFormError("GPS location is mandatory to submit delivery records. Attempting to capture...");
-      captureGps();
-      return;
-    }
-    if (gps.loading) {
-      setFormError("Please wait for GPS coordinates to load.");
-      return;
-    }
+    // Location is optional — submit even without GPS
     setSubmitting(true);
     const fd = new FormData();
     fd.append("customerId", selectedCustomer.id);
@@ -1622,9 +1526,10 @@ export function MyDeliveriesClient({
     fd.append("notes", form.notes || "");
     fd.append("date", form.date);
     fd.append("deliveredById", userId);
-    if (gps.lat) fd.append("deliveryLat", gps.lat.toString());
-    if (gps.lng) fd.append("deliveryLng", gps.lng.toString());
-    if (gps.accuracy) fd.append("deliveryAccuracy", gps.accuracy.toString());
+    // Attach GPS only if successfully captured (optional)
+    if (location.lat != null) fd.append("deliveryLat", location.lat.toString());
+    if (location.lng != null) fd.append("deliveryLng", location.lng.toString());
+    if (location.accuracy != null) fd.append("deliveryAccuracy", location.accuracy.toString());
     // ── Append proof photo URLs ──
     if (proofPhotos.paymentReceiptUrl) fd.append("paymentReceiptUrl", proofPhotos.paymentReceiptUrl);
     if (proofPhotos.customerCardUrl) fd.append("customerCardUrl", proofPhotos.customerCardUrl);
@@ -1707,19 +1612,86 @@ export function MyDeliveriesClient({
         />
       </div>
 
-      {/* Warning banner if not departed or vehicle not assigned */}
-      {!isDeparted && (
-        <div className="flex items-start gap-3 p-4 rounded-xl mb-5"
-          style={{ background: "#FEF3C7", border: "1px solid #FDE68A", color: "#92400E" }}>
-          <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5 text-amber-600" />
-          <div className="text-[13px]">
-            <p className="font-semibold">Delivery Feature Locked</p>
-            <p className="mt-0.5 opacity-90">
-              {!hasVehicleAssigned 
-                ? "No vehicle is assigned to you today. Please contact your manager or godown keeper to assign a vehicle."
-                : `Your assigned vehicle (${assignedVehicle.vehicleNo}) has not departed yet. Please ensure the godown keeper records the vehicle departure.`}
-            </p>
+      {/* Synchronized Workflow Banner: Vehicle loading & status */}
+      {!isDeparted ? (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl mb-5 border bg-amber-50 border-amber-200 text-amber-900">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5 text-amber-600" />
+            <div className="text-[13px]">
+              <p className="font-semibold">Delivery Recording Locked</p>
+              <p className="mt-0.5 text-amber-800 text-xs">
+                {!hasVehicleAssigned ? (
+                  "No vehicle is assigned to you. Please ask your manager or godown keeper to assign a vehicle."
+                ) : !todayCountRequest ? (
+                  <>
+                    You have not submitted today&apos;s delivery load request yet. Once approved and loaded by Godown, deliveries will unlock.
+                  </>
+                ) : todayCountRequest.status === "PENDING" ? (
+                  <>
+                    Your daily load request (<strong>{todayCountRequest.totalRequested} cylinders</strong>) is awaiting Admin/Manager approval.
+                  </>
+                ) : todayCountRequest.status === "APPROVED" ? (
+                  <>
+                    Your daily load request is <strong>approved</strong>! Waiting for Godown keeper to load your vehicle and dispatch.
+                  </>
+                ) : todayCountRequest.status === "REJECTED" ? (
+                  <>
+                    Your load request was <strong>rejected</strong>. Please review or re-submit in Daily Count Request.
+                  </>
+                ) : (
+                  `Vehicle (${assignedVehicle.vehicleNo}) waiting for godown loading confirmation.`
+                )}
+              </p>
+            </div>
           </div>
+
+          <Link
+            href="/delivery-boy/delivery-count"
+            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-semibold shadow-xs shrink-0 self-start sm:self-auto"
+          >
+            {todayCountRequest ? "View Request Status" : "Request Today's Load"}
+            <ChevronRight className="w-3.5 h-3.5" />
+          </Link>
+        </div>
+      ) : (
+        /* Vehicle Loaded Live Stock Tracker */
+        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-3.5 mb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg bg-blue-600 text-white flex items-center justify-center shrink-0">
+              <Truck className="w-4 h-4" />
+            </div>
+            <div>
+              <p className="text-xs font-bold text-zinc-900 flex items-center gap-2">
+                Vehicle Dispatched: {assignedVehicle.vehicleNo}
+                <span className="inline-flex items-center gap-1 px-2 py-0.2 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-800">
+                  <Check className="w-2.5 h-2.5" /> Ready for Deliveries
+                </span>
+              </p>
+              <div className="flex items-center gap-3 text-xs mt-0.5 text-zinc-600">
+                <span>
+                  Loaded: <strong className="text-blue-700">{todayTrip?.cylindersLoaded ?? todayCountRequest?.totalLoaded ?? 0} cyl</strong>
+                </span>
+                <span>•</span>
+                <span>
+                  Delivered: <strong className="text-emerald-700">{todayCylinders} cyl</strong>
+                </span>
+                <span>•</span>
+                <span>
+                  Remaining:{" "}
+                  <strong className="text-amber-700">
+                    {Math.max(0, (todayTrip?.cylindersLoaded ?? todayCountRequest?.totalLoaded ?? 0) - todayCylinders)} cyl
+                  </strong>
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <Link
+            href="/delivery-boy/delivery-count"
+            className="text-xs text-blue-700 hover:text-blue-800 font-semibold flex items-center gap-1"
+          >
+            Load Details <ChevronRight className="w-3 h-3" />
+          </Link>
         </div>
       )}
 
@@ -1826,6 +1798,15 @@ export function MyDeliveriesClient({
                   setFormError("");
                 }}
               />
+              {/* Show location CTA at step 1 — user taps to capture, never auto-captures */}
+              <div className="mt-4">
+                <LocationStatusCard
+                  location={location}
+                  onCapture={captureLocation}
+                  showWhenIdle
+                  label="Delivery Location"
+                />
+              </div>
               {formError && (
                 <div className="mt-3 flex items-center gap-2 px-3 py-2 rounded-lg"
                   style={{ background: "#FEF2F2", border: "1px solid #FCA5A5" }}>
@@ -1854,7 +1835,15 @@ export function MyDeliveriesClient({
 
           {step === 2 && selectedCustomer && (
             <>
-              <GpsStatusBox gps={gps} onRetry={captureGps} />
+              {/* Location status — optional, non-blocking */}
+              <div className="mb-3">
+                <LocationStatusCard
+                  location={location}
+                  onCapture={captureLocation}
+                  showWhenIdle
+                  label="Delivery Location"
+                />
+              </div>
               <Step2DeliveryDetails
                 customer={selectedCustomer}
                 products={products}
@@ -1882,7 +1871,15 @@ export function MyDeliveriesClient({
 
           {step === 3 && selectedCustomer && (
             <>
-              <GpsStatusBox gps={gps} onRetry={captureGps} />
+              {/* Location status on review — optional */}
+              <div className="mb-3">
+                <LocationStatusCard
+                  location={location}
+                  onCapture={captureLocation}
+                  showWhenIdle
+                  label="Delivery Location"
+                />
+              </div>
               <Step3Review customer={selectedCustomer} form={form} product={selectedProduct} proofPhotos={proofPhotos} />
               {formError && (
                 <div className="mt-3 flex items-center gap-2 px-3 py-2 rounded-lg"

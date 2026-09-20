@@ -5,7 +5,8 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 
 interface ModalProps {
-  open: boolean;
+  open?: boolean;
+  isOpen?: boolean;
   onClose: () => void;
   title: string;
   subtitle?: string;
@@ -21,6 +22,7 @@ const widths = { sm: 400, md: 520, lg: 640, xl: 820 };
 
 export function Modal({
   open,
+  isOpen,
   onClose,
   title,
   subtitle,
@@ -31,6 +33,7 @@ export function Modal({
   className,
   style,
 }: ModalProps) {
+  const isModalOpen = open ?? isOpen ?? false;
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -38,7 +41,7 @@ export function Modal({
   }, []);
 
   useEffect(() => {
-    if (!open || !mounted) return;
+    if (!isModalOpen || !mounted) return;
 
     const originalOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -52,9 +55,9 @@ export function Modal({
       document.body.style.overflow = originalOverflow;
       window.removeEventListener("keydown", onKey);
     };
-  }, [open, onClose, mounted]);
+  }, [isModalOpen, onClose, mounted]);
 
-  if (!open || !mounted) return null;
+  if (!isModalOpen || !mounted) return null;
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 md:p-6">

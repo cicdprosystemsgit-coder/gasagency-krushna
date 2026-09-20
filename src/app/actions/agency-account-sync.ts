@@ -3,21 +3,28 @@
 import { prisma } from "@/lib/prisma";
 import { recalculateAccountBalance } from "./personal-accounts";
 
-// Helper to get agency account for an agency
-async function getAgencyAccount(agencyId: string) {
+// Helper to get agency account for an agency (supports preferred specific account)
+async function getAgencyAccount(agencyId: string, preferredAccountId?: string) {
+  if (preferredAccountId) {
+    const specific = await prisma.personalAccount.findFirst({
+      where: { id: preferredAccountId, agencyId, isAgencyAccount: true, isActive: true },
+    });
+    if (specific) return specific;
+  }
   return await prisma.personalAccount.findFirst({
     where: { agencyId, isAgencyAccount: true, isActive: true },
+    orderBy: { createdAt: "asc" },
   });
 }
 
-export async function syncExpenseToPersonalAccount(expenseId: string) {
+export async function syncExpenseToPersonalAccount(expenseId: string, preferredAccountId?: string) {
   try {
     const expense = await prisma.expense.findUnique({
       where: { id: expenseId },
     });
     if (!expense) return { error: "Expense not found" };
 
-    const agencyAccount = await getAgencyAccount(expense.agencyId);
+    const agencyAccount = await getAgencyAccount(expense.agencyId, preferredAccountId);
     if (!agencyAccount) return { success: true, message: "No active agency account registered for auto-sync" };
 
     // Check if transaction is already linked or exists
@@ -75,7 +82,7 @@ export async function removeExpenseSync(expenseId: string) {
   }
 }
 
-export async function syncSalaryToPersonalAccount(drawingId: string) {
+export async function syncSalaryToPersonalAccount(drawingId: string, preferredAccountId?: string) {
   try {
     const drawing = await prisma.salaryDrawing.findUnique({
       where: { id: drawingId },
@@ -83,7 +90,7 @@ export async function syncSalaryToPersonalAccount(drawingId: string) {
     });
     if (!drawing) return { error: "Salary drawing not found" };
 
-    const agencyAccount = await getAgencyAccount(drawing.agencyId);
+    const agencyAccount = await getAgencyAccount(drawing.agencyId, preferredAccountId);
     if (!agencyAccount) return { success: true, message: "No active agency account registered for auto-sync" };
 
     const existing = await prisma.personalTransaction.findFirst({
@@ -148,14 +155,14 @@ export async function removeSalarySync(drawingId: string) {
   }
 }
 
-export async function syncCompanyPaymentToPersonalAccount(paymentId: string) {
+export async function syncCompanyPaymentToPersonalAccount(paymentId: string, preferredAccountId?: string) {
   try {
     const payment = await prisma.companyPayment.findUnique({
       where: { id: paymentId },
     });
     if (!payment) return { error: "Company payment not found" };
 
-    const agencyAccount = await getAgencyAccount(payment.agencyId);
+    const agencyAccount = await getAgencyAccount(payment.agencyId, preferredAccountId);
     if (!agencyAccount) return { success: true, message: "No active agency account registered for auto-sync" };
 
     const existing = await prisma.personalTransaction.findFirst({

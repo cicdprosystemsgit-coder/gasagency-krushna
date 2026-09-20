@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { formatDate, formatCurrency } from "@/lib/utils";
 import { PunchWidget } from "@/components/ui/PunchWidget";
-import { Truck, Package, DollarSign, ArrowRight, Users, Clock, AlertCircle, ShieldAlert } from "lucide-react";
+import { Truck, Package, DollarSign, ArrowRight, Users, Clock, AlertCircle, ShieldAlert, ClipboardCheck, BarChart3, CheckCircle2, Fuel } from "lucide-react";
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import { checkPermission } from "@/lib/rbac";
@@ -26,7 +26,7 @@ export default async function DeliveryBoyDashboard() {
     checkPermission(session.userId, "customers", "read"),
   ]);
 
-  const [deliveries, assignedVehicle, todayTrip] = await Promise.all([
+  const [deliveries, assignedVehicle, todayTrip, todayCountRequest] = await Promise.all([
     hasDeliveries
       ? prisma.deliveryRecord.findMany({
           where: { deliveredById: session.userId, agencyId, date: { gte: todayStart, lte: todayEnd } },
@@ -48,6 +48,13 @@ export default async function DeliveryBoyDashboard() {
           where: { agencyId, date: { gte: todayStart, lte: todayEnd }, vehicle: { assignedToId: session.userId } },
           orderBy: { createdAt: "desc" },
           select: { cylindersLoaded: true, cylindersDelivered: true, cylindersReturned: true, tripStatus: true, departureTime: true, returnTime: true },
+        })
+      : Promise.resolve(null),
+    hasDeliveries
+      ? prisma.deliveryCountRequest.findFirst({
+          where: { agencyId, requestedById: session.userId, date: { gte: todayStart, lte: todayEnd } },
+          orderBy: { createdAt: "desc" },
+          include: { reviewedBy: { select: { name: true } }, fulfilledBy: { select: { name: true } } },
         })
       : Promise.resolve(null),
   ]);
@@ -73,6 +80,8 @@ export default async function DeliveryBoyDashboard() {
   const tripInfo = todayTrip ? TRIP_STATUS_MAP[todayTrip.tripStatus] : null;
 
   const modules = [
+    { label: "Daily Count Request", href: "/delivery-boy/delivery-count", icon: <ClipboardCheck className="w-5 h-5" />, desc: "Submit today's cylinder count for approval & godown vehicle filling", color: "#0284C7", bg: "#F0F9FF", allowed: hasDeliveries },
+    { label: "Monthly Report", href: "/delivery-boy/monthly-report", icon: <BarChart3 className="w-5 h-5" />, desc: "Monthly delivery requests, vehicle loading & fuel totals", color: "#4F46E5", bg: "#EEF2FF", allowed: hasDeliveries },
     { label: t("myDeliveries"), href: "/delivery-boy/my-deliveries", icon: <Truck className="w-5 h-5" />, desc: t("myDeliveriesDesc"), color: "#2563EB", bg: "#EFF6FF", allowed: hasDeliveries },
     { label: t("deliveryLedger"), href: "/delivery-boy/delivery-ledger", icon: <Package className="w-5 h-5" />, desc: t("deliveryLedgerDesc"), color: "#7C3AED", bg: "#F5F3FF", allowed: hasDeliveries },
     { label: t("creditLedger"), href: "/delivery-boy/credit-ledger", icon: <DollarSign className="w-5 h-5" />, desc: t("creditLedgerDesc"), color: "#16A34A", bg: "#F0FDF4", allowed: hasCustomers },
@@ -151,6 +160,60 @@ export default async function DeliveryBoyDashboard() {
                   </p>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Today's Delivery Count / Vehicle Load Request Card */}
+          {hasDeliveries && (
+            <div className="rounded-xl p-4 mb-5 border bg-white border-zinc-200 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-start sm:items-center gap-3.5">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-blue-50 text-blue-600 shrink-0">
+                  <ClipboardCheck className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="text-[13px] font-semibold text-zinc-900">Today&apos;s Vehicle Load Request</p>
+                    {todayCountRequest ? (
+                      todayCountRequest.status === "PENDING" ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-50 text-amber-700 border border-amber-200">
+                          <Clock className="w-3 h-3" /> Awaiting Admin Approval
+                        </span>
+                      ) : todayCountRequest.status === "APPROVED" ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-blue-50 text-blue-700 border border-blue-200">
+                          <CheckCircle2 className="w-3 h-3" /> Approved • Ready for Godown Loading
+                        </span>
+                      ) : todayCountRequest.status === "FULFILLED" ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          <Truck className="w-3 h-3" /> Vehicle Loaded ({todayCountRequest.totalLoaded} cyl)
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-rose-50 text-rose-700 border border-rose-200">
+                          Rejected
+                        </span>
+                      )
+                    ) : (
+                      <span className="text-[11px] text-zinc-400 bg-zinc-100 px-2 py-0.5 rounded-full">
+                        Not requested yet
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[12px] text-zinc-500 mt-0.5">
+                    {todayCountRequest
+                      ? `Requested: ${todayCountRequest.totalRequested} cylinders. ${
+                          todayCountRequest.fulfilledBy ? `Loaded by ${todayCountRequest.fulfilledBy}.` : ""
+                        }`
+                      : "Submit your daily cylinder count to request vehicle loading and fuel from Godown."}
+                  </p>
+                </div>
+              </div>
+
+              <Link
+                href="/delivery-boy/delivery-count"
+                className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition shrink-0"
+              >
+                {todayCountRequest ? "View Request Status" : "Request Today's Load"}
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
             </div>
           )}
 

@@ -65,6 +65,15 @@ export default async function MyDeliveriesPage() {
     });
   }
 
+  const todayDeliveryCount = await prisma.deliveryCountRequest.findFirst({
+    where: {
+      agencyId: session.agencyId!,
+      requestedById: session.userId,
+      date: { gte: todayStart, lte: todayEnd },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
   const serializedDeliveries = deliveries.map((d) => ({
     ...d,
     date: (d.date as Date).toISOString(),
@@ -78,6 +87,14 @@ export default async function MyDeliveriesPage() {
     departureTime: todayTrip.departureTime ? todayTrip.departureTime.toISOString() : null,
     returnTime: todayTrip.returnTime ? todayTrip.returnTime.toISOString() : null,
     tripStatus: todayTrip.tripStatus,
+    cylindersLoaded: todayTrip.cylindersLoaded,
+  } : null;
+
+  const serializedCountRequest = todayDeliveryCount ? {
+    id: todayDeliveryCount.id,
+    status: todayDeliveryCount.status,
+    totalRequested: todayDeliveryCount.totalRequested,
+    totalLoaded: todayDeliveryCount.totalLoaded,
   } : null;
 
   return (
@@ -94,6 +111,7 @@ export default async function MyDeliveriesPage() {
         userId={session.userId}
         assignedVehicle={assignedVehicle}
         todayTrip={serializedTrip}
+        todayCountRequest={serializedCountRequest}
       />
     </div>
   );

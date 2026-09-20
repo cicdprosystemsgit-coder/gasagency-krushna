@@ -131,7 +131,7 @@ function getNavSections(
         items: [
           { label: "Finance Dashboard", href: `${base}/accounts/dashboard`,      icon: <LayoutDashboard className="w-4 h-4" />, featureKey: "finance_dashboard" },
           { label: "Personal Accounts", href: `${base}/accounts`,                icon: <Wallet className="w-4 h-4" />,         featureKey: "personal_accounts" },
-          { label: "Agency Account",    href: `${base}/accounts/agency-account`, icon: <Activity className="w-4 h-4" />,       featureKey: "agency_account"    },
+          { label: "Agency Accounts",   href: `${base}/accounts/agency-account`, icon: <Activity className="w-4 h-4" />,       featureKey: "agency_account"    },
           { label: "Fund Transfer",     href: `${base}/accounts/transfer`,       icon: <ArrowRightLeft className="w-4 h-4" />, featureKey: "fund_transfer"     },
           { label: "Tax & ITR Summary", href: `${base}/accounts/tax-summary`,    icon: <Percent className="w-4 h-4" />,        featureKey: "tax_itr_summary"   },
         ]
@@ -146,6 +146,7 @@ function getNavSections(
         items: [
           { label: "Inventory",         href: `${base}/inventory`,          icon: <Boxes className="w-4 h-4" />,       featureKey: "inventory"          },
           { label: "Godown",            href: `${base}/godown`,             icon: <Warehouse className="w-4 h-4" />,   featureKey: "godown"             },
+          { label: "Vehicle Loading",   href: `${base}/delivery-requests`, icon: <Truck className="w-4 h-4" />,       featureKey: "godown"             },
           { label: "Vehicle Management",href: `${base}/vehicle-management`, icon: <Car className="w-4 h-4" />,        featureKey: "vehicle_management" },
           { label: "Delivery Plan",     href: `${base}/delivery-plan`,      icon: <Truck className="w-4 h-4" />,      featureKey: "delivery_plan"      },
         ],
@@ -212,8 +213,9 @@ function getNavSections(
       {
         label: "Operations",
         items: [
-          { label: "Godown & Fleet", href: `${base}/godown`,     icon: <Warehouse className="w-4 h-4" />, featureKey: "godown"     },
-          { label: "Inventory",      href: `${base}/inventory`,  icon: <Boxes className="w-4 h-4" />,     featureKey: "inventory"  },
+          { label: "Godown & Fleet",    href: `${base}/godown`,            icon: <Warehouse className="w-4 h-4" />, featureKey: "godown"     },
+          { label: "Vehicle Loading",   href: `${base}/delivery-requests`, icon: <Truck className="w-4 h-4" />                                },
+          { label: "Inventory",         href: `${base}/inventory`,         icon: <Boxes className="w-4 h-4" />,     featureKey: "inventory"  },
         ],
       },
       {
@@ -262,10 +264,12 @@ function getNavSections(
       {
         label: "Deliveries",
         items: [
-          { label: "My Deliveries",  href: `${base}/my-deliveries`,  icon: <Truck className="w-4 h-4" />   },
-          { label: "Delivery Ledger",href: `${base}/delivery-ledger`,icon: <Package className="w-4 h-4" /> },
-          { label: "Daily Closing",  href: `${base}/daily-closing`,  icon: <ClipboardCheck className="w-4 h-4" /> },
-          { label: "Credit Ledger",  href: `${base}/credit-ledger`,  icon: <CreditCard className="w-4 h-4" />, featureKey: "credit_ledger" },
+          { label: "My Deliveries",       href: `${base}/my-deliveries`,   icon: <Truck className="w-4 h-4" />          },
+          { label: "Daily Count Request", href: `${base}/delivery-count`,  icon: <ClipboardCheck className="w-4 h-4" /> },
+          { label: "Monthly Report",      href: `${base}/monthly-report`,  icon: <BarChart3 className="w-4 h-4" />       },
+          { label: "Delivery Ledger",     href: `${base}/delivery-ledger`, icon: <Package className="w-4 h-4" />        },
+          { label: "Daily Closing",       href: `${base}/daily-closing`,   icon: <Activity className="w-4 h-4" />       },
+          { label: "Credit Ledger",       href: `${base}/credit-ledger`,   icon: <CreditCard className="w-4 h-4" />, featureKey: "credit_ledger" },
         ],
       },
       {
@@ -279,6 +283,7 @@ function getNavSections(
       },
     ];
   }
+
 
   return [{ items: [dashboard] }];
 }

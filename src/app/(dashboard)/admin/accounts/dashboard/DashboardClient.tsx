@@ -46,6 +46,7 @@ interface Account {
   accountType: PersonalAccountType;
   currentBalance: number;
   bankName: string | null;
+  isAgencyAccount?: boolean;
 }
 
 interface Transaction {
@@ -108,6 +109,9 @@ export function DashboardClient({
 
   const netWorth = totalAssets - totalLiabilities;
 
+  const agencyAccounts = accounts.filter((a) => a.isAgencyAccount);
+  const totalAgencyBalance = agencyAccounts.reduce((sum, a) => sum + a.currentBalance, 0);
+
   // Monthly Cash Flow (Current Calendar Month)
   const currentMonth = new Date().getMonth();
   const currentYear = new Date().getFullYear();
@@ -148,7 +152,7 @@ export function DashboardClient({
 
   // Chart 1: Asset Allocation data
   const assetAllocationData = accounts.map((a) => ({
-    name: a.name,
+    name: a.isAgencyAccount ? `${a.name} (Agency)` : a.name,
     value: Math.max(0, a.currentBalance),
   })).filter((d) => d.value > 0);
 
@@ -215,14 +219,18 @@ export function DashboardClient({
             </p>
           </div>
 
-          <div className="grid grid-cols-2 gap-4 border-t md:border-t-0 md:border-l border-slate-700/50 pt-4 md:pt-0 md:pl-6">
+          <div className="grid grid-cols-3 gap-3 border-t md:border-t-0 md:border-l border-slate-700/50 pt-4 md:pt-0 md:pl-6">
             <div>
               <span className="text-[10px] text-slate-400 font-bold uppercase block">Assets</span>
-              <span className="text-lg font-black text-emerald-400">+{formatCurrency(totalAssets)}</span>
+              <span className="text-base md:text-lg font-black text-emerald-400">+{formatCurrency(totalAssets)}</span>
             </div>
             <div>
               <span className="text-[10px] text-slate-400 font-bold uppercase block">Liabilities</span>
-              <span className="text-lg font-black text-rose-400">-{formatCurrency(totalLiabilities)}</span>
+              <span className="text-base md:text-lg font-black text-rose-400">-{formatCurrency(totalLiabilities)}</span>
+            </div>
+            <div>
+              <span className="text-[10px] text-amber-300 font-bold uppercase block">Agency ({agencyAccounts.length})</span>
+              <span className="text-base md:text-lg font-black text-amber-400">{formatCurrency(totalAgencyBalance)}</span>
             </div>
           </div>
         </div>
@@ -395,7 +403,9 @@ export function DashboardClient({
               <Building2 className="w-5 h-5" />
             </div>
             <div>
-              <span className="text-xs font-bold text-slate-800 group-hover:text-indigo-900 block">Agency Account</span>
+              <span className="text-xs font-bold text-slate-800 group-hover:text-indigo-900 block">
+                Agency Accounts ({agencyAccounts.length})
+              </span>
               <span className="text-[10px] text-slate-400 font-medium">Auto-Sync Logs</span>
             </div>
           </Link>

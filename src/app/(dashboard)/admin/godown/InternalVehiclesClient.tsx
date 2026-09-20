@@ -1,11 +1,16 @@
-"use client";
-
 import { useState, useTransition, useCallback, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { format, parseISO } from "date-fns";
+import { toast } from "sonner";
 import { Modal } from "@/components/ui/Modal";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { CustomSelect } from "@/components/ui/CustomSelect";
 import { formatDateTime } from "@/lib/utils";
-import { Plus, Minus, X, HelpCircle, Truck, User, Edit2, Activity, CheckCircle2, RotateCcw, ArrowUpRight, AlertCircle, Navigation } from "lucide-react";
+import {
+  Plus, Minus, X, HelpCircle, Truck, User, Edit2, Activity,
+  CheckCircle2, RotateCcw, ArrowUpRight, AlertCircle, Navigation,
+  Clock, Fuel, Trash2
+} from "lucide-react";
 import {
   createDeliveryVehicle,
   updateDeliveryVehicle,
@@ -14,8 +19,10 @@ import {
   updateTripLog,
 } from "@/app/actions/delivery-vehicles";
 import { addCylinderType } from "@/app/actions/godown";
+import { fulfillDeliveryCountRequest } from "@/app/actions/delivery-count-requests";
 import { useGodownGps } from "@/hooks/useGodownGps";
-import { GpsStatusBox } from "@/components/ui/GpsStatusBox";
+import { LocationStatusCard } from "@/components/ui/GpsStatusBox";
+import type { GodownDeliveryRequest } from "../../godown-keeper/delivery-requests/DeliveryRequestsClient";
 
 interface Product {
   id: string;
@@ -85,7 +92,15 @@ function getTripItems(t: TripLog): CylinderRowItem[] {
 }
 
 export function InternalVehiclesClient({
-  initialVehicles, initialTripLogs, deliveryBoys, isAdmin, userId, cylinderTypes = [], selectedDate,
+  initialVehicles,
+  initialTripLogs,
+  deliveryBoys,
+  isAdmin,
+  userId,
+  cylinderTypes = [],
+  selectedDate,
+  deliveryRequests = [],
+  products = [],
 }: {
   initialVehicles: DeliveryVehicle[];
   initialTripLogs: TripLog[];
@@ -94,7 +109,10 @@ export function InternalVehiclesClient({
   userId: string;
   cylinderTypes?: Product[];
   selectedDate?: string;
+  deliveryRequests?: GodownDeliveryRequest[];
+  products?: Product[];
 }) {
+  const router = useRouter();
   const [vehicles, setVehicles] = useState(initialVehicles);
   const [tripLogs, setTripLogs] = useState(initialTripLogs);
 
@@ -119,27 +137,91 @@ export function InternalVehiclesClient({
   const [departureItems, setDepartureItems] = useState<CylinderRowItem[]>([]);
   const [returnItems, setReturnItems] = useState<CylinderRowItem[]>([]);
 
+  // Vehicle Loading Modal for Delivery Boy requests
+  const [loadingModalRequest, setLoadingModalRequest] = useState<GodownDeliveryRequest | null>(null);
+  const [loadItems, setLoadItems] = useState<Array<{ productId: string; productName: string; loadedQty: number }>>([]);
+  const [fuelLitres, setFuelLitres] = useState<string>("");
+  const [fuelAmount, setFuelAmount] = useState<string>("");
+  const [fuelType, setFuelType] = useState<string>("Petrol");
+  const [godownNotes, setGodownNotes] = useState<string>("");
+  const [loadModalError, setLoadModalError] = useState<string>("");
+
+  const openLoadModal = (req: GodownDeliveryRequest) => {
+    setLoadingModalRequest(req);
+    setLoadItems(
+      req.items.map((it) => ({
+        productId: it.productId,
+        productName: it.productName,
+        loadedQty: it.requestedQty,
+      }))
+    );
+    setFuelLitres("");
+    setFuelAmount("");
+    setFuelType(req.deliveryBoy.vehicle?.vehicleType === "Two-Wheeler" ? "Petrol" : "Diesel");
+    setGodownNotes("");
+    setLoadModalError("");
+  };
+
+  const handleLoadedQtyChange = (idx: number, val: number) => {
+    const updated = [...loadItems];
+    updated[idx] = { ...updated[idx], loadedQty: Math.max(0, val) };
+    setLoadItems(updated);
+  };
+
+  const handleAddExtraProduct = () => {
+    const available = (products.length > 0 ? products : productsState).find(
+      (p) => !loadItems.some((li) => li.productId === p.id)
+    );
+    const target = available || (products.length > 0 ? products[0] : productsState[0]);
+    if (target) {
+      setLoadItems([...loadItems, { productId: target.id, productName: target.name, loadedQty: 1 }]);
+    }
+  };
+
+  const handleRemoveLoadItem = (idx: number) => {
+    if (loadItems.length <= 1) return;
+    setLoadItems(loadItems.filter((_, i) => i !== idx));
+  };
+
+  const handleFulfillSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!loadingModalRequest) return;
+    setLoadModalError("");
+
+    const validItems = loadItems.filter((it) => Number(it.loadedQty) > 0);
+    if (validItems.length === 0) {
+      setLoadModalError("At least one product must have loaded quantity > 0");
+      return;
+    }
+
+    startTransition(async () => {
+      const res = await fulfillDeliveryCountRequest(loadingModalRequest.id, {
+        fulfilledItems: validItems,
+        fuelLitres: fuelLitres ? Number(fuelLitres) : undefined,
+        fuelAmount: fuelAmount ? Number(fuelAmount) : undefined,
+        fuelType: fuelLitres ? fuelType : undefined,
+        godownNotes,
+      });
+
+      if (res.error) {
+        setLoadModalError(res.error);
+        toast.error(res.error);
+      } else {
+        toast.success(`Vehicle successfully loaded & dispatched for ${loadingModalRequest.deliveryBoy.name}!`);
+        setLoadingModalRequest(null);
+        router.refresh();
+      }
+    });
+  };
+
   const [addTypeOpen, setAddTypeOpen] = useState(false);
   const [addTypeCallback, setAddTypeCallback] = useState<((p: Product) => void) | null>(null);
 
   const departureGps = useGodownGps();
   const returnGps = useGodownGps();
 
-  useEffect(() => {
-    if (tripModal) {
-      departureGps.captureGps();
-    } else {
-      departureGps.resetGps();
-    }
-  }, [tripModal, departureGps.captureGps, departureGps.resetGps]);
-
-  useEffect(() => {
-    if (!!updateModal) {
-      returnGps.captureGps();
-    } else {
-      returnGps.resetGps();
-    }
-  }, [updateModal, returnGps.captureGps, returnGps.resetGps]);
+  // Location is NOT auto-captured — user must tap the "Get My Location" button.
+  // departureGps and returnGps are reset when their modals open so each fresh modal shows the idle CTA.
 
   const openAddType = useCallback((cb: (p: Product) => void) => {
     setAddTypeCallback(() => cb);
@@ -299,6 +381,7 @@ export function InternalVehiclesClient({
     });
     setError("");
     setTripModal(true);
+    departureGps.resetGps();
   }
 
   function openUpdateTrip(t: TripLog) {
@@ -412,6 +495,31 @@ export function InternalVehiclesClient({
       {/* TODAY TRIPS TAB */}
       {activeTab === "trips" && (
         <>
+          {/* Approved Vehicle Loading Banner */}
+          {deliveryRequests.filter((r) => r.status === "APPROVED").length > 0 && (
+            <div className="mb-4 p-3.5 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl flex items-center justify-between gap-3 shadow-2xs">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center shrink-0">
+                  <Truck className="w-4 h-4" />
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-zinc-900">
+                    {deliveryRequests.filter((r) => r.status === "APPROVED").length} Vehicle(s) Approved & Ready for Cylinder Loading
+                  </p>
+                  <p className="text-[11px] text-zinc-500">
+                    Delivery count requests approved by admin. Load vehicles directly from the Fleet tab to synchronize trip logs and fuel.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setActiveTab("vehicles")}
+                className="btn text-xs font-bold bg-white text-blue-700 border border-blue-200 hover:bg-blue-50 py-1.5 px-3 rounded-lg shadow-2xs whitespace-nowrap"
+              >
+                View Fleet ({deliveryRequests.filter((r) => r.status === "APPROVED").length})
+              </button>
+            </div>
+          )}
+
           <div className="flex items-center justify-between mb-3">
             <p className="text-[13px] font-semibold" style={{ color: "#18181B" }}>Internal vehicle trip log</p>
             <button onClick={() => {
@@ -428,6 +536,7 @@ export function InternalVehiclesClient({
                 notes: ""
               });
               setTripModal(true);
+            departureGps.resetGps(); // Reset so idle CTA shows fresh each time
             }} className="btn btn-primary">
               <Plus className="w-3.5 h-3.5" /> Record Departure
             </button>
@@ -607,6 +716,67 @@ export function InternalVehiclesClient({
                      {v.assignedTo ? v.assignedTo.name : "Unassigned"}
                   </p>
                 </div>
+
+                {/* Connected Delivery Request for assigned driver */}
+                {(() => {
+                  const driverReq = deliveryRequests.find((r) => r.deliveryBoy.id === v.assignedTo?.id);
+                  if (!driverReq) return null;
+
+                  if (driverReq.status === "APPROVED") {
+                    return (
+                      <div className="mt-3 p-2.5 rounded-lg bg-blue-50 border border-blue-200 space-y-2">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="inline-flex items-center gap-1 font-bold text-blue-700">
+                            <CheckCircle2 className="w-3.5 h-3.5" /> Ready to Load
+                          </span>
+                          <span className="font-bold text-blue-900 bg-white px-2 py-0.5 rounded border border-blue-200">
+                            {driverReq.totalRequested} cyl
+                          </span>
+                        </div>
+                        <button
+                          onClick={() => openLoadModal(driverReq)}
+                          className="w-full btn text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white py-1.5 px-3 rounded-lg flex items-center justify-center gap-1.5 shadow-xs transition"
+                        >
+                          <Truck className="w-3.5 h-3.5" /> Fill / Load Vehicle
+                        </button>
+                      </div>
+                    );
+                  }
+
+                  if (driverReq.status === "FULFILLED") {
+                    return (
+                      <div className="mt-3 p-2.5 rounded-lg bg-emerald-50 border border-emerald-200 text-xs flex items-center justify-between">
+                        <div className="space-y-0.5">
+                          <div className="font-bold text-emerald-800 flex items-center gap-1">
+                            <Truck className="w-3.5 h-3.5 text-emerald-600" />
+                            <span>Loaded: {driverReq.totalLoaded} cyl</span>
+                          </div>
+                          {driverReq.fuelLitres != null && (
+                            <p className="text-[11px] text-emerald-600">
+                              Fuel: {driverReq.fuelLitres}L {driverReq.fuelType || ""} (₹{driverReq.fuelAmount || 0})
+                            </p>
+                          )}
+                        </div>
+                        <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wide bg-white px-1.5 py-0.5 rounded border border-emerald-200">
+                          Dispatched
+                        </span>
+                      </div>
+                    );
+                  }
+
+                  if (driverReq.status === "PENDING") {
+                    return (
+                      <div className="mt-3 p-2 rounded-lg bg-amber-50 border border-amber-200 text-xs flex items-center justify-between">
+                        <span className="font-semibold text-amber-800 flex items-center gap-1">
+                          <Clock className="w-3.5 h-3.5 animate-pulse" /> Awaiting Admin
+                        </span>
+                        <span className="font-bold text-amber-900">{driverReq.totalRequested} cyl</span>
+                      </div>
+                    );
+                  }
+
+                  return null;
+                })()}
               </div>
             ))}
           </div>
@@ -732,7 +902,19 @@ export function InternalVehiclesClient({
             </div>
           )}
 
-          <GpsStatusBox gps={departureGps.gps} onRetry={departureGps.captureGps} titleText="Acquiring departure coordinates..." />
+          <LocationStatusCard
+            location={{
+              lat: departureGps.gps.lat,
+              lng: departureGps.gps.lng,
+              accuracy: departureGps.gps.accuracy,
+              status: departureGps.gps.loading ? "loading" : departureGps.gps.lat !== null ? "success" : departureGps.gps.error ? "denied" : "idle",
+              error: departureGps.gps.error,
+              hint: departureGps.gps.hint ?? null,
+            }}
+            onCapture={departureGps.captureGps}
+            showWhenIdle
+            label="Departure Location"
+          />
           
           <div className="rounded-xl border border-slate-200 overflow-visible">
             <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-200 rounded-t-xl">
@@ -939,7 +1121,19 @@ export function InternalVehiclesClient({
             </div>
           )}
 
-          <GpsStatusBox gps={returnGps.gps} onRetry={returnGps.captureGps} titleText="Acquiring return coordinates..." />
+          <LocationStatusCard
+            location={{
+              lat: returnGps.gps.lat,
+              lng: returnGps.gps.lng,
+              accuracy: returnGps.gps.accuracy,
+              status: returnGps.gps.loading ? "loading" : returnGps.gps.lat !== null ? "success" : returnGps.gps.error ? "denied" : "idle",
+              error: returnGps.gps.error,
+              hint: returnGps.gps.hint ?? null,
+            }}
+            onCapture={returnGps.captureGps}
+            showWhenIdle
+            label="Return Location"
+          />
           
           {updateModal && (
             <div className="px-4 py-3 rounded-xl border flex items-center justify-between" style={{ background: "#EFF6FF", borderColor: "#BFDBFE" }}>
@@ -1230,6 +1424,194 @@ export function InternalVehiclesClient({
           </div>
         </form>
       </Modal>
+
+      {/* Modal for Fulfilling Delivery Count Request & Loading Vehicle */}
+      {loadingModalRequest && (
+        <Modal
+          open={true}
+          onClose={() => !isPending && setLoadingModalRequest(null)}
+          title="Vehicle Loading & Fueling Dispatch"
+        >
+          <form onSubmit={handleFulfillSubmit} className="space-y-4 text-sm">
+            <div className="bg-blue-50 p-3 rounded-xl border border-blue-200 flex items-center justify-between">
+              <div>
+                <span className="text-[11px] uppercase font-semibold text-blue-700">Delivery Boy</span>
+                <p className="font-bold text-zinc-900">{loadingModalRequest.deliveryBoy.name}</p>
+                <p className="text-xs text-zinc-600 font-mono mt-0.5">
+                  {loadingModalRequest.deliveryBoy.vehicle
+                    ? `${loadingModalRequest.deliveryBoy.vehicle.vehicleNo} · ${loadingModalRequest.deliveryBoy.vehicle.vehicleName}`
+                    : "No vehicle assigned"}
+                </p>
+              </div>
+              <div className="text-right">
+                <span className="text-[11px] uppercase font-semibold text-blue-700">Date</span>
+                <p className="font-bold text-zinc-900">
+                  {format(parseISO(loadingModalRequest.date), "dd MMM yyyy")}
+                </p>
+              </div>
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-xs font-semibold text-zinc-800 uppercase tracking-wide">
+                  Cylinders Loaded onto Vehicle <span className="text-rose-500">*</span>
+                </label>
+                <button
+                  type="button"
+                  onClick={handleAddExtraProduct}
+                  className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 font-semibold"
+                >
+                  <Plus className="w-3.5 h-3.5" /> Add Product
+                </button>
+              </div>
+
+              <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
+                {loadItems.map((item, idx) => (
+                  <div key={idx} className="flex items-center gap-2">
+                    <select
+                      value={item.productId}
+                      onChange={(e) => {
+                        const prods = products.length > 0 ? products : productsState;
+                        const prod = prods.find((p) => p.id === e.target.value);
+                        const updated = [...loadItems];
+                        updated[idx] = {
+                          ...updated[idx],
+                          productId: e.target.value,
+                          productName: prod?.name || "Product",
+                        };
+                        setLoadItems(updated);
+                      }}
+                      className="flex-1 text-xs px-3 py-2 border border-zinc-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                    >
+                      {(products.length > 0 ? products : productsState).map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name}
+                        </option>
+                      ))}
+                    </select>
+
+                    <div className="w-28 relative">
+                      <input
+                        type="number"
+                        min="0"
+                        placeholder="Loaded"
+                        value={item.loadedQty}
+                        onChange={(e) => handleLoadedQtyChange(idx, Number(e.target.value))}
+                        className="w-full text-xs px-3 py-2 border border-zinc-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-right pr-6 font-bold text-zinc-900"
+                        required
+                      />
+                      <span className="absolute right-2 top-2 text-xs text-zinc-400">cyl</span>
+                    </div>
+
+                    {loadItems.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveLoadItem(idx)}
+                        className="p-1.5 text-zinc-400 hover:text-rose-600 rounded-lg transition"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-2 text-right text-xs font-semibold text-zinc-600">
+                Total Loaded:{" "}
+                <span className="text-emerald-700 text-sm font-bold">
+                  {loadItems.reduce((sum, it) => sum + (Number(it.loadedQty) || 0), 0)} cylinders
+                </span>
+              </div>
+            </div>
+
+            <div className="border border-purple-200 bg-purple-50/50 p-3 rounded-xl space-y-2.5">
+              <div className="flex items-center gap-1.5 text-purple-900 font-bold text-xs">
+                <Fuel className="w-4 h-4 text-purple-600" />
+                <span>Vehicle Fuel Filling (Optional)</span>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2.5">
+                <div>
+                  <label className="block text-[11px] font-semibold text-zinc-600 mb-1">Fuel Type</label>
+                  <select
+                    value={fuelType}
+                    onChange={(e) => setFuelType(e.target.value)}
+                    className="w-full text-xs px-2.5 py-1.5 border border-zinc-300 rounded-lg bg-white focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                  >
+                    <option value="Petrol">Petrol</option>
+                    <option value="Diesel">Diesel</option>
+                    <option value="CNG">CNG</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-zinc-600 mb-1">Litres</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="e.g. 5"
+                    value={fuelLitres}
+                    onChange={(e) => setFuelLitres(e.target.value)}
+                    className="w-full text-xs px-2.5 py-1.5 border border-zinc-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-zinc-600 mb-1">Amount (₹)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="e.g. 500"
+                    value={fuelAmount}
+                    onChange={(e) => setFuelAmount(e.target.value)}
+                    className="w-full text-xs px-2.5 py-1.5 border border-zinc-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-zinc-700 mb-1">
+                Godown Loading Remarks (Optional)
+              </label>
+              <textarea
+                rows={2}
+                value={godownNotes}
+                onChange={(e) => setGodownNotes(e.target.value)}
+                placeholder="e.g. Vehicle inspected, full load loaded..."
+                className="w-full text-xs px-3 py-2 border border-zinc-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              />
+            </div>
+
+            {loadModalError && (
+              <div className="p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-1.5 font-medium">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                {loadModalError}
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-zinc-200">
+              <button
+                type="button"
+                disabled={isPending}
+                onClick={() => setLoadingModalRequest(null)}
+                className="px-3.5 py-2 text-xs font-medium text-zinc-700 hover:bg-zinc-100 rounded-lg transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isPending}
+                className="px-4 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition flex items-center gap-1.5 shadow-sm disabled:opacity-50"
+              >
+                <Truck className="w-3.5 h-3.5" /> Confirm Vehicle Loaded & Dispatched
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
 
       <AddTypeModal
         open={addTypeOpen}

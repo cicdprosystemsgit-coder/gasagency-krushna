@@ -119,6 +119,13 @@ enum LeaveStatus {
   REJECTED
 }
 
+enum DeliveryRequestStatus {
+  PENDING      // Submitted by delivery boy, awaiting approval
+  APPROVED     // Approved by admin/manager — visible to godown keeper
+  REJECTED     // Rejected by admin/manager
+  FULFILLED    // Godown keeper loaded vehicle
+}
+
 model Agency {
   id              String       @id @default(cuid())
   name            String
@@ -222,6 +229,9 @@ model Agency {
 
   // Phase 2 — S3 backup relations
   deliveryPhotoBackups    DeliveryPhotoBackup[]
+
+  // Delivery Count Requests
+  deliveryCountRequests   DeliveryCountRequest[]
 }
 
 model User {
@@ -322,6 +332,11 @@ model User {
 
   // Phase 2 — S3 backup
   deliveryPhotoBackups     DeliveryPhotoBackup[] @relation("DeliveryPhotoBackupUser")
+
+  // Delivery Count Requests
+  requestedDeliveryCounts  DeliveryCountRequest[] @relation("DCR_RequestedBy")
+  reviewedDeliveryCounts   DeliveryCountRequest[] @relation("DCR_ReviewedBy")
+  fulfilledDeliveryCounts  DeliveryCountRequest[] @relation("DCR_FulfilledBy")
 }
 
 model Product {
@@ -1357,6 +1372,7 @@ enum PersonalAccountType {
   WALLET           // PhonePe / GPay / Paytm wallet
   FD               // Fixed Deposit (non-liquid, for visibility only)
   LOAN             // Outstanding personal loan
+  OTHER            // Other custom account type
 }
 
 enum PersonalTxnType {
@@ -1723,4 +1739,42 @@ model EmployeeExpense {
 
   @@index([agencyId, status])
   @@index([submittedById])
+}
+
+/// Daily delivery count and load request submitted by delivery boy
+model DeliveryCountRequest {
+  id              String                @id @default(cuid())
+  date            DateTime              // Date the delivery load is requested for
+  requestedById   String
+  requestedBy     User                  @relation("DCR_RequestedBy", fields: [requestedById], references: [id])
+  items           Json                  // Array of { productId: string, productName: string, requestedQty: number }
+  totalRequested  Int                   @default(0)
+  notes           String?
+
+  // Approval stage
+  status          DeliveryRequestStatus @default(PENDING)
+  reviewedById    String?
+  reviewedBy      User?                 @relation("DCR_ReviewedBy", fields: [reviewedById], references: [id])
+  reviewNote      String?
+  reviewedAt      DateTime?
+
+  // Godown fulfillment stage
+  fulfilledById   String?
+  fulfilledBy     User?                 @relation("DCR_FulfilledBy", fields: [fulfilledById], references: [id])
+  fulfilledItems  Json?                 // Array of { productId: string, productName: string, loadedQty: number }
+  totalLoaded     Int?
+  fuelLitres      Float?
+  fuelAmount      Float?
+  fuelType        String?               // Petrol | Diesel | CNG
+  fulfilledAt     DateTime?
+  godownNotes     String?
+
+  agencyId        String
+  agency          Agency                @relation(fields: [agencyId], references: [id])
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  @@index([agencyId, status])
+  @@index([agencyId, date])
+  @@index([requestedById])
 }

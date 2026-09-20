@@ -78,6 +78,7 @@ export function AccountsClient({ initialAccounts, userId }: AccountsClientProps)
   const [accountForm, setAccountForm] = useState({
     name: "",
     accountType: "SAVINGS" as PersonalAccountType,
+    otherAccountType: "",
     bankName: "",
     accountNo: "",
     ifscCode: "",
@@ -92,12 +93,15 @@ export function AccountsClient({ initialAccounts, userId }: AccountsClientProps)
   const [txnForm, setTxnForm] = useState({
     accountId: "",
     date: new Date().toISOString().split("T")[0],
-    type: "INCOME" as PersonalTxnType,
+    type: "INCOME" as PersonalTxnType | "OTHER",
+    otherType: "",
+    otherTypeFlow: "EXPENSE" as "INCOME" | "EXPENSE",
     amount: "",
     description: "",
     partyName: "",
     partyPhone: "",
     paymentMode: "UPI",
+    otherPaymentMode: "",
     referenceNo: "",
     tags: "",
     notes: "",
@@ -114,7 +118,8 @@ export function AccountsClient({ initialAccounts, userId }: AccountsClientProps)
 
   const netWorth = totalAssets - totalLiabilities;
 
-  const agencyAccount = initialAccounts.find((a) => a.isAgencyAccount);
+  const agencyAccounts = initialAccounts.filter((a) => a.isAgencyAccount);
+  const totalAgencyBalance = agencyAccounts.reduce((sum, a) => sum + a.currentBalance, 0);
 
   // Handlers
   async function handleAddAccount(e: React.FormEvent) {
@@ -126,18 +131,24 @@ export function AccountsClient({ initialAccounts, userId }: AccountsClientProps)
       setError("Account name is required");
       return;
     }
+    if (accountForm.accountType === "OTHER" && !accountForm.otherAccountType.trim()) {
+      setError("Please specify the account type");
+      return;
+    }
 
     startTransition(async () => {
       const result = await createPersonalAccount({
         name: accountForm.name,
         accountType: accountForm.accountType,
-        bankName: accountForm.bankName,
+        bankName: accountForm.accountType === "OTHER" ? accountForm.otherAccountType.trim() : accountForm.bankName,
         accountNo: accountForm.accountNo,
         ifscCode: accountForm.ifscCode,
         openingBalance: Number(accountForm.openingBalance) || 0,
         isAgencyAccount: accountForm.isAgencyAccount,
         color: accountForm.color,
-        notes: accountForm.notes,
+        notes: accountForm.accountType === "OTHER"
+          ? (accountForm.notes ? `[Type: ${accountForm.otherAccountType.trim()}] ${accountForm.notes}` : `[Type: ${accountForm.otherAccountType.trim()}]`)
+          : accountForm.notes,
       });
 
       if (result.error) {
@@ -148,6 +159,7 @@ export function AccountsClient({ initialAccounts, userId }: AccountsClientProps)
         setAccountForm({
           name: "",
           accountType: "SAVINGS",
+          otherAccountType: "",
           bankName: "",
           accountNo: "",
           ifscCode: "",
@@ -230,19 +242,41 @@ export function AccountsClient({ initialAccounts, userId }: AccountsClientProps)
       setError("Description is required");
       return;
     }
+    if (txnForm.type === "OTHER" && !txnForm.otherType.trim()) {
+      setError("Please specify the custom transaction type");
+      return;
+    }
+    if (txnForm.paymentMode === "OTHER" && !txnForm.otherPaymentMode.trim()) {
+      setError("Please specify the payment mode");
+      return;
+    }
 
     startTransition(async () => {
+      const isOtherType = txnForm.type === "OTHER";
+      const finalType: PersonalTxnType = isOtherType ? txnForm.otherTypeFlow : (txnForm.type as PersonalTxnType);
+      const customTypeTag = isOtherType ? txnForm.otherType.trim() : null;
+      const effectivePaymentMode = txnForm.paymentMode === "OTHER" ? txnForm.otherPaymentMode.trim() : txnForm.paymentMode;
+
+      const tagsList = txnForm.tags ? txnForm.tags.split(",").map((t) => t.trim()).filter(Boolean) : [];
+      if (customTypeTag && !tagsList.includes(customTypeTag)) {
+        tagsList.push(customTypeTag);
+      }
+
+      const finalDescription = isOtherType
+        ? `[${txnForm.otherType.trim()}] ${txnForm.description.trim()}`
+        : txnForm.description.trim();
+
       const result = await addTransaction({
         accountId: txnForm.accountId,
         date: txnForm.date,
-        type: txnForm.type,
+        type: finalType,
         amount: Number(txnForm.amount),
-        description: txnForm.description,
+        description: finalDescription,
         partyName: txnForm.partyName || undefined,
         partyPhone: txnForm.partyPhone || undefined,
-        paymentMode: txnForm.paymentMode,
+        paymentMode: effectivePaymentMode,
         referenceNo: txnForm.referenceNo || undefined,
-        tags: txnForm.tags ? txnForm.tags.split(",").map((t) => t.trim()) : [],
+        tags: tagsList,
         notes: txnForm.notes || undefined,
       });
 
@@ -255,11 +289,14 @@ export function AccountsClient({ initialAccounts, userId }: AccountsClientProps)
           accountId: "",
           date: new Date().toISOString().split("T")[0],
           type: "INCOME",
+          otherType: "",
+          otherTypeFlow: "EXPENSE",
           amount: "",
           description: "",
           partyName: "",
           partyPhone: "",
           paymentMode: "UPI",
+          otherPaymentMode: "",
           referenceNo: "",
           tags: "",
           notes: "",
@@ -321,12 +358,16 @@ export function AccountsClient({ initialAccounts, userId }: AccountsClientProps)
           </div>
           <div className="space-y-1 bg-amber-500/10 p-3 rounded-2xl border border-amber-500/20">
             <span className="text-[11px] uppercase tracking-wider text-amber-300 font-semibold flex items-center gap-1">
-              <Activity className="w-3.5 h-3.5" /> Agency Account
+              <Activity className="w-3.5 h-3.5" /> Agency Accounts
             </span>
             <h3 className="text-xl font-bold text-amber-400">
-              {agencyAccount ? formatCurrency(agencyAccount.currentBalance) : "Not Configured"}
+              {agencyAccounts.length > 0 ? formatCurrency(totalAgencyBalance) : "Not Configured"}
             </h3>
-            <p className="text-[10px] text-slate-400">Official linked agency bank account</p>
+            <p className="text-[10px] text-slate-400">
+              {agencyAccounts.length > 0
+                ? `${agencyAccounts.length} linked agency account${agencyAccounts.length > 1 ? "s" : ""}`
+                : "Official linked agency bank accounts"}
+            </p>
           </div>
         </div>
       </div>
@@ -353,12 +394,12 @@ export function AccountsClient({ initialAccounts, userId }: AccountsClientProps)
           >
             <ArrowRightLeft className="w-4 h-4" /> Fund Transfer
           </Link>
-          {agencyAccount && (
+          {agencyAccounts.length > 0 && (
             <Link
               href="/admin/accounts/agency-account"
               className="flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-800 px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-amber-100 transition"
             >
-              <Activity className="w-4 h-4" /> Agency Tab
+              <Activity className="w-4 h-4" /> Agency Accounts ({agencyAccounts.length})
             </Link>
           )}
         </div>
@@ -369,6 +410,7 @@ export function AccountsClient({ initialAccounts, userId }: AccountsClientProps)
             setAccountForm({
               name: "",
               accountType: "SAVINGS",
+              otherAccountType: "",
               bankName: "",
               accountNo: "",
               ifscCode: "",
@@ -545,6 +587,7 @@ export function AccountsClient({ initialAccounts, userId }: AccountsClientProps)
                 <option value="WALLET">Wallet (GPay/PhonePe)</option>
                 <option value="FD">Fixed Deposit (FD)</option>
                 <option value="LOAN">Personal Loan</option>
+                <option value="OTHER">Other</option>
               </select>
             </div>
             <div>
@@ -560,6 +603,23 @@ export function AccountsClient({ initialAccounts, userId }: AccountsClientProps)
               />
             </div>
           </div>
+
+          {accountForm.accountType === "OTHER" && (
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                Specify Account Type *
+              </label>
+              <input
+                required
+                value={accountForm.otherAccountType}
+                onChange={(e) =>
+                  setAccountForm({ ...accountForm, otherAccountType: e.target.value })
+                }
+                placeholder="e.g. Demat Account, Chit Fund, Gold Loan"
+                className="w-full px-4 py-2.5 border border-indigo-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none ring-2 ring-indigo-50"
+              />
+            </div>
+          )}
 
           {["SAVINGS", "CURRENT"].includes(accountForm.accountType) && (
             <div className="grid grid-cols-3 gap-3">
@@ -620,7 +680,7 @@ export function AccountsClient({ initialAccounts, userId }: AccountsClientProps)
               className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
             />
             <label htmlFor="isAgency" className="text-xs font-semibold text-slate-700 cursor-pointer">
-              Mark as official Agency Account (auto-syncs drawings/expenses)
+              Mark as official Agency Account (Supports multiple agency accounts)
             </label>
           </div>
 
@@ -787,7 +847,7 @@ export function AccountsClient({ initialAccounts, userId }: AccountsClientProps)
                 className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
               />
               <label htmlFor="editIsAgency" className="text-xs font-semibold text-slate-700 cursor-pointer">
-                Mark as official Agency Account
+                Mark as official Agency Account (Supports multiple agency accounts)
               </label>
             </div>
 
@@ -884,7 +944,7 @@ export function AccountsClient({ initialAccounts, userId }: AccountsClientProps)
               <select
                 value={txnForm.type}
                 onChange={(e) =>
-                  setTxnForm({ ...txnForm, type: e.target.value as PersonalTxnType })
+                  setTxnForm({ ...txnForm, type: e.target.value as PersonalTxnType | "OTHER" })
                 }
                 className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
               >
@@ -894,6 +954,7 @@ export function AccountsClient({ initialAccounts, userId }: AccountsClientProps)
                 <option value="RECEIVED_FROM">Received From Someone</option>
                 <option value="AGENCY_DEPOSIT">Capital Deposit to Agency</option>
                 <option value="AGENCY_WITHDRAWAL">Drawing from Agency</option>
+                <option value="OTHER">Other</option>
               </select>
             </div>
             <div>
@@ -911,6 +972,54 @@ export function AccountsClient({ initialAccounts, userId }: AccountsClientProps)
               />
             </div>
           </div>
+
+          {txnForm.type === "OTHER" && (
+            <div className="p-3.5 bg-indigo-50/60 border border-indigo-100 rounded-2xl space-y-3">
+              <div>
+                <label className="block text-xs font-bold text-indigo-900 uppercase tracking-wider mb-1.5">
+                  Specify Transaction Type *
+                </label>
+                <input
+                  required
+                  value={txnForm.otherType}
+                  onChange={(e) => setTxnForm({ ...txnForm, otherType: e.target.value })}
+                  placeholder="e.g. Consulting Fee, Penalty, Asset Sale, Gift"
+                  className="w-full px-4 py-2.5 border border-indigo-200 bg-white rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-indigo-900 uppercase tracking-wider mb-1.5">
+                  Transaction Flow (Balance Effect) *
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setTxnForm({ ...txnForm, otherTypeFlow: "EXPENSE" })}
+                    className={cn(
+                      "py-2 px-3 rounded-xl text-xs font-bold border transition flex items-center justify-center gap-1.5 cursor-pointer",
+                      txnForm.otherTypeFlow === "EXPENSE"
+                        ? "bg-rose-600 text-white border-rose-600 shadow-sm"
+                        : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                    )}
+                  >
+                    <span>↓</span> Money Out (Debit / Expense)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTxnForm({ ...txnForm, otherTypeFlow: "INCOME" })}
+                    className={cn(
+                      "py-2 px-3 rounded-xl text-xs font-bold border transition flex items-center justify-center gap-1.5 cursor-pointer",
+                      txnForm.otherTypeFlow === "INCOME"
+                        ? "bg-emerald-600 text-white border-emerald-600 shadow-sm"
+                        : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                    )}
+                  >
+                    <span>↑</span> Money In (Credit / Income)
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           <div>
             <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
@@ -967,6 +1076,7 @@ export function AccountsClient({ initialAccounts, userId }: AccountsClientProps)
                 <option value="NET_BANKING">Net Banking</option>
                 <option value="DEBIT_CARD">Debit Card</option>
                 <option value="CREDIT_CARD">Credit Card</option>
+                <option value="OTHER">Other</option>
               </select>
             </div>
             <div>
@@ -981,6 +1091,21 @@ export function AccountsClient({ initialAccounts, userId }: AccountsClientProps)
               />
             </div>
           </div>
+
+          {txnForm.paymentMode === "OTHER" && (
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                Specify Payment Mode *
+              </label>
+              <input
+                required
+                value={txnForm.otherPaymentMode}
+                onChange={(e) => setTxnForm({ ...txnForm, otherPaymentMode: e.target.value })}
+                placeholder="e.g. Demand Draft, RTGS, QR Scanner, Crypto"
+                className="w-full px-4 py-2.5 border border-indigo-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none ring-2 ring-indigo-50"
+              />
+            </div>
+          )}
 
           <div className="grid grid-cols-1 gap-4">
             <div>

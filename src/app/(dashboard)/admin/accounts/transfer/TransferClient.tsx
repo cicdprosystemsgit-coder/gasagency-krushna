@@ -44,6 +44,7 @@ export function TransferClient({ accounts }: TransferClientProps) {
   const [amount, setAmount] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [paymentMode, setPaymentMode] = useState("BANK_TRANSFER");
+  const [otherPaymentMode, setOtherPaymentMode] = useState("");
   const [referenceNo, setReferenceNo] = useState("");
   const [description, setDescription] = useState("");
   const [notes, setNotes] = useState("");
@@ -54,23 +55,13 @@ export function TransferClient({ accounts }: TransferClientProps) {
   // Selected accounts objects
   const fromAccount = accounts.find((a) => a.id === fromAccountId);
   const toAccount = accounts.find((a) => a.id === toAccountId);
-  const agencyAccount = accounts.find((a) => a.isAgencyAccount);
+  const agencyAccounts = accounts.filter((a) => a.isAgencyAccount);
 
   const transferAmount = Number(amount) || 0;
 
   // Expected ending balances
   const fromBalanceAfter = fromAccount ? fromAccount.currentBalance - transferAmount : 0;
   const toBalanceAfter = toAccount ? toAccount.currentBalance + transferAmount : 0;
-
-  // Quick prefill for Agency Account
-  function handleQuickPrefillAgency() {
-    if (agencyAccount) {
-      setToAccountId(agencyAccount.id);
-      if (fromAccountId === agencyAccount.id) {
-        setFromAccountId(""); // clear source if same
-      }
-    }
-  }
 
   // Pre-submit validation
   function handlePreSubmit(e: React.FormEvent) {
@@ -98,6 +89,10 @@ export function TransferClient({ accounts }: TransferClientProps) {
       setError("Please select a transfer date");
       return;
     }
+    if (paymentMode === "OTHER" && !otherPaymentMode.trim()) {
+      setError("Please specify the payment mode / type");
+      return;
+    }
 
     setConfirmModal(true);
   }
@@ -109,10 +104,11 @@ export function TransferClient({ accounts }: TransferClientProps) {
     setSuccess("");
 
     startTransition(async () => {
+      const effectivePaymentMode = paymentMode === "OTHER" ? otherPaymentMode.trim() : paymentMode;
       const result = await addTransfer(fromAccountId, toAccountId, transferAmount, {
         date,
         description: description || undefined,
-        paymentMode,
+        paymentMode: effectivePaymentMode,
         referenceNo: referenceNo || undefined,
         notes: notes || undefined,
       });
@@ -125,6 +121,8 @@ export function TransferClient({ accounts }: TransferClientProps) {
         setFromAccountId("");
         setToAccountId("");
         setAmount("");
+        setPaymentMode("BANK_TRANSFER");
+        setOtherPaymentMode("");
         setReferenceNo("");
         setDescription("");
         setNotes("");
@@ -165,7 +163,7 @@ export function TransferClient({ accounts }: TransferClientProps) {
                 <option value="">-- Choose Account --</option>
                 {accounts.map((a) => (
                   <option key={a.id} value={a.id}>
-                    {a.name} ({formatCurrency(a.currentBalance)})
+                    {a.isAgencyAccount ? "⭐ [AGENCY] " : ""}{a.name} ({formatCurrency(a.currentBalance)})
                   </option>
                 ))}
               </select>
@@ -192,18 +190,32 @@ export function TransferClient({ accounts }: TransferClientProps) {
 
             {/* To Account block */}
             <div className="md:col-span-3 space-y-2">
-              <div className="flex justify-between items-center">
+              <div className="flex flex-wrap justify-between items-center gap-1">
                 <label className="block text-[11px] font-black text-slate-400 uppercase tracking-wider">
                   Destination Account (Credit)
                 </label>
-                {agencyAccount && toAccountId !== agencyAccount.id && (
-                  <button
-                    type="button"
-                    onClick={handleQuickPrefillAgency}
-                    className="text-[10px] font-bold text-amber-600 hover:text-amber-700 bg-amber-50 hover:bg-amber-100 px-2 py-0.5 rounded transition flex items-center gap-1 cursor-pointer"
-                  >
-                    <Building className="w-3 h-3" /> Quick Agency Select
-                  </button>
+                {agencyAccounts.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-1">
+                    {agencyAccounts.map((acc) => (
+                      <button
+                        key={acc.id}
+                        type="button"
+                        onClick={() => {
+                          setToAccountId(acc.id);
+                          if (fromAccountId === acc.id) setFromAccountId("");
+                        }}
+                        className={cn(
+                          "text-[10px] font-bold px-2 py-0.5 rounded transition flex items-center gap-1 cursor-pointer",
+                          toAccountId === acc.id
+                            ? "bg-amber-500 text-white"
+                            : "text-amber-700 hover:text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200"
+                        )}
+                        title={`Quick select ${acc.name}`}
+                      >
+                        <Building className="w-3 h-3" /> {acc.name}
+                      </button>
+                    ))}
+                  </div>
                 )}
               </div>
               <select
@@ -214,7 +226,7 @@ export function TransferClient({ accounts }: TransferClientProps) {
                 <option value="">-- Choose Account --</option>
                 {accounts.map((a) => (
                   <option key={a.id} value={a.id}>
-                    {a.name} ({formatCurrency(a.currentBalance)})
+                    {a.isAgencyAccount ? "⭐ [AGENCY] " : ""}{a.name} ({formatCurrency(a.currentBalance)})
                   </option>
                 ))}
               </select>
@@ -280,6 +292,7 @@ export function TransferClient({ accounts }: TransferClientProps) {
                 <option value="UPI">UPI (GPay / PhonePe / Paytm)</option>
                 <option value="CASH">Cash Withdrawal/Deposit</option>
                 <option value="CHEQUE">Cheque Transfer</option>
+                <option value="OTHER">Other</option>
               </select>
             </div>
 
@@ -295,6 +308,21 @@ export function TransferClient({ accounts }: TransferClientProps) {
               />
             </div>
           </div>
+
+          {paymentMode === "OTHER" && (
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                Specify Payment Mode / Type *
+              </label>
+              <input
+                required
+                value={otherPaymentMode}
+                onChange={(e) => setOtherPaymentMode(e.target.value)}
+                placeholder="e.g. Demand Draft, Internal Journal, Crypto"
+                className="w-full px-4 py-2.5 border border-indigo-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none ring-2 ring-indigo-50"
+              />
+            </div>
+          )}
 
           <div>
             <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
@@ -348,7 +376,7 @@ export function TransferClient({ accounts }: TransferClientProps) {
             </div>
             <div className="flex justify-between items-center text-xs">
               <span className="font-semibold text-slate-500">Mode:</span>
-              <span className="font-bold text-indigo-600">{paymentMode}</span>
+              <span className="font-bold text-indigo-600">{paymentMode === "OTHER" ? otherPaymentMode : paymentMode}</span>
             </div>
           </div>
 

@@ -29,14 +29,6 @@ export async function createPersonalAccount(data: {
 
     if (!data.name.trim()) return { error: "Account name is required" };
 
-    // If setting as primary agency account, clear isAgencyAccount on other accounts of this agency
-    if (data.isAgencyAccount) {
-      await prisma.personalAccount.updateMany({
-        where: { agencyId, isAgencyAccount: true },
-        data: { isAgencyAccount: false },
-      });
-    }
-
     const account = await prisma.personalAccount.create({
       data: {
         agencyId,
@@ -56,6 +48,7 @@ export async function createPersonalAccount(data: {
     });
 
     revalidatePath("/admin/accounts");
+    revalidatePath("/admin/accounts/agency-account");
     return { success: true, account };
   } catch (error: any) {
     return { error: error.message || "Failed to create account" };
@@ -86,14 +79,6 @@ export async function updatePersonalAccount(
     });
     if (!existingAccount) return { error: "Account not found" };
 
-    // If changing to primary agency account, clear others
-    if (data.isAgencyAccount && !existingAccount.isAgencyAccount) {
-      await prisma.personalAccount.updateMany({
-        where: { agencyId, isAgencyAccount: true },
-        data: { isAgencyAccount: false },
-      });
-    }
-
     const account = await prisma.personalAccount.update({
       where: { id, agencyId },
       data: {
@@ -102,7 +87,7 @@ export async function updatePersonalAccount(
         accountNo: data.accountNo?.trim() || null,
         ifscCode: data.ifscCode?.trim() || null,
         openingBalance: data.openingBalance,
-        isAgencyAccount: !!data.isAgencyAccount,
+        isAgencyAccount: data.isAgencyAccount !== undefined ? !!data.isAgencyAccount : existingAccount.isAgencyAccount,
         color: data.color || "#4F46E5",
         notes: data.notes?.trim() || null,
         isActive: data.isActive !== undefined ? data.isActive : existingAccount.isActive,
@@ -115,6 +100,7 @@ export async function updatePersonalAccount(
     }
 
     revalidatePath("/admin/accounts");
+    revalidatePath("/admin/accounts/agency-account");
     revalidatePath(`/admin/accounts/${id}`);
     return { success: true, account };
   } catch (error: any) {

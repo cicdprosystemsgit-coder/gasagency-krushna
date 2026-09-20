@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import dynamic from "next/dynamic";
-import { Warehouse, Truck, MapPin, Map } from "lucide-react";
+import { Warehouse, Truck, MapPin, Map, CheckCircle2 } from "lucide-react";
 import { GodownClient } from "./GodownClient";
 import { InternalVehiclesClient } from "./InternalVehiclesClient";
+import { DeliveryRequestsClient, GodownDeliveryRequest } from "../../godown-keeper/delivery-requests/DeliveryRequestsClient";
 
 import { DateNavigationHeader } from "@/components/ui/DateNavigationHeader";
 
@@ -34,12 +35,17 @@ interface Props {
   cylinderTypes: any[];
   isAdmin: boolean;
   userId: string;
+  userRole?: string;
   
   // For Map view
   mapRecords: any[];
   mapTrips: any[];
   mapMovements: any[];
   selectedDate: string;
+
+  // For Delivery Requests & Vehicle Loading Flow
+  deliveryRequests?: GodownDeliveryRequest[];
+  products?: any[];
 }
 
 export function GodownTabsContainer({
@@ -52,18 +58,23 @@ export function GodownTabsContainer({
   cylinderTypes,
   isAdmin,
   userId,
+  userRole = "ADMIN",
   mapRecords,
   mapTrips,
   mapMovements,
   selectedDate,
+  deliveryRequests = [],
+  products = [],
 }: Props) {
-  const [activeTab, setActiveTab] = useState<"supply" | "fleet" | "live">("supply");
+  const [activeTab, setActiveTab] = useState<"supply" | "fleet" | "requests" | "live">("supply");
+
+  const approvedRequestsCount = deliveryRequests.filter((r) => r.status === "APPROVED").length;
 
   return (
     <div className="space-y-6">
       {/* Header bar with Tab selection and Date selector */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-3 rounded-2xl bg-white border border-slate-200/80 shadow-xs">
-        <div className="flex items-center gap-1.5 p-1 rounded-xl bg-slate-100/80 border border-slate-200/60 w-full sm:w-fit backdrop-blur-xs">
+        <div className="flex flex-wrap items-center gap-1.5 p-1 rounded-xl bg-slate-100/80 border border-slate-200/60 w-full sm:w-fit backdrop-blur-xs">
           <button
             onClick={() => setActiveTab("supply")}
             className={`flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-[13px] font-semibold transition-all duration-200 ${
@@ -86,6 +97,23 @@ export function GodownTabsContainer({
           >
             <Truck className="w-4 h-4" />
             <span>Internal Fleet</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab("requests")}
+            className={`flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-[13px] font-semibold transition-all duration-200 ${
+              activeTab === "requests"
+                ? "bg-white text-indigo-600 shadow-sm border border-slate-200/50"
+                : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/50"
+            }`}
+          >
+            <Truck className="w-4 h-4" />
+            <span>Vehicle Loading</span>
+            {approvedRequestsCount > 0 && (
+              <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-indigo-600 text-white shadow-xs animate-pulse">
+                {approvedRequestsCount}
+              </span>
+            )}
           </button>
 
           <button
@@ -135,7 +163,7 @@ export function GodownTabsContainer({
             <div className="flex items-center gap-2 px-1">
               <div className="w-2 h-2 rounded-full bg-emerald-600" />
               <p className="text-[12px] font-bold uppercase tracking-wider text-slate-500">
-                Internal Delivery Fleet
+                Internal Delivery Fleet & Vehicle Loading
               </p>
             </div>
             <InternalVehiclesClient
@@ -146,6 +174,25 @@ export function GodownTabsContainer({
               userId={userId}
               cylinderTypes={cylinderTypes}
               selectedDate={selectedDate}
+              deliveryRequests={deliveryRequests}
+              products={products.length > 0 ? products : cylinderTypes}
+            />
+          </div>
+        )}
+
+        {activeTab === "requests" && (
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 px-1">
+              <div className="w-2 h-2 rounded-full bg-indigo-600" />
+              <p className="text-[12px] font-bold uppercase tracking-wider text-slate-500">
+                Delivery Boy Cylinder Count Requests & Vehicle Loading Dispatch
+              </p>
+            </div>
+            <DeliveryRequestsClient
+              initialRequests={deliveryRequests}
+              products={products.length > 0 ? products : cylinderTypes}
+              userId={userId}
+              userRole={userRole}
             />
           </div>
         )}

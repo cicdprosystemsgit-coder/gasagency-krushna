@@ -89,6 +89,7 @@ export function AccountStatementClient({ account, initialTransactions }: Account
     partyName: "",
     partyPhone: "",
     paymentMode: "",
+    otherPaymentMode: "",
     referenceNo: "",
     notes: "",
   });
@@ -172,6 +173,7 @@ export function AccountStatementClient({ account, initialTransactions }: Account
 
   // Edit / Delete Handlers
   function openEditModal(txn: Transaction) {
+    const isStandardMode = ["UPI", "CASH", "CHEQUE", "NET_BANKING", "DEBIT_CARD", "CREDIT_CARD"].includes(txn.paymentMode || "");
     setSelectedTxn(txn);
     setEditForm({
       date: new Date(txn.date).toISOString().split("T")[0],
@@ -179,7 +181,8 @@ export function AccountStatementClient({ account, initialTransactions }: Account
       description: txn.description,
       partyName: txn.partyName || "",
       partyPhone: txn.partyPhone || "",
-      paymentMode: txn.paymentMode || "UPI",
+      paymentMode: isStandardMode ? (txn.paymentMode || "UPI") : "OTHER",
+      otherPaymentMode: isStandardMode ? "" : (txn.paymentMode || ""),
       referenceNo: txn.referenceNo || "",
       notes: txn.notes || "",
     });
@@ -201,15 +204,20 @@ export function AccountStatementClient({ account, initialTransactions }: Account
       setError("Description is required");
       return;
     }
+    if (editForm.paymentMode === "OTHER" && !editForm.otherPaymentMode.trim()) {
+      setError("Please specify the payment mode");
+      return;
+    }
 
     startTransition(async () => {
+      const effectivePaymentMode = editForm.paymentMode === "OTHER" ? editForm.otherPaymentMode.trim() : editForm.paymentMode;
       const result = await editTransaction(selectedTxn.id, {
         date: editForm.date,
         amount: Number(editForm.amount),
         description: editForm.description,
         partyName: editForm.partyName,
         partyPhone: editForm.partyPhone,
-        paymentMode: editForm.paymentMode,
+        paymentMode: effectivePaymentMode,
         referenceNo: editForm.referenceNo,
         notes: editForm.notes,
       });
@@ -630,6 +638,7 @@ export function AccountStatementClient({ account, initialTransactions }: Account
                 <option value="NET_BANKING">Net Banking</option>
                 <option value="DEBIT_CARD">Debit Card</option>
                 <option value="CREDIT_CARD">Credit Card</option>
+                <option value="OTHER">Other</option>
               </select>
             </div>
             <div>
@@ -643,6 +652,21 @@ export function AccountStatementClient({ account, initialTransactions }: Account
               />
             </div>
           </div>
+
+          {editForm.paymentMode === "OTHER" && (
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                Specify Payment Mode *
+              </label>
+              <input
+                required
+                value={editForm.otherPaymentMode}
+                onChange={(e) => setEditForm({ ...editForm, otherPaymentMode: e.target.value })}
+                placeholder="e.g. Demand Draft, RTGS, QR Scanner, Crypto"
+                className="w-full px-4 py-2.5 border border-indigo-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none ring-2 ring-indigo-50"
+              />
+            </div>
+          )}
 
           <div>
             <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">

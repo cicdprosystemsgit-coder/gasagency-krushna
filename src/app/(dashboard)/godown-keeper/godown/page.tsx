@@ -1,4 +1,4 @@
-﻿import { getSessionWithFeatures, requireFeature } from "@/lib/feature-gate";
+import { getSessionWithFeatures, requireFeature } from "@/lib/feature-gate";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
@@ -30,7 +30,7 @@ export default async function GodownKeeperGodownPage({ searchParams }: PageProps
   const dateEnd = new Date(targetDate);
   dateEnd.setHours(23, 59, 59, 999);
 
-  const [records, totals, deliveryVehicles, deliveryBoys, todayTripLogs, cylinderTypes] = await Promise.all([
+  const [records, totals, deliveryVehicles, deliveryBoys, todayTripLogs, cylinderTypes, deliveryRequests, allProducts] = await Promise.all([
     prisma.godownRecord.findMany({
       where: {
         agencyId: session.agencyId!,
@@ -70,7 +70,63 @@ export default async function GodownKeeperGodownPage({ searchParams }: PageProps
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     }),
+    prisma.deliveryCountRequest.findMany({
+      where: {
+        agencyId: session.agencyId!,
+        status: { in: ["APPROVED", "FULFILLED", "PENDING"] },
+      },
+      orderBy: { date: "desc" },
+      take: 100,
+      include: {
+        requestedBy: {
+          select: {
+            id: true,
+            name: true,
+            phone: true,
+            assignedVehicle: {
+              select: { id: true, vehicleNo: true, vehicleName: true, vehicleType: true },
+            },
+          },
+        },
+        reviewedBy: { select: { name: true } },
+        fulfilledBy: { select: { name: true } },
+      },
+    }),
+    prisma.product.findMany({
+      where: { agencyId: session.agencyId!, isActive: true },
+      select: { id: true, name: true, isCylinder: true },
+      orderBy: { name: "asc" },
+    }),
   ]);
+
+  const serializedRequests = deliveryRequests.map((r) => ({
+    id: r.id,
+    date: r.date.toISOString(),
+    items: r.items as Array<{ productId: string; productName: string; requestedQty: number }>,
+    totalRequested: r.totalRequested,
+    notes: r.notes,
+    status: r.status,
+    reviewNote: r.reviewNote,
+    reviewedBy: r.reviewedBy?.name || null,
+    reviewedAt: r.reviewedAt ? r.reviewedAt.toISOString() : null,
+    fulfilledItems: r.fulfilledItems
+      ? (r.fulfilledItems as Array<{ productId: string; productName: string; loadedQty: number }>)
+      : null,
+    totalLoaded: r.totalLoaded,
+    fuelLitres: r.fuelLitres,
+    fuelAmount: r.fuelAmount,
+    fuelType: r.fuelType,
+    fulfilledBy: r.fulfilledBy?.name || null,
+    fulfilledAt: r.fulfilledAt ? r.fulfilledAt.toISOString() : null,
+    godownNotes: r.godownNotes,
+    createdAt: r.createdAt.toISOString(),
+    deliveryBoy: {
+      id: r.requestedBy.id,
+      name: r.requestedBy.name,
+      phone: r.requestedBy.phone,
+      vehicle: r.requestedBy.assignedVehicle || null,
+    },
+  }));
 
   return (
     <Suspense fallback={
@@ -88,6 +144,8 @@ export default async function GodownKeeperGodownPage({ searchParams }: PageProps
         initialTripLogs={todayTripLogs}
         deliveryBoys={deliveryBoys}
         selectedDate={selectedDate}
+        deliveryRequests={serializedRequests}
+        products={allProducts}
       />
     </Suspense>
   );

@@ -12,10 +12,33 @@ import { approveOrRejectSummary } from "@/app/actions/approvals";
 import { approveSalaryRequest, rejectSalaryRequest, managerApproveSalaryRequest, managerRejectSalaryRequest } from "@/app/actions/salary-requests";
 import { reviewLeave } from "@/app/actions/leave";
 import { adminReviewEmployeeExpense, managerReviewEmployeeExpense } from "@/app/actions/expenses";
+import { reviewDeliveryCountRequest, bulkReviewDeliveryCountRequests } from "@/app/actions/delivery-count-requests";
 import { toast } from "sonner";
-import { Receipt } from "lucide-react";
+import { Receipt, Truck, Fuel } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
+
+export interface DeliveryCountRequestItem {
+  id: string;
+  date: Date | string;
+  items: Array<{ productId: string; productName: string; requestedQty: number }>;
+  totalRequested: number;
+  notes: string | null;
+  status: "PENDING" | "APPROVED" | "REJECTED" | "FULFILLED";
+  reviewNote: string | null;
+  reviewedAt: Date | string | null;
+  reviewedBy: { name: string } | null;
+  requestedBy: { id: string; name: string; phone?: string | null };
+  fulfilledBy: { name: string } | null;
+  fulfilledItems: Array<{ productId: string; productName: string; loadedQty: number }> | null;
+  totalLoaded: number | null;
+  fuelLitres: number | null;
+  fuelAmount: number | null;
+  fuelType: string | null;
+  fulfilledAt: Date | string | null;
+  godownNotes: string | null;
+  createdAt: Date | string;
+}
 
 interface EmployeeExpenseItem {
   id: string;
@@ -122,6 +145,7 @@ export function ApprovalsClient({
   initialSalaryRequests,
   initialLeaveRequests,
   initialEmployeeExpenses = [],
+  initialDeliveryRequests = [],
   role,
   userId,
 }: {
@@ -129,15 +153,17 @@ export function ApprovalsClient({
   initialSalaryRequests: SalaryRequest[];
   initialLeaveRequests: LeaveRequest[];
   initialEmployeeExpenses?: EmployeeExpenseItem[];
+  initialDeliveryRequests?: DeliveryCountRequestItem[];
   role: string;
   userId: string;
 }) {
-  const [activeTab, setActiveTab] = useState<"daily" | "salary" | "leave" | "expense">("daily");
+  const [activeTab, setActiveTab] = useState<"daily" | "salary" | "leave" | "expense" | "delivery">("daily");
 
   const [summaries, setSummaries]           = useState(initialSummaries);
   const [salaryRequests, setSalaryRequests] = useState(initialSalaryRequests);
   const [leaveRequests, setLeaveRequests]   = useState(initialLeaveRequests);
   const [employeeExpenses, setEmployeeExpenses] = useState(initialEmployeeExpenses);
+  const [deliveryRequests, setDeliveryRequests] = useState(initialDeliveryRequests || []);
 
   const pendingSummaries = summaries.filter((s) => s.status === "PENDING").length;
   const pendingSalary    = salaryRequests.filter((r) => r.status === "PENDING").length;
@@ -145,6 +171,7 @@ export function ApprovalsClient({
   const pendingExpense   = employeeExpenses.filter((e) =>
     role === "ADMIN" ? e.status === "MANAGER_APPROVED" || e.status === "PENDING" : e.status === "PENDING"
   ).length;
+  const pendingDelivery  = deliveryRequests.filter((d) => d.status === "PENDING").length;
 
   return (
     <>
@@ -155,6 +182,12 @@ export function ApprovalsClient({
           badge={pendingSummaries}
           active={activeTab === "daily"}
           onClick={() => setActiveTab("daily")}
+        />
+        <TabBtn
+          label="Delivery Loads"
+          badge={pendingDelivery}
+          active={activeTab === "delivery"}
+          onClick={() => setActiveTab("delivery")}
         />
         <TabBtn
           label="Salary Requests"
@@ -183,6 +216,18 @@ export function ApprovalsClient({
           userId={userId}
           onUpdate={(updated) =>
             setSummaries((prev) => prev.map((s) => (s.id === updated.id ? updated : s)))
+          }
+        />
+      )}
+
+      {activeTab === "delivery" && (
+        <DeliveryCountRequestsSection
+          requests={deliveryRequests}
+          role={role}
+          onUpdate={(updated: DeliveryCountRequestItem) =>
+            setDeliveryRequests((prev: DeliveryCountRequestItem[]) =>
+              prev.map((d: DeliveryCountRequestItem) => (d.id === updated.id ? updated : d))
+            )
           }
         />
       )}
@@ -1470,6 +1515,428 @@ function EmployeeExpensesSection({
         </Modal>
       )}
     </div>
+  );
+}
+
+// ─── Section 5: Delivery Count / Load Requests ───────────────────────────────
+
+function DeliveryCountRequestsSection({
+  requests,
+  role,
+  onUpdate,
+}: {
+  requests: DeliveryCountRequestItem[];
+  role: string;
+  onUpdate: (r: DeliveryCountRequestItem) => void;
+}) {
+  const [filter, setFilter] = useState<"PENDING" | "APPROVED" | "FULFILLED" | "REJECTED" | "ALL">("PENDING");
+  const [viewModal, setViewModal] = useState<DeliveryCountRequestItem | null>(null);
+  const [rejectModal, setRejectModal] = useState<DeliveryCountRequestItem | null>(null);
+  const [rejectNote, setRejectNote] = useState("");
+  const [isPending, startTransition] = useTransition();
+
+  const filtered = filter === "ALL" ? requests : requests.filter((r) => r.status === filter);
+
+  const pendingCount = requests.filter((r) => r.status === "PENDING").length;
+  const approvedCount = requests.filter((r) => r.status === "APPROVED").length;
+  const fulfilledCount = requests.filter((r) => r.status === "FULFILLED").length;
+  const rejectedCount = requests.filter((r) => r.status === "REJECTED").length;
+
+  const totalCylindersPending = requests
+    .filter((r) => r.status === "PENDING")
+    .reduce((sum, r) => sum + (r.totalRequested || 0), 0);
+
+  function handleApprove(id: string) {
+    startTransition(async () => {
+      const result = await reviewDeliveryCountRequest(id, "APPROVED");
+      if (result.error) {
+        toast.error(result.error);
+        return;
+      }
+      if (result.request) {
+        onUpdate(result.request as unknown as DeliveryCountRequestItem);
+        toast.success("Delivery count request approved! Sent to Godown Keeper for vehicle loading.");
+        if (viewModal?.id === id) setViewModal(null);
+      }
+    });
+  }
+
+  function handleReject() {
+    if (!rejectModal || !rejectNote.trim()) {
+      toast.error("Please enter a rejection reason");
+      return;
+    }
+    startTransition(async () => {
+      const result = await reviewDeliveryCountRequest(rejectModal.id, "REJECTED", rejectNote.trim());
+      if (result.error) {
+        toast.error(result.error);
+        return;
+      }
+      if (result.request) {
+        onUpdate(result.request as unknown as DeliveryCountRequestItem);
+        toast.success("Request rejected.");
+        setRejectModal(null);
+        setRejectNote("");
+        if (viewModal?.id === rejectModal.id) setViewModal(null);
+      }
+    });
+  }
+
+  return (
+    <>
+      {/* KPI Stats Strip */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+        {[
+          { label: "Pending Approval", val: pendingCount, sub: `${totalCylindersPending} cyl`, color: "#D97706", bg: "#FFFBEB" },
+          { label: "Approved (Ready for Godown)", val: approvedCount, sub: "awaiting vehicle load", color: "#2563EB", bg: "#EFF6FF" },
+          { label: "Vehicle Loaded & Fulfilled", val: fulfilledCount, sub: "completed", color: "#16A34A", bg: "#F0FDF4" },
+          { label: "Rejected", val: rejectedCount, sub: "disapproved", color: "#DC2626", bg: "#FEF2F2" },
+        ].map(({ label, val, sub, color, bg }) => (
+          <div key={label} className="rounded-xl px-4 py-3" style={{ background: bg, border: `1px solid ${color}22` }}>
+            <p className="text-[11px] font-medium mb-0.5 text-zinc-500">{label}</p>
+            <p className="text-[20px] font-bold" style={{ color }}>{val}</p>
+            <p className="text-[11px] text-zinc-400 mt-0.5">{sub}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Info Banner when pending */}
+      {pendingCount > 0 && filter === "PENDING" && (
+        <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl mb-4 bg-blue-50 border border-blue-200">
+          <div className="flex items-center gap-2.5">
+            <Truck className="w-4 h-4 text-blue-600 shrink-0" />
+            <p className="text-[13px] text-blue-900">
+              <strong>{pendingCount} delivery boy load request{pendingCount > 1 ? "s" : ""}</strong> ({totalCylindersPending} cylinders) waiting for your approval.
+              Approved requests instantly appear on the <strong>Godown Keeper dashboard</strong> for vehicle filling.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Filter tabs */}
+      <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+        <div className="flex gap-1.5 overflow-x-auto">
+          {(["PENDING", "APPROVED", "FULFILLED", "REJECTED", "ALL"] as const).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setFilter(tab)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
+                filter === tab
+                  ? "bg-zinc-900 text-white shadow-xs"
+                  : "bg-white text-zinc-600 border border-zinc-200 hover:bg-zinc-50"
+              }`}
+            >
+              {tab === "ALL" ? "All Requests" : tab.charAt(0) + tab.slice(1).toLowerCase()}
+              {tab === "PENDING" && pendingCount > 0 && (
+                <span className="ml-1.5 px-1.5 py-0.2 bg-amber-500 text-white rounded-full text-[10px]">
+                  {pendingCount}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+
+        <span className="text-xs text-zinc-500">
+          Showing {filtered.length} of {requests.length} records
+        </span>
+      </div>
+
+      {/* Table */}
+      <div className="bg-white rounded-xl border border-zinc-200 shadow-xs overflow-hidden">
+        {filtered.length === 0 ? (
+          <div className="py-16 text-center text-zinc-500">
+            <Truck className="w-10 h-10 mx-auto text-zinc-300 mb-2" />
+            <p className="text-sm font-medium text-zinc-700">No {filter.toLowerCase()} requests</p>
+            <p className="text-xs text-zinc-400 mt-0.5">Switch filter tabs to view other records</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="border-b border-zinc-200 bg-zinc-50 text-zinc-600 font-semibold uppercase tracking-wider text-[11px]">
+                  <th className="py-3 px-4">Date</th>
+                  <th className="py-3 px-4">Delivery Boy</th>
+                  <th className="py-3 px-4">Requested Products</th>
+                  <th className="py-3 px-4 text-right">Total Qty</th>
+                  <th className="py-3 px-4 text-center">Status</th>
+                  <th className="py-3 px-4">Godown Loading / Review</th>
+                  <th className="py-3 px-4 text-center">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-200 text-zinc-700">
+                {filtered.map((r) => {
+                  const isPendingRow = r.status === "PENDING";
+                  return (
+                    <tr key={r.id} className="hover:bg-zinc-50/80 transition">
+                      <td className="py-3 px-4 font-semibold text-zinc-900 whitespace-nowrap">
+                        {formatDate(new Date(r.date))}
+                        <div className="text-[10px] font-normal text-zinc-400">
+                          {formatDateTime(new Date(r.createdAt))}
+                        </div>
+                      </td>
+
+                      <td className="py-3 px-4 whitespace-nowrap">
+                        <p className="font-semibold text-zinc-900">{r.requestedBy.name}</p>
+                        {r.requestedBy.phone && (
+                          <p className="text-[11px] text-zinc-400">{r.requestedBy.phone}</p>
+                        )}
+                      </td>
+
+                      <td className="py-3 px-4 max-w-xs">
+                        <div className="flex flex-wrap gap-1">
+                          {r.items.map((it, idx) => (
+                            <span
+                              key={idx}
+                              className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-zinc-100 text-zinc-800 border border-zinc-200"
+                            >
+                              {it.productName}: <strong>{it.requestedQty}</strong>
+                            </span>
+                          ))}
+                        </div>
+                        {r.notes && (
+                          <p className="text-[11px] text-zinc-500 mt-1 italic line-clamp-1">
+                            Note: {r.notes}
+                          </p>
+                        )}
+                      </td>
+
+                      <td className="py-3 px-4 text-right font-bold text-blue-700 text-sm whitespace-nowrap">
+                        {r.totalRequested} cyl
+                      </td>
+
+                      <td className="py-3 px-4 text-center whitespace-nowrap">
+                        {r.status === "PENDING" && (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-amber-50 text-amber-700 border border-amber-200">
+                            <Clock className="w-3 h-3 animate-pulse" /> Pending
+                          </span>
+                        )}
+                        {r.status === "APPROVED" && (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-blue-50 text-blue-700 border border-blue-200">
+                            <CheckCircle2 className="w-3 h-3" /> Approved
+                          </span>
+                        )}
+                        {r.status === "FULFILLED" && (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            <Truck className="w-3 h-3" /> Fulfilled
+                          </span>
+                        )}
+                        {r.status === "REJECTED" && (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-rose-50 text-rose-700 border border-rose-200">
+                            <XCircle className="w-3 h-3" /> Rejected
+                          </span>
+                        )}
+                      </td>
+
+                      <td className="py-3 px-4 text-xs text-zinc-600">
+                        {r.status === "FULFILLED" ? (
+                          <div className="space-y-0.5">
+                            <div className="font-semibold text-emerald-700">
+                              Loaded: {r.totalLoaded} cyl by {r.fulfilledBy?.name || "Godown"}
+                            </div>
+                            {r.fuelLitres != null && (
+                              <div className="text-[11px] text-zinc-500">
+                                Fuel: {r.fuelLitres}L (₹{r.fuelAmount || 0})
+                              </div>
+                            )}
+                          </div>
+                        ) : r.reviewedBy ? (
+                          <div>
+                            Approved by <strong className="text-zinc-800">{r.reviewedBy.name}</strong>
+                          </div>
+                        ) : (
+                          <span className="text-zinc-400">Needs review</span>
+                        )}
+                      </td>
+
+                      <td className="py-3 px-4 text-center whitespace-nowrap">
+                        <div className="flex items-center justify-center gap-1.5">
+                          <button
+                            onClick={() => setViewModal(r)}
+                            className="p-1.5 text-zinc-500 hover:text-zinc-800 hover:bg-zinc-100 rounded-md transition border border-zinc-200"
+                            title="View Details"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                          </button>
+
+                          {isPendingRow && (
+                            <>
+                              <button
+                                onClick={() => handleApprove(r.id)}
+                                disabled={isPending}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-md transition"
+                                title="Approve Request"
+                              >
+                                <CheckCircle2 className="w-3.5 h-3.5" /> Approve
+                              </button>
+
+                              <button
+                                onClick={() => {
+                                  setRejectModal(r);
+                                  setRejectNote("");
+                                }}
+                                disabled={isPending}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-300 rounded-md transition"
+                                title="Reject Request"
+                              >
+                                <XCircle className="w-3.5 h-3.5" /> Reject
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Reject Reason Modal */}
+      {rejectModal && (
+        <Modal
+          isOpen={true}
+          onClose={() => setRejectModal(null)}
+          title="Reject Delivery Load Request"
+        >
+          <div className="space-y-4 text-sm">
+            <p className="text-xs text-zinc-600">
+              You are rejecting the load request for{" "}
+              <strong>{rejectModal.requestedBy.name}</strong> ({rejectModal.totalRequested} cylinders on{" "}
+              {formatDate(new Date(rejectModal.date))}).
+            </p>
+
+            <div>
+              <label className="block text-xs font-semibold text-zinc-700 mb-1">
+                Reason for Rejection <span className="text-rose-500">*</span>
+              </label>
+              <textarea
+                rows={3}
+                value={rejectNote}
+                onChange={(e) => setRejectNote(e.target.value)}
+                placeholder="e.g. Godown stock insufficient, vehicle maintenance today, duplicate request..."
+                className="w-full text-xs p-2.5 border border-zinc-300 rounded-lg focus:ring-2 focus:ring-rose-500 focus:outline-none"
+                required
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-zinc-200">
+              <button
+                type="button"
+                onClick={() => setRejectModal(null)}
+                className="px-3.5 py-2 text-xs font-medium text-zinc-700 hover:bg-zinc-100 rounded-lg transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isPending || !rejectNote.trim()}
+                onClick={handleReject}
+                className="px-4 py-2 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 rounded-lg transition disabled:opacity-50"
+              >
+                {isPending ? "Rejecting..." : "Confirm Rejection"}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* View Detail Modal */}
+      {viewModal && (
+        <Modal
+          isOpen={true}
+          onClose={() => setViewModal(null)}
+          title="Delivery Load Request Details"
+        >
+          <div className="space-y-4 text-sm">
+            <div className="flex justify-between items-start pb-3 border-b border-zinc-200">
+              <div>
+                <p className="font-bold text-zinc-900">{viewModal.requestedBy.name}</p>
+                <p className="text-xs text-zinc-500">
+                  Date: {formatDate(new Date(viewModal.date))} • Total: {viewModal.totalRequested} cylinders
+                </p>
+              </div>
+              <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-zinc-100 text-zinc-800">
+                {viewModal.status}
+              </span>
+            </div>
+
+            <div>
+              <h4 className="text-xs font-semibold uppercase text-zinc-500 mb-2">Requested Products</h4>
+              <div className="border border-zinc-200 rounded-lg divide-y divide-zinc-200">
+                {viewModal.items.map((it, idx) => (
+                  <div key={idx} className="flex justify-between px-3 py-2 text-xs">
+                    <span className="font-medium text-zinc-800">{it.productName}</span>
+                    <span className="font-bold text-zinc-900">{it.requestedQty} cyl</span>
+                  </div>
+                ))}
+              </div>
+              {viewModal.notes && (
+                <p className="text-xs text-zinc-500 mt-2 bg-zinc-50 p-2 rounded border border-zinc-200">
+                  <strong>Notes:</strong> {viewModal.notes}
+                </p>
+              )}
+            </div>
+
+            {viewModal.status === "FULFILLED" && (
+              <div className="bg-emerald-50 p-3 rounded-lg border border-emerald-200 space-y-2 text-xs">
+                <div className="flex justify-between font-bold text-emerald-900">
+                  <span>Godown Vehicle Loading Summary</span>
+                  <span>{viewModal.totalLoaded} cylinders loaded</span>
+                </div>
+
+                {viewModal.fulfilledItems && (
+                  <div className="bg-white rounded border border-emerald-200 divide-y divide-emerald-200">
+                    {viewModal.fulfilledItems.map((fit, idx) => (
+                      <div key={idx} className="flex justify-between px-2.5 py-1.5">
+                        <span>{fit.productName}</span>
+                        <strong className="text-emerald-700">{fit.loadedQty} loaded</strong>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {viewModal.fuelLitres != null && (
+                  <p className="text-emerald-900">
+                    Vehicle Fuel: <strong>{viewModal.fuelLitres} L</strong> ({viewModal.fuelType || "Fuel"}) - ₹{viewModal.fuelAmount || 0}
+                  </p>
+                )}
+
+                {viewModal.fulfilledBy && (
+                  <p className="text-emerald-800">
+                    Fulfilled by: <strong>{viewModal.fulfilledBy.name}</strong> on{" "}
+                    {viewModal.fulfilledAt ? formatDateTime(new Date(viewModal.fulfilledAt)) : ""}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {viewModal.status === "PENDING" && (
+              <div className="flex justify-end gap-2 pt-2 border-t border-zinc-200">
+                <button
+                  onClick={() => {
+                    const req = viewModal;
+                    setViewModal(null);
+                    setRejectModal(req);
+                  }}
+                  className="px-3.5 py-2 text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 rounded-lg transition"
+                >
+                  Reject
+                </button>
+                <button
+                  onClick={() => handleApprove(viewModal.id)}
+                  disabled={isPending}
+                  className="px-4 py-2 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition"
+                >
+                  Approve Request
+                </button>
+              </div>
+            )}
+          </div>
+        </Modal>
+      )}
+    </>
   );
 }
 

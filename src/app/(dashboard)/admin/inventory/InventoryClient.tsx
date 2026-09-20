@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Modal } from "@/components/ui/Modal";
 import { formatCurrency } from "@/lib/utils";
 import {
@@ -75,7 +76,17 @@ function StatCard({ title, value, sub, color, icon }: {
   );
 }
 
-function InventoryDashboard({ data }: { data: InventoryClientProps["dashboardData"] }) {
+function InventoryDashboard({
+  data,
+  isAdmin,
+  onEdit,
+  onDelete,
+}: {
+  data: InventoryClientProps["dashboardData"];
+  isAdmin: boolean;
+  onEdit: (productId: string) => void;
+  onDelete: (id: string, name: string) => void;
+}) {
   const marginPercent = data.salesTotalRevenue > 0 
     ? Math.round(((data.salesTotalRevenue - data.salesTotalCOGS) / data.salesTotalRevenue) * 100) 
     : 0;
@@ -178,6 +189,11 @@ function InventoryDashboard({ data }: { data: InventoryClientProps["dashboardDat
                 {["Product", "Unit Cost", "Sale Rate", "Office Stock", "Godown Stock", "Total Stock", "Stock Cost Value", "Stock Sale Value", "Potential Margin"].map((h) => (
                   <th key={h} className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-zinc-400">{h}</th>
                 ))}
+                {isAdmin && (
+                  <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-zinc-400 text-center">
+                    Actions
+                  </th>
+                )}
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-100 text-[13px]">
@@ -196,6 +212,26 @@ function InventoryDashboard({ data }: { data: InventoryClientProps["dashboardDat
                     <td className="px-4 py-3 font-bold text-emerald-600">
                       {sv.totalStock > 0 ? formatCurrency(margin * sv.totalStock) : "—"}
                     </td>
+                    {isAdmin && (
+                      <td className="px-4 py-3 text-center">
+                        <div className="flex items-center justify-center gap-1.5">
+                          <button
+                            onClick={() => onEdit(sv.productId)}
+                            title="Edit Product"
+                            className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition cursor-pointer"
+                          >
+                            <Pencil className="w-3.5 h-3.5" /> Edit
+                          </button>
+                          <button
+                            onClick={() => onDelete(sv.productId, sv.productName)}
+                            title="Delete Product"
+                            className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 );
               })}
@@ -256,6 +292,7 @@ function InventoryDashboard({ data }: { data: InventoryClientProps["dashboardDat
 }
 
 export function InventoryClient({ initialProducts, isAdmin, dashboardData }: InventoryClientProps) {
+  const router = useRouter();
   const [products, setProducts] = useState(initialProducts);
   const [activeTab, setActiveTab] = useState<"dashboard" | "external" | "cylinders">("dashboard");
   const [modalOpen, setModalOpen] = useState(false);
@@ -320,8 +357,30 @@ export function InventoryClient({ initialProducts, isAdmin, dashboardData }: Inv
         if (editProduct) setProducts((prev) => prev.map((p) => p.id === result.product!.id ? result.product! : p));
         else setProducts((prev) => [result.product!, ...prev]);
         setModalOpen(false);
+        router.refresh();
       }
     });
+  }
+
+  function handleEditFromDashboard(productId: string) {
+    const prod = products.find((p) => p.id === productId);
+    if (prod) {
+      openEdit(prod);
+    } else {
+      const sv = dashboardData.stockValuationList.find((s) => s.productId === productId);
+      if (sv) {
+        openEdit({
+          id: sv.productId,
+          name: sv.productName,
+          unitCost: sv.unitCost,
+          saleRate: sv.saleRate,
+          margin: sv.saleRate - sv.unitCost,
+          isCylinder: false,
+          hsnCode: "",
+          isActive: true,
+        });
+      }
+    }
   }
 
   function handleDeleteSelected() {
@@ -360,6 +419,7 @@ export function InventoryClient({ initialProducts, isAdmin, dashboardData }: Inv
           return n;
         });
         setError("");
+        router.refresh();
       } else {
         setError(result.error || "Failed to delete product. It may be linked to existing records.");
       }
@@ -418,7 +478,12 @@ export function InventoryClient({ initialProducts, isAdmin, dashboardData }: Inv
       )}
 
       {activeTab === "dashboard" ? (
-        <InventoryDashboard data={dashboardData} />
+        <InventoryDashboard
+          data={dashboardData}
+          isAdmin={isAdmin}
+          onEdit={handleEditFromDashboard}
+          onDelete={handleDeleteSingle}
+        />
       ) : (
         <>
           {/* Toolbar */}

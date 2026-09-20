@@ -1,4 +1,4 @@
-﻿import { getSessionWithFeatures, requireFeature } from "@/lib/feature-gate";
+import { getSessionWithFeatures, requireFeature } from "@/lib/feature-gate";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -12,7 +12,7 @@ export default async function ApprovalsPage() {
   if (!session || !["ADMIN", "MANAGER"].includes(session.role)) redirect("/login");
   requireFeature(session, "approvals");
 
-  const [summaries, salaryRequests, leaveRequests, employeeExpenses] = await Promise.all([
+  const [summaries, salaryRequests, leaveRequests, employeeExpenses, deliveryRequests] = await Promise.all([
     prisma.dailySummary.findMany({
       where: { agencyId: session.agencyId! },
       orderBy: { createdAt: "desc" },
@@ -54,13 +54,23 @@ export default async function ApprovalsPage() {
         admin: { select: { name: true } },
       },
     }),
+    prisma.deliveryCountRequest.findMany({
+      where: { agencyId: session.agencyId! },
+      orderBy: { createdAt: "desc" },
+      take: 200,
+      include: {
+        requestedBy: { select: { id: true, name: true, phone: true } },
+        reviewedBy: { select: { name: true } },
+        fulfilledBy: { select: { name: true } },
+      },
+    }),
   ]);
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Approvals Hub"
-        subtitle="Review and approve daily summaries, salary requests, leave applications & employee expense claims"
+        subtitle="Review and approve daily summaries, delivery count loads, salary requests, leave applications & expense claims"
         icon={<BookOpen className="w-5 h-5" />}
       />
       <ApprovalsClient
@@ -68,6 +78,7 @@ export default async function ApprovalsPage() {
         initialSalaryRequests={salaryRequests as any}
         initialLeaveRequests={leaveRequests as any}
         initialEmployeeExpenses={employeeExpenses as any}
+        initialDeliveryRequests={deliveryRequests as any}
         role={session.role}
         userId={session.userId}
       />

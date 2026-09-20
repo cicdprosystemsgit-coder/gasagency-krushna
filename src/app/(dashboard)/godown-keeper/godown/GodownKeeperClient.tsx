@@ -16,6 +16,8 @@ interface GodownKeeperClientProps {
   initialTripLogs: any[];
   deliveryBoys: any[];
   selectedDate?: string;
+  deliveryRequests?: any[];
+  products?: any[];
 }
 
 export function GodownKeeperClient({
@@ -28,6 +30,8 @@ export function GodownKeeperClient({
   initialTripLogs,
   deliveryBoys,
   selectedDate = new Date().toISOString().slice(0, 10),
+  deliveryRequests = [],
+  products = [],
 }: GodownKeeperClientProps) {
   return (
     <div className="space-y-6">
@@ -77,6 +81,8 @@ export function GodownKeeperClient({
           userId={userId}
           cylinderTypes={cylinderTypes}
           selectedDate={selectedDate}
+          deliveryRequests={deliveryRequests}
+          products={products.length > 0 ? products : cylinderTypes}
         />
       </div>
     </div>

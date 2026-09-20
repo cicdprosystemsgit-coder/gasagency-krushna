@@ -38,7 +38,8 @@ export default async function GodownKeeperDashboard() {
     allTripLogs,
     todayTrips,
     totalVehicles,
-    products
+    products,
+    approvedDeliveryLoads
   ] = await Promise.all([
     // Arrivals submitted by today
     hasGodown
@@ -91,8 +92,23 @@ export default async function GodownKeeperDashboard() {
     // Cylinder products
     prisma.product.findMany({
       where: { agencyId, isCylinder: true, isActive: true }
-    })
+    }),
+    // Approved delivery load requests waiting for vehicle loading
+    prisma.deliveryCountRequest.findMany({
+      where: { agencyId, status: "APPROVED" },
+      include: {
+        requestedBy: {
+          select: {
+            name: true,
+            assignedVehicle: { select: { vehicleNo: true, vehicleName: true } },
+          },
+        },
+      },
+      orderBy: { date: "desc" },
+    }),
   ]);
+
+  const pendingDeliveryLoads = approvedDeliveryLoads || [];
 
   const activeTrips = todayTrips.filter((t) => t.tripStatus === "OUT_FOR_DELIVERY" || t.tripStatus === "LOADED");
   const completedTripsCount = todayTrips.filter((t) => t.tripStatus === "RETURNED").length;
@@ -186,6 +202,19 @@ export default async function GodownKeeperDashboard() {
               <Warehouse className="w-4 h-4" /> {t("goToOperations")}
             </Link>
           )}
+          {hasGodown && (
+            <Link
+              href="/godown-keeper/delivery-requests"
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-md shadow-emerald-100 hover:shadow-lg transition-all"
+            >
+              <Truck className="w-4 h-4" /> Vehicle Loading
+              {pendingDeliveryLoads.length > 0 && (
+                <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-white text-emerald-700 font-bold">
+                  {pendingDeliveryLoads.length}
+                </span>
+              )}
+            </Link>
+          )}
           {hasInventory && (
             <Link
               href="/godown-keeper/inventory"
@@ -196,6 +225,31 @@ export default async function GodownKeeperDashboard() {
           )}
         </div>
       </div>
+
+      {/* Vehicle Loading Alert Widget */}
+      {pendingDeliveryLoads.length > 0 && (
+        <div className="bg-gradient-to-r from-blue-500 to-indigo-600 rounded-2xl p-4 text-white shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-white/15 backdrop-blur-sm flex items-center justify-center text-white shrink-0">
+              <Truck className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="font-bold text-sm">
+                {pendingDeliveryLoads.length} Delivery Vehicle{pendingDeliveryLoads.length > 1 ? "s" : ""} Approved & Ready for Loading
+              </p>
+              <p className="text-xs text-blue-100 mt-0.5">
+                {pendingDeliveryLoads.map((p) => p.requestedBy.name).join(", ")} waiting for vehicle cylinder loading and fuel filling.
+              </p>
+            </div>
+          </div>
+          <Link
+            href="/godown-keeper/delivery-requests"
+            className="px-4 py-2 bg-white text-blue-700 hover:bg-blue-50 text-xs font-bold rounded-xl transition shadow-xs shrink-0 self-start sm:self-auto"
+          >
+            Load Vehicles Now
+          </Link>
+        </div>
+      )}
 
       <div className="max-w-md">
         <PunchWidget />

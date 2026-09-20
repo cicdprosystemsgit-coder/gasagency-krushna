@@ -35,7 +35,7 @@ import {
 import { createGodownEntry, recordGodownExit, approveGodownRecord, addCylinderType, rejectGodownRecord, updateGodownEntry } from "@/app/actions/godown";
 import { useEffect } from "react";
 import { useGodownGps } from "@/hooks/useGodownGps";
-import { GpsStatusBox } from "@/components/ui/GpsStatusBox";
+import { GpsStatusBox, LocationStatusCard } from "@/components/ui/GpsStatusBox";
 
 /* â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
@@ -429,16 +429,8 @@ export function GodownClient({
   const entryGps = useGodownGps();
   const exitGps = useGodownGps();
 
-  useEffect(() => {
-    if (entryOpen) {
-      if (!modifyRecordId) {
-        setEntryDate(getLocalDateTimeString()); // capture real-time when modal opens
-      }
-      entryGps.captureGps();
-    } else {
-      entryGps.resetGps();
-    }
-  }, [entryOpen, modifyRecordId, entryGps.captureGps, entryGps.resetGps]);
+  // Location is NOT auto-captured — user must tap the "Get My Location" button.
+  // entryGps resets when modal opens so each fresh modal shows the idle CTA.
 
   const isEditingExit = useMemo(() => {
     if (!exitRecordId) return false;
@@ -446,16 +438,7 @@ export function GodownClient({
     return rec ? hasExited(rec) : false;
   }, [records, exitRecordId]);
 
-  useEffect(() => {
-    if (exitOpen) {
-      if (!isEditingExit) {
-        setExitDate(getLocalDateTimeString()); // capture real-time when modal opens
-      }
-      exitGps.captureGps();
-    } else {
-      exitGps.resetGps();
-    }
-  }, [exitOpen, isEditingExit, exitGps.captureGps, exitGps.resetGps]);
+  // exitGps resets when modal opens so each fresh modal shows the idle CTA.
 
   // Toggle row expansion
   const toggleRow = (id: string) => {
@@ -742,10 +725,10 @@ export function GodownClient({
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={() => { setError(""); setModifyRecordId(null); setEntryVehicleNo(""); setEntryDate(new Date().toISOString().slice(0, 16)); setEntryNotes(""); setEntryErvNo(""); setEntryErvDate(""); if (products.length > 0) setEntryItems([newRow(products)]); setEntryOpen(true); }} className="btn btn-primary py-2 px-4 shadow-sm">
+          <button onClick={() => { setError(""); setModifyRecordId(null); setEntryVehicleNo(""); setEntryDate(new Date().toISOString().slice(0, 16)); setEntryNotes(""); setEntryErvNo(""); setEntryErvDate(""); if (products.length > 0) setEntryItems([newRow(products)]); entryGps.resetGps(); setEntryOpen(true); }} className="btn btn-primary py-2 px-4 shadow-sm">
             <LogIn className="w-4 h-4" /> Record Entry
           </button>
-          <button onClick={() => { setError(""); if (products.length > 0) setExitItems([newRow(products)]); setExitOpen(true); }} className="btn py-2 px-4 shadow-sm hover:opacity-95 font-semibold text-[13px]" style={{ background: "#F59E0B", color: "#FFFFFF" }}>
+          <button onClick={() => { setError(""); if (products.length > 0) setExitItems([newRow(products)]); exitGps.resetGps(); setExitOpen(true); }} className="btn py-2 px-4 shadow-sm hover:opacity-95 font-semibold text-[13px]" style={{ background: "#F59E0B", color: "#FFFFFF" }}>
             <LogOut className="w-4 h-4" /> Record Exit
           </button>
         </div>
@@ -1192,7 +1175,19 @@ export function GodownClient({
             </div>
           )}
 
-          <GpsStatusBox gps={entryGps.gps} onRetry={entryGps.captureGps} titleText="Acquiring entry coordinates..." />
+          <LocationStatusCard
+            location={{
+              lat: entryGps.gps.lat,
+              lng: entryGps.gps.lng,
+              accuracy: entryGps.gps.accuracy,
+              status: entryGps.gps.loading ? "loading" : entryGps.gps.lat !== null ? "success" : entryGps.gps.error ? "denied" : "idle",
+              error: entryGps.gps.error,
+              hint: entryGps.gps.hint ?? null,
+            }}
+            onCapture={entryGps.captureGps}
+            showWhenIdle
+            label="Entry Location"
+          />
           <div className="rounded-xl border border-slate-200 overflow-hidden">
             <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-200">
               <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Vehicle &amp; Schedule</p>
@@ -1266,7 +1261,19 @@ export function GodownClient({
             </div>
           )}
 
-          <GpsStatusBox gps={exitGps.gps} onRetry={exitGps.captureGps} titleText="Acquiring exit coordinates..." />
+          <LocationStatusCard
+            location={{
+              lat: exitGps.gps.lat,
+              lng: exitGps.gps.lng,
+              accuracy: exitGps.gps.accuracy,
+              status: exitGps.gps.loading ? "loading" : exitGps.gps.lat !== null ? "success" : exitGps.gps.error ? "denied" : "idle",
+              error: exitGps.gps.error,
+              hint: exitGps.gps.hint ?? null,
+            }}
+            onCapture={exitGps.captureGps}
+            showWhenIdle
+            label="Exit Location"
+          />
           
           {isEditingExit ? (
             <div className="rounded-xl border border-slate-200 overflow-hidden">

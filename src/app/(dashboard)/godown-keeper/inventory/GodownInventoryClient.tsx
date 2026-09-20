@@ -4,7 +4,7 @@ import { Modal } from "@/components/ui/Modal";
 import { Package, ArrowDownToLine, ArrowUpFromLine, Pencil, Trash2, Plus, Boxes, Calendar, TrendingUp, TrendingDown, Navigation, FileText } from "lucide-react";
 import { receiveGodownStock, dispatchToOffice, updateGodownMovement, deleteGodownMovement } from "@/app/actions/godown-inventory";
 import { useGodownGps } from "@/hooks/useGodownGps";
-import { GpsStatusBox } from "@/components/ui/GpsStatusBox";
+import { LocationStatusCard } from "@/components/ui/GpsStatusBox";
 import { CustomSelect } from "@/components/ui/CustomSelect";
 
 interface Movement {
@@ -52,22 +52,21 @@ export function GodownInventoryClient({ initialMovements, products, userId }: {
 
   const gps = useGodownGps();
 
-  useEffect(() => {
-    if (modalType === "receive" || modalType === "dispatch") {
-      gps.captureGps();
-    } else {
-      gps.resetGps();
-    }
-  }, [modalType, gps.captureGps, gps.resetGps]);
+  // Location is NOT auto-captured — user must tap the "Get My Location" button.
+  // GPS resets when modal closes so each new modal open starts fresh in idle state.
 
   // Real-time date refresh: whenever a new/receive/dispatch modal opens, reset to current date
   function openReceive() {
-    setForm(blankForm()); // freshly computed with current local datetime
-    setError(""); setEditTarget(null); setModalType("receive");
+    setForm(blankForm());
+    setError(""); setEditTarget(null);
+    gps.resetGps(); // Reset so idle CTA is shown fresh
+    setModalType("receive");
   }
   function openDispatch() {
-    setForm(blankForm()); // freshly computed with current local datetime
-    setError(""); setEditTarget(null); setModalType("dispatch");
+    setForm(blankForm());
+    setError(""); setEditTarget(null);
+    gps.resetGps(); // Reset so idle CTA is shown fresh
+    setModalType("dispatch");
   }
   function openEdit(m: Movement) {
     setEditTarget(m);
@@ -348,7 +347,19 @@ export function GodownInventoryClient({ initialMovements, products, userId }: {
           {error && <div className="text-[13px] px-3 py-2.5 rounded-md" style={{ background: "#FEF2F2", border: "1px solid #FCA5A5", color: "#B91C1C" }}>{error}</div>}
 
           {(modalType === "receive" || modalType === "dispatch") && (
-            <GpsStatusBox gps={gps.gps} onRetry={gps.captureGps} titleText="Acquiring movement coordinates..." />
+            <LocationStatusCard
+              location={{
+                lat: gps.gps.lat,
+                lng: gps.gps.lng,
+                accuracy: gps.gps.accuracy,
+                status: gps.gps.loading ? "loading" : gps.gps.lat !== null ? "success" : gps.gps.error ? "denied" : "idle",
+                error: gps.gps.error,
+                hint: gps.gps.hint ?? null,
+              }}
+              onCapture={gps.captureGps}
+              showWhenIdle
+              label="Record Location"
+            />
           )}
 
           {/* Stock hint for dispatch */}

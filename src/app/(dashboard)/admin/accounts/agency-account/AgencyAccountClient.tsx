@@ -14,6 +14,9 @@ import {
   Printer,
   PiggyBank,
   Calendar,
+  Wallet,
+  CheckCircle2,
+  Layers,
 } from "lucide-react";
 import Link from "next/link";
 import { PersonalAccountType, PersonalTxnType } from "@/generated/prisma";
@@ -22,6 +25,7 @@ import { generateVoucherPDF } from "@/lib/voucher-pdf";
 
 interface Transaction {
   id: string;
+  accountId: string;
   date: Date | string;
   type: PersonalTxnType;
   amount: number;
@@ -31,6 +35,13 @@ interface Transaction {
   linkedModule: string | null;
   linkedRecordId: string | null;
   notes: string | null;
+  account?: {
+    id: string;
+    name: string;
+    bankName: string | null;
+    accountNo: string | null;
+    color: string | null;
+  };
 }
 
 interface Account {
@@ -40,23 +51,41 @@ interface Account {
   currentBalance: number;
   bankName: string | null;
   accountNo: string | null;
+  color?: string | null;
 }
 
 interface AgencyAccountClientProps {
-  agencyAccount: Account | null;
+  agencyAccounts: Account[];
   initialTransactions: Transaction[];
   ownerDrawings: any[];
 }
 
-export function AgencyAccountClient({ agencyAccount, initialTransactions, ownerDrawings }: AgencyAccountClientProps) {
+export function AgencyAccountClient({ agencyAccounts, initialTransactions, ownerDrawings }: AgencyAccountClientProps) {
+  // Active Account Selector ("ALL" or specific account ID)
+  const [selectedAccountId, setSelectedAccountId] = useState<string>("ALL");
+
   // Filters State
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<"ALL" | PersonalTxnType>("ALL");
   const [syncFilter, setSyncFilter] = useState<"ALL" | "SYNCED" | "MANUAL">("ALL");
   const [activeTab, setActiveTab] = useState<"statement" | "drawings">("statement");
 
+  const selectedAccount = selectedAccountId === "ALL" 
+    ? null 
+    : agencyAccounts.find((a) => a.id === selectedAccountId) || null;
+
+  const totalCombinedBalance = agencyAccounts.reduce((sum, a) => sum + a.currentBalance, 0);
+  const activeBalance = selectedAccount ? selectedAccount.currentBalance : totalCombinedBalance;
+
+  // Transactions scoped to selected account or all agency accounts
+  const scopedTransactions = selectedAccountId === "ALL"
+    ? initialTransactions
+    : initialTransactions.filter((t) => t.accountId === selectedAccountId);
+
   function handlePrintVoucher(t: Transaction) {
     const isCredit = !["EXPENSE", "TRANSFER_OUT", "UDHAARI_GIVEN"].includes(t.type);
+    const accountName = t.account?.name || selectedAccount?.name || "Agency Account";
+
     generateVoucherPDF({
       voucherNo: t.id.substring(t.id.length - 8).toUpperCase(),
       date: formatDate(t.date),
@@ -66,12 +95,12 @@ export function AgencyAccountClient({ agencyAccount, initialTransactions, ownerD
       partyName: isCredit ? "Received" : "Paid Out",
       paymentMode: t.paymentMode || "UPI",
       referenceNo: t.referenceNo || "N/A",
-      accountName: agencyAccount?.name || "Agency Account",
-      agencyName: "Gas Agency Finance Division"
+      accountName,
+      agencyName: "Gas Agency Finance Division",
     });
   }
 
-  if (!agencyAccount) {
+  if (agencyAccounts.length === 0) {
     return (
       <div className="bg-white rounded-3xl border border-slate-100 p-16 text-center shadow-sm max-w-2xl mx-auto mt-6">
         <div className="w-16 h-16 bg-amber-50 rounded-2xl flex items-center justify-center text-amber-600 mx-auto mb-5">
@@ -79,7 +108,7 @@ export function AgencyAccountClient({ agencyAccount, initialTransactions, ownerD
         </div>
         <h3 className="text-xl font-bold text-slate-800 mb-2">No Agency Account Configured</h3>
         <p className="text-slate-500 text-sm max-w-md mx-auto mb-6">
-          To track automated agency cash flows (salary payments, oil company transactions, and business expenses), you must flag one of your bank/personal accounts as the primary **Agency Account**.
+          To track automated agency cash flows (salary payments, oil company transactions, and business expenses), you can flag one or more of your bank/personal accounts as an **Agency Account**.
         </p>
         <Link
           href="/admin/accounts"
@@ -91,41 +120,38 @@ export function AgencyAccountClient({ agencyAccount, initialTransactions, ownerD
     );
   }
 
-  // Calculate statistics (Current month or all time depending on selection, here all-time on this account)
-  const totalInflows = initialTransactions
-    .filter((t) => ["INCOME", "TRANSFER_IN", "UDHAARI_RECEIVED"].includes(t.type))
+  // Calculate statistics for the active scope (All accounts or selected account)
+  const totalInflows = scopedTransactions
+    .filter((t) => ["INCOME", "TRANSFER_IN", "UDHAARI_RECEIVED", "AGENCY_DEPOSIT"].includes(t.type))
     .reduce((sum, t) => sum + t.amount, 0);
 
-  const totalOutflows = initialTransactions
-    .filter((t) => ["EXPENSE", "TRANSFER_OUT", "UDHAARI_GIVEN"].includes(t.type))
+  const totalOutflows = scopedTransactions
+    .filter((t) => ["EXPENSE", "TRANSFER_OUT", "UDHAARI_GIVEN", "AGENCY_WITHDRAWAL"].includes(t.type))
     .reduce((sum, t) => sum + t.amount, 0);
 
-  // Sync categories breakdown
-  const salarySynced = initialTransactions
+  // Sync categories breakdown for active scope
+  const salarySynced = scopedTransactions
     .filter((t) => t.linkedModule === "SALARY")
     .reduce((sum, t) => sum + t.amount, 0);
 
-  const companyPaymentSynced = initialTransactions
+  const companyPaymentSynced = scopedTransactions
     .filter((t) => t.linkedModule === "COMPANY_PAYMENT")
     .reduce((sum, t) => sum + t.amount, 0);
 
-  const expenseSynced = initialTransactions
+  const expenseSynced = scopedTransactions
     .filter((t) => t.linkedModule === "EXPENSE")
     .reduce((sum, t) => sum + t.amount, 0);
 
-  const manualTxns = initialTransactions
-    .filter((t) => !t.linkedModule)
-    .reduce((sum, t) => sum + t.amount, 0);
-
   // Filtered transactions list
-  const filteredTransactions = initialTransactions.filter((t) => {
+  const filteredTransactions = scopedTransactions.filter((t) => {
     // Search
     if (search.trim()) {
       const term = search.toLowerCase();
       const descMatch = t.description.toLowerCase().includes(term);
       const refMatch = t.referenceNo?.toLowerCase().includes(term);
       const noteMatch = t.notes?.toLowerCase().includes(term);
-      if (!descMatch && !refMatch && !noteMatch) return false;
+      const accountMatch = t.account?.name.toLowerCase().includes(term);
+      if (!descMatch && !refMatch && !noteMatch && !accountMatch) return false;
     }
 
     // Type Filter
@@ -140,6 +166,56 @@ export function AgencyAccountClient({ agencyAccount, initialTransactions, ownerD
 
   return (
     <div className="space-y-6 mt-4">
+      {/* ── Agency Accounts Switcher Tabs ── */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+        <button
+          onClick={() => setSelectedAccountId("ALL")}
+          className={cn(
+            "flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap border cursor-pointer",
+            selectedAccountId === "ALL"
+              ? "bg-slate-900 text-white border-slate-900 shadow-sm"
+              : "bg-white text-slate-600 hover:bg-slate-50 border-slate-200"
+          )}
+        >
+          <Layers className="w-3.5 h-3.5" />
+          <span>All Agency Accounts ({agencyAccounts.length})</span>
+          <span className={cn(
+            "px-2 py-0.5 rounded-md text-[10px] font-black",
+            selectedAccountId === "ALL" ? "bg-white/20 text-white" : "bg-slate-100 text-slate-700"
+          )}>
+            {formatCurrency(totalCombinedBalance)}
+          </span>
+        </button>
+
+        {agencyAccounts.map((acc) => {
+          const isSelected = selectedAccountId === acc.id;
+          return (
+            <button
+              key={acc.id}
+              onClick={() => setSelectedAccountId(acc.id)}
+              className={cn(
+                "flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap border cursor-pointer",
+                isSelected
+                  ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
+                  : "bg-white text-slate-600 hover:bg-slate-50 border-slate-200"
+              )}
+            >
+              <span
+                className="w-2.5 h-2.5 rounded-full"
+                style={{ backgroundColor: acc.color || "#4F46E5" }}
+              />
+              <span>{acc.name}</span>
+              <span className={cn(
+                "px-2 py-0.5 rounded-md text-[10px] font-black",
+                isSelected ? "bg-white/20 text-white" : "bg-slate-100 text-slate-700"
+              )}>
+                {formatCurrency(acc.currentBalance)}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
       {/* ── Top Agency Card & Status ── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-950 rounded-3xl p-6 text-white shadow-md flex flex-col justify-between space-y-6 relative overflow-hidden">
@@ -150,11 +226,15 @@ export function AgencyAccountClient({ agencyAccount, initialTransactions, ownerD
           <div className="flex justify-between items-start">
             <div>
               <span className="text-[10px] bg-indigo-500/30 text-indigo-300 font-extrabold uppercase px-2.5 py-1 rounded-full tracking-wider border border-indigo-400/20">
-                Primary Operational Account
+                {selectedAccount ? "Official Operational Account" : `Consolidated View (${agencyAccounts.length} Agency Accounts)`}
               </span>
-              <h3 className="text-xl font-bold mt-2.5">{agencyAccount.name}</h3>
+              <h3 className="text-xl font-bold mt-2.5">
+                {selectedAccount ? selectedAccount.name : "All Agency Accounts Consolidated"}
+              </h3>
               <p className="text-xs text-slate-300 mt-1">
-                {agencyAccount.bankName || "Internal Ledger"} • {agencyAccount.accountNo ? `**** ${agencyAccount.accountNo.slice(-4)}` : "Cash Wallet"}
+                {selectedAccount
+                  ? `${selectedAccount.bankName || "Internal Ledger"} • ${selectedAccount.accountNo ? `**** ${selectedAccount.accountNo.slice(-4)}` : "Cash Wallet"}`
+                  : `Aggregated balances & transactions across ${agencyAccounts.length} official bank accounts`}
               </p>
             </div>
             <span className="flex items-center gap-1 text-xs text-emerald-400 font-bold bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20">
@@ -163,14 +243,16 @@ export function AgencyAccountClient({ agencyAccount, initialTransactions, ownerD
           </div>
 
           <div>
-            <span className="text-slate-400 text-xs font-semibold block">Available Book Balance</span>
-            <span className="text-3xl font-black">{formatCurrency(agencyAccount.currentBalance)}</span>
+            <span className="text-slate-400 text-xs font-semibold block">
+              {selectedAccount ? "Available Book Balance" : "Total Agency Book Balance"}
+            </span>
+            <span className="text-3xl font-black">{formatCurrency(activeBalance)}</span>
           </div>
         </div>
 
         {/* Sync Summary Widget */}
         <div className="bg-white border border-slate-100 rounded-3xl p-5 shadow-sm space-y-4">
-          <h4 className="font-extrabold text-xs text-slate-400 uppercase tracking-wider">Sync Integrations</h4>
+          <h4 className="font-extrabold text-xs text-slate-400 uppercase tracking-wider">Sync Integrations ({selectedAccount ? selectedAccount.name : "All Accounts"})</h4>
           <div className="space-y-2 text-xs">
             <div className="flex justify-between items-center p-2.5 bg-amber-50/50 border border-amber-100/50 rounded-xl">
               <span className="font-bold text-amber-800">Salary Synced</span>
@@ -188,11 +270,51 @@ export function AgencyAccountClient({ agencyAccount, initialTransactions, ownerD
         </div>
       </div>
 
+      {/* ── Multiple Accounts Overview Grid (Shown when "ALL" is selected) ── */}
+      {selectedAccountId === "ALL" && agencyAccounts.length > 1 && (
+        <div className="bg-white border border-slate-100 rounded-3xl p-5 shadow-sm space-y-3">
+          <h4 className="font-extrabold text-xs text-slate-400 uppercase tracking-wider flex items-center justify-between">
+            <span>Linked Agency Accounts ({agencyAccounts.length})</span>
+            <span className="text-[11px] font-semibold text-slate-400">Click an account to isolate statements</span>
+          </h4>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+            {agencyAccounts.map((acc) => (
+              <button
+                key={acc.id}
+                onClick={() => setSelectedAccountId(acc.id)}
+                className="text-left p-3.5 rounded-2xl border border-slate-100 hover:border-indigo-300 bg-slate-50/50 hover:bg-indigo-50/30 transition group cursor-pointer"
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span
+                    className="w-2.5 h-2.5 rounded-full"
+                    style={{ backgroundColor: acc.color || "#4F46E5" }}
+                  />
+                  <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">
+                    Agency
+                  </span>
+                </div>
+                <h5 className="font-bold text-slate-800 text-xs group-hover:text-indigo-900 truncate">
+                  {acc.name}
+                </h5>
+                <p className="text-[10px] text-slate-400 truncate">
+                  {acc.bankName || "Bank"} {acc.accountNo ? `(****${acc.accountNo.slice(-4)})` : ""}
+                </p>
+                <div className="mt-2 text-sm font-black text-slate-900 group-hover:text-indigo-600">
+                  {formatCurrency(acc.currentBalance)}
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* ── Cash Flow P&L Snapshot Report ── */}
       <div className="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm">
         <div className="flex items-center gap-2 mb-4">
           <TrendingUp className="w-4 h-4 text-indigo-600" />
-          <h4 className="font-extrabold text-xs text-slate-400 uppercase tracking-wider">Agency Cash Flow & Profitability Snapshot</h4>
+          <h4 className="font-extrabold text-xs text-slate-400 uppercase tracking-wider">
+            Agency Cash Flow & Profitability Snapshot {selectedAccount ? `(${selectedAccount.name})` : "(Consolidated All Accounts)"}
+          </h4>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
@@ -267,8 +389,8 @@ export function AgencyAccountClient({ agencyAccount, initialTransactions, ownerD
             </div>
 
             <div className="bg-indigo-50/50 p-4 rounded-2xl text-xs text-indigo-900 border border-indigo-100/30">
-              <span className="font-bold block mb-1">Operational Auto-Sync Notice</span>
-              All expenses, staff salary slips, and oil company invoice payments added elsewhere in the system will automatically reconcile and adjust the book balance of this account in real-time.
+              <span className="font-bold block mb-1">Multi-Agency Operational Notice</span>
+              All expenses, staff salary slips, and oil company invoice payments added elsewhere in the system automatically reconcile with active agency accounts in real-time.
             </div>
           </div>
         </div>
@@ -278,17 +400,17 @@ export function AgencyAccountClient({ agencyAccount, initialTransactions, ownerD
       <div className="flex gap-2 border-b border-slate-200 mb-4 mt-2">
         <button
           onClick={() => setActiveTab("statement")}
-          className={`px-4 py-2.5 text-xs font-extrabold rounded-t-xl border-b-2 transition ${
+          className={`px-4 py-2.5 text-xs font-extrabold rounded-t-xl border-b-2 transition cursor-pointer ${
             activeTab === "statement"
               ? "border-indigo-500 text-indigo-700"
               : "border-transparent text-slate-500 hover:text-slate-700"
           }`}
         >
-          Statement & Sync Ledger
+          Statement & Sync Ledger ({filteredTransactions.length})
         </button>
         <button
           onClick={() => setActiveTab("drawings")}
-          className={`px-4 py-2.5 text-xs font-extrabold rounded-t-xl border-b-2 transition flex items-center gap-1.5 ${
+          className={`px-4 py-2.5 text-xs font-extrabold rounded-t-xl border-b-2 transition flex items-center gap-1.5 cursor-pointer ${
             activeTab === "drawings"
               ? "border-indigo-500 text-indigo-700"
               : "border-transparent text-slate-500 hover:text-slate-700"
@@ -307,7 +429,9 @@ export function AgencyAccountClient({ agencyAccount, initialTransactions, ownerD
       {activeTab === "statement" && (
         <div className="bg-white border border-slate-100 rounded-3xl p-5 shadow-sm space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-4">
-            <h4 className="font-extrabold text-xs text-slate-400 uppercase tracking-wider">Account Statements & Sync Ledger</h4>
+            <h4 className="font-extrabold text-xs text-slate-400 uppercase tracking-wider">
+              {selectedAccount ? `${selectedAccount.name} Statement` : "Consolidated Statement & Sync Ledger"}
+            </h4>
             <div className="flex items-center gap-2 text-xs text-slate-400">
               Showing {filteredTransactions.length} operations logs
             </div>
@@ -319,7 +443,7 @@ export function AgencyAccountClient({ agencyAccount, initialTransactions, ownerD
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search synced logs, invoice ref..."
+                placeholder="Search synced logs, invoice ref, account..."
                 className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
               />
             </div>
@@ -358,6 +482,7 @@ export function AgencyAccountClient({ agencyAccount, initialTransactions, ownerD
                 <thead>
                   <tr className="border-b border-slate-100 text-slate-400 font-bold">
                     <th className="py-3 px-2">Date</th>
+                    {selectedAccountId === "ALL" && <th className="py-3 px-2">Account</th>}
                     <th className="py-3 px-2">Description</th>
                     <th className="py-3 px-2">Source Type</th>
                     <th className="py-3 px-2">Ref / UTR</th>
@@ -374,6 +499,19 @@ export function AgencyAccountClient({ agencyAccount, initialTransactions, ownerD
                         <td className="py-3.5 px-2 text-slate-500 whitespace-nowrap">
                           {formatDate(t.date)}
                         </td>
+                        {selectedAccountId === "ALL" && (
+                          <td className="py-3.5 px-2 whitespace-nowrap">
+                            <span
+                              className="px-2 py-0.5 rounded text-[10px] font-bold"
+                              style={{
+                                backgroundColor: `${t.account?.color || "#4F46E5"}15`,
+                                color: t.account?.color || "#4F46E5",
+                              }}
+                            >
+                              {t.account?.name || "Agency"}
+                            </span>
+                          </td>
+                        )}
                         <td className="py-3.5 px-2 font-medium text-slate-800">
                           <div className="flex flex-col">
                             <span>{t.description}</span>
@@ -519,4 +657,3 @@ export function AgencyAccountClient({ agencyAccount, initialTransactions, ownerD
     </div>
   );
 }
-
