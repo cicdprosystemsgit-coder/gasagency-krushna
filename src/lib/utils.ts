@@ -84,3 +84,16 @@ export function getAgencyTodayRange(timezone: string = "Asia/Kolkata") {
   };
 }
 
+/**
+ * Natural language comparison for product names:
+ * Sorts numbers first (0 to 9 in ascending order: 5 < 14.2 < 19 < 47),
+ * followed by alphabetical names (A to Z).
+ */
+export function naturalSortCompare(nameA: string, nameB: string): number {
+  return nameA.localeCompare(nameB, undefined, {
+    numeric: true,
+    sensitivity: "base",
+  });
+}
+
+

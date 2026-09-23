@@ -346,3 +346,122 @@ export async function updateTripLog(id: string, formData: FormData) {
   }
 }
 
+/* ── Soft Delete Trip Log ─────────────────────────────────────────────────────── */
+
+export async function softDeleteTripLog(id: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const session = await getSession();
+    if (!session || !["ADMIN", "MANAGER"].includes(session.role) || !session.agencyId) {
+      return { success: false, error: "Unauthorized" };
+    }
+    if (!id) return { success: false, error: "Trip log ID is required" };
+
+    const trip = await prisma.vehicleTripLog.findUnique({
+      where: { id, agencyId: session.agencyId },
+    });
+    if (!trip) return { success: false, error: "Trip log not found" };
+
+    await prisma.vehicleTripLog.update({
+      where: { id },
+      data: {
+        isDeleted: true,
+        deletedAt: new Date(),
+      },
+    });
+
+    revalidatePath("/godown-keeper");
+    revalidatePath("/godown-keeper/godown");
+    revalidatePath("/admin/godown");
+    revalidatePath("/manager/godown");
+    revalidatePath("/admin/vehicle-management");
+    revalidatePath("/manager/vehicle-management");
+    return { success: true };
+  } catch (err: any) {
+    console.error("[softDeleteTripLog]", err);
+    return { success: false, error: err?.message || "Failed to delete trip log" };
+  }
+}
+
+/* ── Restore Trip Log ─────────────────────────────────────────────────────────── */
+
+export async function restoreTripLog(id: string): Promise<{ success: boolean; tripLog?: any; error?: string }> {
+  try {
+    const session = await getSession();
+    if (!session || !["ADMIN", "MANAGER"].includes(session.role) || !session.agencyId) {
+      return { success: false, error: "Unauthorized" };
+    }
+    if (!id) return { success: false, error: "Trip log ID is required" };
+
+    const trip = await prisma.vehicleTripLog.findUnique({
+      where: { id, agencyId: session.agencyId },
+    });
+    if (!trip) return { success: false, error: "Trip log not found" };
+
+    const updated = await prisma.vehicleTripLog.update({
+      where: { id },
+      data: {
+        isDeleted: false,
+        deletedAt: null,
+      },
+      include: {
+        vehicle: { select: { vehicleNo: true, vehicleName: true, assignedTo: { select: { name: true } } } },
+        recordedBy: { select: { name: true } },
+      },
+    });
+
+    revalidatePath("/godown-keeper");
+    revalidatePath("/godown-keeper/godown");
+    revalidatePath("/admin/godown");
+    revalidatePath("/manager/godown");
+    revalidatePath("/admin/vehicle-management");
+    revalidatePath("/manager/vehicle-management");
+    return {
+      success: true,
+      tripLog: {
+        ...updated,
+        date: (updated.date as Date).toISOString(),
+        departureTime: updated.departureTime ? (updated.departureTime as Date).toISOString() : null,
+        returnTime: updated.returnTime ? (updated.returnTime as Date).toISOString() : null,
+        createdAt: (updated.createdAt as Date).toISOString(),
+        updatedAt: (updated.updatedAt as Date).toISOString(),
+      },
+    };
+  } catch (err: any) {
+    console.error("[restoreTripLog]", err);
+    return { success: false, error: err?.message || "Failed to restore trip log" };
+  }
+}
+
+/* ── Permanent Delete Trip Log ────────────────────────────────────────────────── */
+
+export async function permanentDeleteTripLog(id: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const session = await getSession();
+    if (!session || session.role !== "ADMIN" || !session.agencyId) {
+      return { success: false, error: "Unauthorized: Admin access required for permanent deletion" };
+    }
+    if (!id) return { success: false, error: "Trip log ID is required" };
+
+    const trip = await prisma.vehicleTripLog.findUnique({
+      where: { id, agencyId: session.agencyId },
+    });
+    if (!trip) return { success: false, error: "Trip log not found" };
+
+    await prisma.vehicleTripLog.delete({
+      where: { id },
+    });
+
+    revalidatePath("/godown-keeper");
+    revalidatePath("/godown-keeper/godown");
+    revalidatePath("/admin/godown");
+    revalidatePath("/manager/godown");
+    revalidatePath("/admin/vehicle-management");
+    revalidatePath("/manager/vehicle-management");
+    return { success: true };
+  } catch (err: any) {
+    console.error("[permanentDeleteTripLog]", err);
+    return { success: false, error: err?.message || "Failed to permanently delete trip log" };
+  }
+}
+
+

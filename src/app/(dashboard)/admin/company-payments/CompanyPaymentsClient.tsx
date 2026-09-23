@@ -8,6 +8,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { createCompanyPayment, updateCompanyPayment, deleteCompanyPayment, getCompanyPayments } from "@/app/actions/company-payments";
 import { type CompanyPayment } from "@/generated/prisma";
 import { toast } from "sonner";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 
 interface PaymentWithRelations extends CompanyPayment {
   product?: { name: string } | null;
@@ -37,6 +38,7 @@ export function CompanyPaymentsClient({
 
   const [isPending, startTransition] = useTransition();
   const [isFiltering, startFilterTransition] = useTransition();
+  const confirm = useConfirm();
   const [error, setError] = useState("");
 
   // Modals state
@@ -178,7 +180,15 @@ export function CompanyPaymentsClient({
   }
 
   async function handleDelete(id: string) {
-    if (!confirm("Are you sure you want to delete this payment record? This action cannot be undone.")) return;
+    const ok = await confirm({
+      title: "Delete Payment Record?",
+      message: "Are you sure you want to delete this payment record? This action cannot be undone.",
+      confirmText: "Delete Record",
+      cancelText: "Cancel",
+      variant: "danger",
+    });
+    if (!ok) return;
+
     startTransition(async () => {
       const result = await deleteCompanyPayment(id);
       if (result.success) {

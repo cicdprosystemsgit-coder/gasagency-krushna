@@ -4,6 +4,7 @@ import { useState, useEffect, useTransition } from "react";
 import { ShieldAlert, Save, RefreshCw, Check, AlertCircle, Trash2 } from "lucide-react";
 import { getRolePermissions, savePermissionsBatch } from "@/app/actions/rbac";
 import { deleteCustomRole } from "@/app/actions/staff";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 
 type Role = "ADMIN" | "MANAGER" | "STAFF" | "GODOWN_KEEPER" | "CASHIER" | "DELIVERY_BOY" | "SYSTEM_ADMIN";
 
@@ -101,6 +102,7 @@ const DEFAULT_PERMISSIONS_STATIC: Record<string, Record<string, string[]>> = {
 };
 
 export function RolePermissionsClient() {
+  const confirm = useConfirm();
   const [allRoles, setAllRoles] = useState<{ key: string; label: string; baseRole?: string }[]>(ROLES);
   const [activeRole, setActiveRole] = useState<string>("MANAGER");
   const [dbOverrides, setDbOverrides] = useState<any[]>([]);
@@ -231,9 +233,14 @@ export function RolePermissionsClient() {
   };
 
   const handleDeleteRole = async (roleId: string, roleName: string) => {
-    if (!confirm(`Are you sure you want to delete the custom role "${roleName}"? Any users assigned to this role will revert to having no custom role and will inherit permissions from their base template role.`)) {
-      return;
-    }
+    const ok = await confirm({
+      title: `Delete Custom Role "${roleName}"?`,
+      message: `Are you sure you want to delete the custom role "${roleName}"? Any users assigned to this role will revert to having no custom role and will inherit permissions from their base template role.`,
+      confirmText: "Delete Role",
+      cancelText: "Cancel",
+      variant: "danger",
+    });
+    if (!ok) return;
     
     setIsLoading(true);
     const res = await deleteCustomRole(roleId);

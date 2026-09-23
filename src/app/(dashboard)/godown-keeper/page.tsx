@@ -44,13 +44,13 @@ export default async function GodownKeeperDashboard() {
     // Arrivals submitted by today
     hasGodown
       ? prisma.godownRecord.count({
-          where: { submittedById: session.userId, agencyId, entryDate: { gte: todayStart, lte: todayEnd } }
+          where: { submittedById: session.userId, agencyId, isDeleted: false, entryDate: { gte: todayStart, lte: todayEnd } }
         })
       : Promise.resolve(0),
     // Recent arrivals
     hasGodown
       ? prisma.godownRecord.findMany({
-          where: { agencyId },
+          where: { agencyId, isDeleted: false },
           orderBy: { entryDate: "desc" },
           take: 5
         })
@@ -58,19 +58,19 @@ export default async function GodownKeeperDashboard() {
     // Approved arrivals for stock calculation
     hasGodown
       ? prisma.godownRecord.findMany({
-          where: { agencyId, status: "APPROVED" }
+          where: { agencyId, isDeleted: false, status: "APPROVED" }
         })
       : Promise.resolve([]),
     // Trip logs for stock calculation
     hasGodown
       ? prisma.vehicleTripLog.findMany({
-          where: { agencyId }
+          where: { agencyId, isDeleted: false }
         })
       : Promise.resolve([]),
     // Today's trips
     hasGodown
       ? prisma.vehicleTripLog.findMany({
-          where: { agencyId, date: { gte: todayStart, lte: todayEnd } },
+          where: { agencyId, isDeleted: false, date: { gte: todayStart, lte: todayEnd } },
           include: {
             vehicle: {
               select: {

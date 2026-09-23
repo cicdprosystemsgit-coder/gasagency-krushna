@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Modal } from "@/components/ui/Modal";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import {
   Plus,
@@ -68,6 +69,7 @@ export function AccountsClient({ initialAccounts, userId }: AccountsClientProps)
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const confirm = useConfirm();
 
   // Modals state
   const [accountModal, setAccountModal] = useState(false);
@@ -209,7 +211,13 @@ export function AccountsClient({ initialAccounts, userId }: AccountsClientProps)
   }
 
   async function handleDeleteAccount(id: string) {
-    if (!confirm("Are you sure you want to archive/delete this account?")) return;
+    const ok = await confirm({
+      title: "Archive / Delete Account",
+      message: "Are you sure you want to archive/delete this account?",
+      confirmText: "Delete Account",
+      variant: "danger",
+    });
+    if (!ok) return;
     setError("");
     setSuccess("");
 

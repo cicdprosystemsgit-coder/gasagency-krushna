@@ -9,6 +9,7 @@ import {
   Eye, RefreshCw, X
 } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 import {
   submitDeliveryCountRequest,
   cancelDeliveryCountRequest,
@@ -61,6 +62,7 @@ export function DeliveryCountClient({
 }: DeliveryCountClientProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const confirm = useConfirm();
 
   // Form State
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -149,7 +151,13 @@ export function DeliveryCountClient({
   };
 
   const handleCancelRequest = async (id: string) => {
-    if (!confirm("Are you sure you want to cancel this delivery count request?")) return;
+    const ok = await confirm({
+      title: "Cancel Delivery Count Request",
+      message: "Are you sure you want to cancel this delivery count request?",
+      confirmText: "Cancel Request",
+      variant: "danger",
+    });
+    if (!ok) return;
 
     startTransition(async () => {
       const res = await cancelDeliveryCountRequest(id);

@@ -39,10 +39,13 @@ export default async function ManagerGodownPage({ searchParams }: PageProps) {
     todayMovements,
     deliveryRequests,
     allProducts,
+    deletedRecords,
+    deletedTripLogs,
   ] = await Promise.all([
     prisma.godownRecord.findMany({
       where: {
         agencyId: session.agencyId!,
+        isDeleted: false,
         entryDate: { gte: dateStart, lte: dateEnd },
       },
       orderBy: { entryDate: "desc" },
@@ -52,6 +55,7 @@ export default async function ManagerGodownPage({ searchParams }: PageProps) {
       _sum: { filledCylindersReceived: true, emptyCylindersReturned: true },
       where: {
         agencyId: session.agencyId!,
+        isDeleted: false,
         status: "APPROVED",
         entryDate: { gte: dateStart, lte: dateEnd },
       },
@@ -67,7 +71,7 @@ export default async function ManagerGodownPage({ searchParams }: PageProps) {
       orderBy: { name: "asc" },
     }),
     prisma.vehicleTripLog.findMany({
-      where: { agencyId: session.agencyId!, date: { gte: dateStart, lte: dateEnd } },
+      where: { agencyId: session.agencyId!, isDeleted: false, date: { gte: dateStart, lte: dateEnd } },
       orderBy: { createdAt: "desc" },
       include: {
         vehicle: { select: { vehicleNo: true, vehicleName: true, assignedTo: { select: { name: true } } } },
@@ -114,6 +118,27 @@ export default async function ManagerGodownPage({ searchParams }: PageProps) {
       select: { id: true, name: true, isCylinder: true },
       orderBy: { name: "asc" },
     }),
+    // Deleted Supply Records
+    prisma.godownRecord.findMany({
+      where: {
+        agencyId: session.agencyId!,
+        isDeleted: true,
+      },
+      orderBy: { deletedAt: "desc" },
+      include: { submittedBy: { select: { name: true } } },
+    }),
+    // Deleted Trip Logs
+    prisma.vehicleTripLog.findMany({
+      where: {
+        agencyId: session.agencyId!,
+        isDeleted: true,
+      },
+      orderBy: { deletedAt: "desc" },
+      include: {
+        vehicle: { select: { vehicleNo: true, vehicleName: true, assignedTo: { select: { name: true } } } },
+        recordedBy: { select: { name: true } },
+      },
+    }),
   ]);
 
   const serializedRequests = deliveryRequests.map((r) => ({
@@ -155,6 +180,8 @@ export default async function ManagerGodownPage({ searchParams }: PageProps) {
 
       <GodownTabsContainer
         initialRecords={records}
+        initialDeletedRecords={deletedRecords}
+        initialDeletedTripLogs={deletedTripLogs}
         totalFilled={totals._sum.filledCylindersReceived ?? 0}
         totalEmpty={totals._sum.emptyCylindersReturned ?? 0}
         deliveryVehicles={deliveryVehicles}

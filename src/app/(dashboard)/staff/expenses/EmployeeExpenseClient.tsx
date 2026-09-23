@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 import {
   Receipt,
   PlusCircle,
@@ -61,6 +62,7 @@ export default function EmployeeExpenseClient({
   categories,
   initialExpenses,
 }: EmployeeExpenseClientProps) {
+  const confirm = useConfirm();
   // Live Date Time State
   const [currentDateTime, setCurrentDateTime] = useState<string>("");
   const [editableDateTime, setEditableDateTime] = useState<string>("");
@@ -223,7 +225,13 @@ export default function EmployeeExpenseClient({
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure you want to cancel this pending expense request?")) return;
+    const ok = await confirm({
+      title: "Cancel Expense Request",
+      message: "Are you sure you want to cancel this pending expense request?",
+      confirmText: "Cancel Request",
+      variant: "danger",
+    });
+    if (!ok) return;
 
     const res = await deleteEmployeeExpense(id);
     if (res.error) {

@@ -2,6 +2,7 @@
 
 import { useState, useTransition, useMemo } from "react";
 import { Modal } from "@/components/ui/Modal";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { formatCurrency, formatDate, ROLE_LABELS } from "@/lib/utils";
 import {
   Plus, Wallet, Trash2, Users, AlertCircle, Gift,
@@ -624,6 +625,7 @@ function SalaryHistory({ drawings, staff, isAdmin, month, year, onDelete }: {
   const [filterYear, setFilterYear] = useState(String(year));
   const [filterType, setFilterType] = useState("");
   const [isPending, startTransition] = useTransition();
+  const confirm = useConfirm();
 
   const filtered = useMemo(() => drawings.filter((d) => {
     if (filterEmp && d.employeeId !== filterEmp) return false;
@@ -640,8 +642,14 @@ function SalaryHistory({ drawings, staff, isAdmin, month, year, onDelete }: {
     bonus: filtered.filter((d) => d.type === "BONUS").reduce((s, d) => s + d.amount, 0),
   }), [filtered]);
 
-  function handleDelete(id: string) {
-    if (!confirm("Delete this record?")) return;
+  async function handleDelete(id: string) {
+    const ok = await confirm({
+      title: "Delete Salary Record",
+      message: "Are you sure you want to delete this salary record?",
+      confirmText: "Delete",
+      variant: "danger",
+    });
+    if (!ok) return;
     startTransition(async () => {
       const result = await deleteSalaryDrawing(id);
       if (result.success) onDelete(id);
@@ -752,6 +760,7 @@ function AdvancesTab({ advances, staff, isAdmin, onAdvanceAdded, onAdvanceUpdate
   const [filterStatus, setFilterStatus] = useState("ACTIVE");
   const [filterEmp, setFilterEmp] = useState("");
   const [isPending, startTransition] = useTransition();
+  const confirm = useConfirm();
 
   const filtered = useMemo(() => advances.filter((a) => {
     if (filterStatus === "ACTIVE" && a.status === "RECOVERED") return false;
@@ -762,8 +771,14 @@ function AdvancesTab({ advances, staff, isAdmin, onAdvanceAdded, onAdvanceUpdate
 
   const totalOutstanding = advances.filter((a) => a.status !== "RECOVERED").reduce((s, a) => s + a.balanceAmount, 0);
 
-  function handleDelete(id: string) {
-    if (!confirm("Delete this advance?")) return;
+  async function handleDelete(id: string) {
+    const ok = await confirm({
+      title: "Delete Advance",
+      message: "Are you sure you want to delete this advance record?",
+      confirmText: "Delete",
+      variant: "danger",
+    });
+    if (!ok) return;
     startTransition(async () => {
       const result = await deleteAdvance(id);
       if (result.success) onAdvanceDeleted(id);
@@ -1074,6 +1089,7 @@ function BonusesTab({ bonuses, staff, isAdmin, month, year, onBonusAdded, onBonu
   const [filterMonth, setFilterMonth] = useState(String(month));
   const [filterYear, setFilterYear] = useState(String(year));
   const [isPending, startTransition] = useTransition();
+  const confirm = useConfirm();
 
   const filtered = useMemo(() => bonuses.filter((b) => {
     if (filterEmp && b.employeeId !== filterEmp) return false;
@@ -1082,8 +1098,14 @@ function BonusesTab({ bonuses, staff, isAdmin, month, year, onBonusAdded, onBonu
     return true;
   }), [bonuses, filterEmp, filterMonth, filterYear]);
 
-  function handleDelete(id: string) {
-    if (!confirm("Delete this bonus record?")) return;
+  async function handleDelete(id: string) {
+    const ok = await confirm({
+      title: "Delete Bonus",
+      message: "Are you sure you want to delete this bonus record?",
+      confirmText: "Delete",
+      variant: "danger",
+    });
+    if (!ok) return;
     startTransition(async () => {
       const result = await deleteBonus(id);
       if (result.success) onBonusDeleted(id);
@@ -1439,6 +1461,7 @@ function ApprovalsTab({ requests, isAdmin, onRequestUpdated }: {
   const [filterStatus, setFilterStatus] = useState("PENDING");
   const [rejectModal, setRejectModal] = useState<SalaryRequest | null>(null);
   const [isPending, startTransition] = useTransition();
+  const confirm = useConfirm();
 
   const filtered = useMemo(() => requests.filter((r) => {
     if (filterStatus === "PENDING") {
@@ -1462,8 +1485,14 @@ function ApprovalsTab({ requests, isAdmin, onRequestUpdated }: {
   const approvedCount = requests.filter((r) => r.status === "APPROVED").length;
   const rejectedCount = requests.filter((r) => r.status === "REJECTED").length;
 
-  function handleApprove(id: string) {
-    if (!confirm("Approve this payment request? This will process the actual payment immediately.")) return;
+  async function handleApprove(id: string) {
+    const ok = await confirm({
+      title: "Approve Payment Request",
+      message: "Approve this payment request? This will process the actual payment immediately.",
+      confirmText: "Approve & Pay",
+      variant: "primary",
+    });
+    if (!ok) return;
     startTransition(async () => {
       const result = await approveSalaryRequest(id);
       if ("error" in result && result.error) { alert(result.error); return; }

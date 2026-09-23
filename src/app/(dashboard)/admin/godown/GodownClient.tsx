@@ -2,6 +2,7 @@
 
 import { useState, useTransition, useCallback, useMemo, Fragment } from "react";
 import { Modal } from "@/components/ui/Modal";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { StatsCard } from "@/components/ui/StatsCard";
 import { CustomSelect } from "@/components/ui/CustomSelect";
@@ -17,6 +18,7 @@ import {
   LogOut,
   X,
   Trash2,
+  RotateCcw,
   Search,
   ChevronDown,
   ChevronUp,
@@ -32,12 +34,23 @@ import {
   MapPin,
   Edit,
 } from "lucide-react";
-import { createGodownEntry, recordGodownExit, approveGodownRecord, addCylinderType, rejectGodownRecord, updateGodownEntry } from "@/app/actions/godown";
+import {
+  createGodownEntry,
+  recordGodownExit,
+  approveGodownRecord,
+  addCylinderType,
+  rejectGodownRecord,
+  updateGodownEntry,
+  softDeleteGodownRecord,
+  restoreGodownRecord,
+  permanentDeleteGodownRecord,
+} from "@/app/actions/godown";
 import { useEffect } from "react";
+import { toast } from "sonner";
 import { useGodownGps } from "@/hooks/useGodownGps";
 import { GpsStatusBox, LocationStatusCard } from "@/components/ui/GpsStatusBox";
 
-/* â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Types ──────────────────────────────────────────────────────────────────── */
 
 interface CylinderItem {
   id: string;
@@ -68,14 +81,18 @@ interface GodownRecord {
   exitLat?: number | null;
   exitLng?: number | null;
   exitAccuracy?: number | null;
+  isDeleted?: boolean;
+  deletedAt?: Date | string | null;
 }
 
 interface GodownClientProps {
   initialRecords: GodownRecord[];
+  initialDeletedRecords?: GodownRecord[];
   totalFilled: number;
   totalEmpty: number;
   isAdmin: boolean;
   userId: string;
+  userRole?: string;
   cylinderTypes: Product[];
   selectedDate?: string;
 }
@@ -376,24 +393,35 @@ function AddTypeModal({
 
 export function GodownClient({
   initialRecords,
+  initialDeletedRecords = [],
   totalFilled,
   totalEmpty,
   isAdmin,
   userId,
+  userRole = "ADMIN",
   cylinderTypes,
   selectedDate,
 }: GodownClientProps) {
   const [records, setRecords] = useState(initialRecords);
+  const [deletedRecords, setDeletedRecords] = useState<GodownRecord[]>(initialDeletedRecords);
   const [products, setProducts] = useState<Product[]>(cylinderTypes);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState("");
+  const confirm = useConfirm();
+
+  const canDelete = isAdmin || userRole === "MANAGER";
+  const canPermanentDelete = isAdmin;
 
   useEffect(() => {
     setRecords(initialRecords);
   }, [initialRecords]);
 
+  useEffect(() => {
+    setDeletedRecords(initialDeletedRecords);
+  }, [initialDeletedRecords]);
+
   const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"ALL" | "PENDING" | "APPROVED" | "PENDING_EXIT">("ALL");
+  const [statusFilter, setStatusFilter] = useState<"ALL" | "PENDING" | "APPROVED" | "PENDING_EXIT" | "DELETED">("ALL");
   const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({});
 
   // Pagination state
@@ -515,14 +543,83 @@ export function GodownClient({
   }
 
   // ── Reject ──
-  function handleReject(id: string) {
-    if (!confirm("Are you sure you want to reject this entry record?")) return;
+  async function handleReject(id: string) {
+    const ok = await confirm({
+      title: "Reject Godown Record",
+      message: "Are you sure you want to reject this entry record?",
+      confirmText: "Reject Record",
+      variant: "danger",
+    });
+    if (!ok) return;
     startTransition(async () => {
       const res = await rejectGodownRecord(id);
       if (res.success) {
         setRecords((prev) => prev.map((r) => (r.id === id ? { ...r, status: "REJECTED" } : r)));
       } else {
         alert(res.error || "Failed to reject record");
+      }
+    });
+  }
+
+  // ── Soft Delete ──
+  async function handleSoftDelete(r: GodownRecord) {
+    const ok = await confirm({
+      title: "Delete Supply Vehicle Record",
+      message: `Are you sure you want to move supply vehicle entry "${r.vehicleNo}" to deleted records? You can restore it later from the Deleted Records tab.`,
+      confirmText: "Delete Record",
+      variant: "danger",
+    });
+    if (!ok) return;
+    startTransition(async () => {
+      const res = await softDeleteGodownRecord(r.id);
+      if (res.success) {
+        setRecords((prev) => prev.filter((item) => item.id !== r.id));
+        setDeletedRecords((prev) => [{ ...r, isDeleted: true, deletedAt: new Date().toISOString() }, ...prev]);
+        toast.success(`Vehicle entry ${r.vehicleNo} moved to deleted records.`);
+      } else {
+        toast.error(res.error || "Failed to delete record");
+      }
+    });
+  }
+
+  // ── Restore ──
+  async function handleRestore(r: GodownRecord) {
+    const ok = await confirm({
+      title: "Restore Supply Vehicle Record",
+      message: `Are you sure you want to restore supply vehicle entry "${r.vehicleNo}" back to active records?`,
+      confirmText: "Restore Record",
+      variant: "primary",
+    });
+    if (!ok) return;
+    startTransition(async () => {
+      const res = await restoreGodownRecord(r.id);
+      if (res.success) {
+        setDeletedRecords((prev) => prev.filter((item) => item.id !== r.id));
+        const restored = res.record || { ...r, isDeleted: false, deletedAt: null };
+        setRecords((prev) => [restored, ...prev]);
+        toast.success(`Vehicle entry ${r.vehicleNo} restored successfully.`);
+      } else {
+        toast.error(res.error || "Failed to restore record");
+      }
+    });
+  }
+
+  // ── Permanent Delete ──
+  async function handlePermanentDelete(r: GodownRecord) {
+    const ok = await confirm({
+      title: "Permanently Delete Supply Vehicle Record",
+      message: `WARNING: This action is permanent and cannot be undone! Supply vehicle record "${r.vehicleNo}" will be completely removed from the database. Are you absolutely sure?`,
+      confirmText: "Permanently Delete",
+      variant: "danger",
+    });
+    if (!ok) return;
+    startTransition(async () => {
+      const res = await permanentDeleteGodownRecord(r.id);
+      if (res.success) {
+        setDeletedRecords((prev) => prev.filter((item) => item.id !== r.id));
+        toast.success(`Vehicle entry ${r.vehicleNo} permanently deleted.`);
+      } else {
+        toast.error(res.error || "Failed to permanently delete record");
       }
     });
   }
@@ -671,6 +768,11 @@ export function GodownClient({
 
   // Filtered records
   const filteredRecords = useMemo(() => {
+    if (statusFilter === "DELETED") {
+      return deletedRecords.filter((r) =>
+        r.vehicleNo.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+    }
     return records.filter((r) => {
       const matchesSearch = r.vehicleNo.toLowerCase().includes(searchQuery.toLowerCase());
       if (!matchesSearch) return false;
@@ -680,7 +782,7 @@ export function GodownClient({
       if (statusFilter === "PENDING_EXIT") return !hasExited(r);
       return true;
     });
-  }, [records, searchQuery, statusFilter]);
+  }, [records, deletedRecords, searchQuery, statusFilter]);
 
   const paginatedRecords = useMemo(() => {
     const start = (currentPage - 1) * itemsPerPage;
@@ -711,14 +813,41 @@ export function GodownClient({
             <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400"><Search className="w-4 h-4" /></span>
             <input type="text" placeholder="Search vehicle number..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="input pl-9 text-[13px]" />
           </div>
-          <div className="flex items-center gap-1 p-1 rounded-lg border self-start" style={{ background: "var(--color-bg)", borderColor: "var(--color-border)" }}>
-            {(["ALL", "PENDING", "APPROVED", "PENDING_EXIT"] as const).map((tab) => {
-              const label = tab === "ALL" ? "All" : tab === "PENDING" ? "Pending" : tab === "APPROVED" ? "Approved" : "In Godown";
+          <div className="flex flex-wrap items-center gap-1 p-1 rounded-lg border self-start" style={{ background: "var(--color-bg)", borderColor: "var(--color-border)" }}>
+            {(["ALL", "PENDING", "APPROVED", "PENDING_EXIT", "DELETED"] as const).map((tab) => {
+              const label =
+                tab === "ALL"
+                  ? "All"
+                  : tab === "PENDING"
+                  ? "Pending"
+                  : tab === "APPROVED"
+                  ? "Approved"
+                  : tab === "PENDING_EXIT"
+                  ? "In Godown"
+                  : "Deleted Records";
               const active = statusFilter === tab;
+              const count = tab === "DELETED" ? deletedRecords.length : undefined;
               return (
-                <button key={tab} onClick={() => setStatusFilter(tab)} className="px-3 py-1 rounded-md text-[12px] font-semibold transition-all whitespace-nowrap"
-                  style={active ? { background: "#FFFFFF", color: "var(--color-text-primary)", boxShadow: "var(--shadow-sm)" } : { color: "var(--color-text-secondary)" }}>
-                  {label}
+                <button
+                  key={tab}
+                  onClick={() => setStatusFilter(tab)}
+                  className="px-3 py-1 rounded-md text-[12px] font-semibold transition-all whitespace-nowrap flex items-center gap-1.5"
+                  style={
+                    active
+                      ? {
+                          background: tab === "DELETED" ? "#FEF2F2" : "#FFFFFF",
+                          color: tab === "DELETED" ? "#DC2626" : "var(--color-text-primary)",
+                          boxShadow: "var(--shadow-sm)",
+                        }
+                      : { color: tab === "DELETED" && deletedRecords.length > 0 ? "#DC2626" : "var(--color-text-secondary)" }
+                  }
+                >
+                  <span>{label}</span>
+                  {count !== undefined && count > 0 && (
+                    <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-rose-100 text-rose-700">
+                      {count}
+                    </span>
+                  )}
                 </button>
               );
             })}
@@ -741,19 +870,26 @@ export function GodownClient({
           {filteredRecords.length === 0 ? (
             <div className="py-12 text-center">
               <Truck className="w-10 h-10 mx-auto mb-2 text-slate-300" />
-              <p className="font-semibold text-slate-700 text-xs">No records found</p>
+              <p className="font-semibold text-slate-700 text-xs">
+                {statusFilter === "DELETED" ? "No deleted supply records found" : "No records found"}
+              </p>
             </div>
           ) : (
             paginatedRecords.map((r) => {
               const exited = hasExited(r);
               const exitDt = getExitDate(r);
+              const isDeletedView = statusFilter === "DELETED";
               return (
                 <div key={`mob-gdn-${r.id}`} className="p-4 space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="font-mono text-xs font-bold text-slate-800 px-2.5 py-1 rounded bg-slate-100 border">
                       {r.vehicleNo}
                     </span>
-                    <StatusBadge status={r.status} />
+                    {isDeletedView ? (
+                      <span className="badge badge-rose text-[11px] font-bold">Deleted</span>
+                    ) : (
+                      <StatusBadge status={r.status} />
+                    )}
                   </div>
 
                   <div className="grid grid-cols-2 gap-2 text-xs bg-slate-50 p-2.5 rounded-xl border border-slate-100">
@@ -773,46 +909,91 @@ export function GodownClient({
                         <span className="font-bold">Exit:</span> {formatDateTime(exitDt)}
                       </div>
                     )}
+                    {isDeletedView && r.deletedAt && (
+                      <div className="col-span-2 text-[11px] text-rose-600 font-semibold">
+                        <span className="font-bold">Deleted On:</span> {formatDateTime(r.deletedAt)}
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex items-center justify-between pt-1">
                     <span className="text-xs text-slate-500 font-medium">By: {r.submittedBy.name}</span>
                     <div className="flex items-center gap-1.5">
-                      {r.status === "PENDING" && (
+                      {isDeletedView ? (
                         <>
                           <button
-                            onClick={() => handleApprove(r.id)}
+                            onClick={() => handleRestore(r)}
                             disabled={isPending}
-                            className="btn text-[11px] py-1 px-2 border border-emerald-300 bg-emerald-50 text-emerald-700 font-bold"
+                            className="btn text-[11px] py-1 px-2 border border-blue-300 bg-blue-50 text-blue-700 font-bold inline-flex items-center gap-1"
                           >
-                            Approve
+                            <RotateCcw className="w-3 h-3" /> Restore
                           </button>
-                          <button
-                            onClick={() => openModifyEntry(r)}
-                            disabled={isPending}
-                            className="btn text-[11px] py-1 px-2 border border-blue-300 bg-blue-50 text-blue-700 font-bold"
-                          >
-                            Edit
-                          </button>
+                          {canPermanentDelete && (
+                            <button
+                              onClick={() => handlePermanentDelete(r)}
+                              disabled={isPending}
+                              className="btn text-[11px] py-1 px-2 border border-rose-300 bg-rose-50 text-rose-700 font-bold inline-flex items-center gap-1"
+                            >
+                              <Trash2 className="w-3 h-3" /> Delete
+                            </button>
+                          )}
                         </>
-                      )}
-                      {r.status === "APPROVED" && !exited && (
-                        <button
-                          onClick={() => {
-                            setError("");
-                            setExitRecordId(r.id);
-                            const eItems = getEntryItems(r);
-                            if (eItems.length > 0) {
-                              setExitItems(eItems.map((it) => ({ id: makeId(), productId: it.productId, productName: it.productName, qty: it.qty })));
-                            } else if (products.length > 0) {
-                              setExitItems([newRow(products)]);
-                            }
-                            setExitOpen(true);
-                          }}
-                          className="btn text-[11px] py-1 px-2.5 bg-amber-500 text-white font-bold rounded-lg"
-                        >
-                          Record Exit
-                        </button>
+                      ) : (
+                        <>
+                          {r.status === "PENDING" && (
+                            <>
+                              <button
+                                onClick={() => handleApprove(r.id)}
+                                disabled={isPending}
+                                className="btn text-[11px] py-1 px-2 border border-emerald-300 bg-emerald-50 text-emerald-700 font-bold"
+                              >
+                                Approve
+                              </button>
+                              <button
+                                onClick={() => openModifyEntry(r)}
+                                disabled={isPending}
+                                className="btn text-[11px] py-1 px-2 border border-blue-300 bg-blue-50 text-blue-700 font-bold"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                onClick={() => handleReject(r.id)}
+                                disabled={isPending}
+                                className="btn text-[11px] py-1 px-2 border border-rose-300 bg-rose-50 text-rose-700 font-bold"
+                              >
+                                Reject
+                              </button>
+                            </>
+                          )}
+                          {r.status === "APPROVED" && !exited && (
+                            <button
+                              onClick={() => {
+                                setError("");
+                                setExitRecordId(r.id);
+                                const eItems = getEntryItems(r);
+                                if (eItems.length > 0) {
+                                  setExitItems(eItems.map((it) => ({ id: makeId(), productId: it.productId, productName: it.productName, qty: it.qty })));
+                                } else if (products.length > 0) {
+                                  setExitItems([newRow(products)]);
+                                }
+                                setExitOpen(true);
+                              }}
+                              className="btn text-[11px] py-1 px-2.5 bg-amber-500 text-white font-bold rounded-lg"
+                            >
+                              Record Exit
+                            </button>
+                          )}
+                          {canDelete && (
+                            <button
+                              onClick={() => handleSoftDelete(r)}
+                              disabled={isPending}
+                              className="btn text-[11px] py-1 px-2 border border-rose-300 bg-rose-50 text-rose-700 font-bold inline-flex items-center gap-0.5"
+                              title="Delete Record"
+                            >
+                              <Trash2 className="w-3 h-3" /> Delete
+                            </button>
+                          )}
+                        </>
                       )}
                     </div>
                   </div>
@@ -834,7 +1015,7 @@ export function GodownClient({
                 <th className="text-center">Filled In</th>
                 <th className="text-center">Empty Out</th>
                 <th>Submitted By</th>
-                <th>Status</th>
+                <th>{statusFilter === "DELETED" ? "Deleted On" : "Status"}</th>
                 <th className="text-center">GPS</th>
                 <th className="text-center">Action</th>
               </tr>
@@ -844,8 +1025,12 @@ export function GodownClient({
                 <tr>
                   <td colSpan={10} className="py-16 text-center">
                     <Truck className="w-12 h-12 mx-auto mb-3 text-slate-300" />
-                    <p className="font-semibold text-slate-700 text-[14px]">No records found</p>
-                    <p className="text-[12px] text-slate-400 mt-1">Try adjusting your filters or search terms.</p>
+                    <p className="font-semibold text-slate-700 text-[14px]">
+                      {statusFilter === "DELETED" ? "No deleted records found" : "No records found"}
+                    </p>
+                    <p className="text-[12px] text-slate-400 mt-1">
+                      {statusFilter === "DELETED" ? "Any supply vehicle records you delete will appear here." : "Try adjusting your filters or search terms."}
+                    </p>
                   </td>
                 </tr>
               ) : (
@@ -855,6 +1040,7 @@ export function GodownClient({
                   const isExpanded = !!expandedRows[r.id];
                   const entryCylinders = getEntryItems(r);
                   const exitCylinders = getExitItems(r);
+                  const isDeletedView = statusFilter === "DELETED";
                   return (
                     <Fragment key={r.id}>
                       <tr className="hover:bg-slate-50/50 transition-colors cursor-pointer" onClick={() => toggleRow(r.id)}>
@@ -877,7 +1063,15 @@ export function GodownClient({
                         <td className="text-center font-bold text-[14px] text-blue-600">{r.filledCylindersReceived}</td>
                         <td className="text-center font-bold text-[14px] text-amber-600">{r.emptyCylindersReturned}</td>
                         <td className="text-slate-600 font-medium text-[13px]">{r.submittedBy.name}</td>
-                        <td className="py-4"><StatusBadge status={r.status} /></td>
+                        <td className="py-4">
+                          {isDeletedView ? (
+                            <span className="text-[12px] font-medium text-rose-600">
+                              {r.deletedAt ? formatDateTime(r.deletedAt) : "Deleted"}
+                            </span>
+                          ) : (
+                            <StatusBadge status={r.status} />
+                          )}
+                        </td>
                         <td className="text-center py-4" onClick={(e) => e.stopPropagation()}>
                           <div className="flex flex-col gap-1 items-center justify-center">
                             {r.entryLat && r.entryLng ? (
@@ -906,78 +1100,113 @@ export function GodownClient({
                           </div>
                         </td>
                         <td className="text-center py-4" onClick={(e) => e.stopPropagation()}>
-                          {r.status === "PENDING" && (
-                            <div className="flex flex-col sm:flex-row items-center justify-center gap-1">
+                          {isDeletedView ? (
+                            <div className="flex flex-col sm:flex-row items-center justify-center gap-1.5">
                               <button
-                                onClick={() => handleApprove(r.id)}
+                                onClick={() => handleRestore(r)}
                                 disabled={isPending}
-                                className="btn text-[11px] py-1 px-2 border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 font-bold inline-flex items-center gap-0.5 shadow-2xs whitespace-nowrap"
-                                title="Approve Entry"
+                                className="btn text-[11px] py-1 px-2.5 border border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100 font-bold inline-flex items-center gap-1 shadow-2xs whitespace-nowrap"
+                                title="Restore to active records"
                               >
-                                <Check className="w-3 h-3" /> Approve
+                                <RotateCcw className="w-3 h-3" /> Restore
                               </button>
-                              <button
-                                onClick={() => openModifyEntry(r)}
-                                disabled={isPending}
-                                className="btn text-[11px] py-1 px-2 border border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100 font-bold inline-flex items-center gap-0.5 shadow-2xs whitespace-nowrap"
-                                title="Modify Entry"
-                              >
-                                <Edit className="w-3 h-3" /> Modify
-                              </button>
-                              <button
-                                onClick={() => handleReject(r.id)}
-                                disabled={isPending}
-                                className="btn text-[11px] py-1 px-2 border border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100 font-bold inline-flex items-center gap-0.5 shadow-2xs whitespace-nowrap"
-                                title="Reject Entry"
-                              >
-                                <X className="w-3 h-3" /> Reject
-                              </button>
+                              {canPermanentDelete && (
+                                <button
+                                  onClick={() => handlePermanentDelete(r)}
+                                  disabled={isPending}
+                                  className="btn text-[11px] py-1 px-2.5 border border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100 font-bold inline-flex items-center gap-1 shadow-2xs whitespace-nowrap"
+                                  title="Permanently remove from database"
+                                >
+                                  <Trash2 className="w-3 h-3" /> Delete Permanently
+                                </button>
+                              )}
                             </div>
-                          )}
-                          {r.status === "APPROVED" && !exited && (
-                            <button
-                              onClick={() => {
-                                setError("");
-                                setExitRecordId(r.id);
-                                const eItems = getEntryItems(r);
-                                if (eItems.length > 0) {
-                                  setExitItems(eItems.map((it) => ({ id: makeId(), productId: it.productId, productName: it.productName, qty: it.qty })));
-                                } else if (products.length > 0) {
-                                  setExitItems([newRow(products)]);
-                                }
-                                setExitErvNo(r.ervNo || "");
-                                setExitErvDate(r.ervDate ? new Date(r.ervDate).toISOString().slice(0, 10) : "");
-                                setExitOpen(true);
-                              }}
-                              className="btn text-[12px] py-1 px-3 font-bold text-white shadow-xs hover:opacity-95 transition-all"
-                              style={{ background: "#F59E0B" }}
-                            >
-                              Record Exit
-                            </button>
-                          )}
-                           {r.status === "APPROVED" && exited && (
-                            <div className="flex flex-col sm:flex-row items-center justify-center gap-2">
-                              <span className="text-[12px] font-semibold text-slate-400 flex items-center gap-1">
-                                <Check className="w-3.5 h-3.5 text-emerald-500" /> Completed
-                              </span>
-                              <div className="flex flex-col sm:flex-row gap-1">
+                          ) : (
+                            <div className="flex flex-col sm:flex-row items-center justify-center gap-1">
+                              {r.status === "PENDING" && (
+                                <>
+                                  <button
+                                    onClick={() => handleApprove(r.id)}
+                                    disabled={isPending}
+                                    className="btn text-[11px] py-1 px-2 border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 font-bold inline-flex items-center gap-0.5 shadow-2xs whitespace-nowrap"
+                                    title="Approve Entry"
+                                  >
+                                    <Check className="w-3 h-3" /> Approve
+                                  </button>
+                                  <button
+                                    onClick={() => openModifyEntry(r)}
+                                    disabled={isPending}
+                                    className="btn text-[11px] py-1 px-2 border border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100 font-bold inline-flex items-center gap-0.5 shadow-2xs whitespace-nowrap"
+                                    title="Modify Entry"
+                                  >
+                                    <Edit className="w-3 h-3" /> Modify
+                                  </button>
+                                  <button
+                                    onClick={() => handleReject(r.id)}
+                                    disabled={isPending}
+                                    className="btn text-[11px] py-1 px-2 border border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100 font-bold inline-flex items-center gap-0.5 shadow-2xs whitespace-nowrap"
+                                    title="Reject Entry"
+                                  >
+                                    <X className="w-3 h-3" /> Reject
+                                  </button>
+                                </>
+                              )}
+                              {r.status === "APPROVED" && !exited && (
                                 <button
-                                  onClick={() => openModifyEntry(r)}
-                                  disabled={isPending}
-                                  className="btn text-[11px] py-1 px-2 border border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100 font-bold inline-flex items-center gap-0.5 shadow-2xs whitespace-nowrap"
-                                  title="Modify Entry details"
+                                  onClick={() => {
+                                    setError("");
+                                    setExitRecordId(r.id);
+                                    const eItems = getEntryItems(r);
+                                    if (eItems.length > 0) {
+                                      setExitItems(eItems.map((it) => ({ id: makeId(), productId: it.productId, productName: it.productName, qty: it.qty })));
+                                    } else if (products.length > 0) {
+                                      setExitItems([newRow(products)]);
+                                    }
+                                    setExitErvNo(r.ervNo || "");
+                                    setExitErvDate(r.ervDate ? new Date(r.ervDate).toISOString().slice(0, 10) : "");
+                                    setExitOpen(true);
+                                  }}
+                                  className="btn text-[12px] py-1 px-3 font-bold text-white shadow-xs hover:opacity-95 transition-all"
+                                  style={{ background: "#F59E0B" }}
                                 >
-                                  <Edit className="w-3 h-3" /> Edit Entry
+                                  Record Exit
                                 </button>
+                              )}
+                              {r.status === "APPROVED" && exited && (
+                                <div className="flex flex-col sm:flex-row items-center justify-center gap-2">
+                                  <span className="text-[12px] font-semibold text-slate-400 flex items-center gap-1">
+                                    <Check className="w-3.5 h-3.5 text-emerald-500" /> Completed
+                                  </span>
+                                  <div className="flex flex-col sm:flex-row gap-1">
+                                    <button
+                                      onClick={() => openModifyEntry(r)}
+                                      disabled={isPending}
+                                      className="btn text-[11px] py-1 px-2 border border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100 font-bold inline-flex items-center gap-0.5 shadow-2xs whitespace-nowrap"
+                                      title="Modify Entry details"
+                                    >
+                                      <Edit className="w-3 h-3" /> Edit Entry
+                                    </button>
+                                    <button
+                                      onClick={() => openModifyExit(r)}
+                                      disabled={isPending}
+                                      className="btn text-[11px] py-1 px-2 border border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100 font-bold inline-flex items-center gap-0.5 shadow-2xs whitespace-nowrap"
+                                      title="Modify Exit details"
+                                    >
+                                      <Edit className="w-3 h-3" /> Edit Exit
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+                              {canDelete && (
                                 <button
-                                  onClick={() => openModifyExit(r)}
+                                  onClick={() => handleSoftDelete(r)}
                                   disabled={isPending}
-                                  className="btn text-[11px] py-1 px-2 border border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100 font-bold inline-flex items-center gap-0.5 shadow-2xs whitespace-nowrap"
-                                  title="Modify Exit details"
+                                  className="btn text-[11px] py-1 px-2 border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100 font-bold inline-flex items-center gap-0.5 shadow-2xs whitespace-nowrap"
+                                  title="Delete record"
                                 >
-                                  <Edit className="w-3 h-3" /> Edit Exit
+                                  <Trash2 className="w-3 h-3" /> Delete
                                 </button>
-                              </div>
+                              )}
                             </div>
                           )}
                         </td>

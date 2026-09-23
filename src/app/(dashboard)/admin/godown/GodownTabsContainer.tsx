@@ -27,11 +27,13 @@ const GodownTrackingMap = dynamic(
 
 interface Props {
   initialRecords: any[];
+  initialDeletedRecords?: any[];
   totalFilled: number;
   totalEmpty: number;
   deliveryVehicles: any[];
   deliveryBoys: any[];
   todayTripLogs: any[];
+  initialDeletedTripLogs?: any[];
   cylinderTypes: any[];
   isAdmin: boolean;
   userId: string;
@@ -50,11 +52,13 @@ interface Props {
 
 export function GodownTabsContainer({
   initialRecords,
+  initialDeletedRecords = [],
   totalFilled,
   totalEmpty,
   deliveryVehicles,
   deliveryBoys,
   todayTripLogs,
+  initialDeletedTripLogs = [],
   cylinderTypes,
   isAdmin,
   userId,
@@ -148,10 +152,12 @@ export function GodownTabsContainer({
             </div>
             <GodownClient
               initialRecords={initialRecords}
+              initialDeletedRecords={initialDeletedRecords}
               totalFilled={totalFilled}
               totalEmpty={totalEmpty}
               isAdmin={isAdmin}
               userId={userId}
+              userRole={userRole}
               cylinderTypes={cylinderTypes}
               selectedDate={selectedDate}
             />
@@ -169,9 +175,11 @@ export function GodownTabsContainer({
             <InternalVehiclesClient
               initialVehicles={deliveryVehicles}
               initialTripLogs={todayTripLogs}
+              initialDeletedTripLogs={initialDeletedTripLogs}
               deliveryBoys={deliveryBoys}
               isAdmin={isAdmin}
               userId={userId}
+              userRole={userRole}
               cylinderTypes={cylinderTypes}
               selectedDate={selectedDate}
               deliveryRequests={deliveryRequests}

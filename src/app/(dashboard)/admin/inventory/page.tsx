@@ -1,10 +1,11 @@
-﻿import { getSessionWithFeatures, requireFeature } from "@/lib/feature-gate";
+import { getSessionWithFeatures, requireFeature } from "@/lib/feature-gate";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Boxes, Package } from "lucide-react";
 import { InventoryClient } from "./InventoryClient";
 import { OfficeInventorySection } from "@/components/ui/OfficeInventorySection";
+import { naturalSortCompare } from "@/lib/utils";
 
 export default async function InventoryPage() {
   const session = await getSessionWithFeatures();
@@ -17,10 +18,48 @@ export default async function InventoryPage() {
   startOfMonth.setDate(1);
   startOfMonth.setHours(0, 0, 0, 0);
 
-  const [products, allGodownMovements, latestStockRecords, deliveries, commercialSales] = await Promise.all([
+  const [products, deletedProducts, allGodownMovements, latestStockRecords, deliveries, commercialSales] = await Promise.all([
     prisma.product.findMany({
-      where: { agencyId: session.agencyId!, isActive: true },
+      where: { agencyId: session.agencyId!, isActive: true, isDeleted: false },
+      include: {
+        _count: {
+          select: {
+            stockRecords: true,
+            deliveryRecords: true,
+            commercialSales: true,
+            officeTransactions: true,
+            godownInventory: true,
+            companyPayments: true,
+          },
+        },
+      },
       orderBy: { createdAt: "desc" },
+    }),
+    prisma.product.findMany({
+      where: {
+        agencyId: session.agencyId!,
+        OR: [
+          { isDeleted: true },
+          { isActive: false },
+          { name: { contains: "(Deleted)" } },
+        ],
+        NOT: {
+          name: { contains: "(Permanently Deleted)" },
+        },
+      },
+      include: {
+        _count: {
+          select: {
+            stockRecords: true,
+            deliveryRecords: true,
+            commercialSales: true,
+            officeTransactions: true,
+            godownInventory: true,
+            companyPayments: true,
+          },
+        },
+      },
+      orderBy: { updatedAt: "desc" },
     }),
     prisma.godownInventory.findMany({
       where: { agencyId: session.agencyId! },
@@ -54,7 +93,16 @@ export default async function InventoryPage() {
     }),
   ]);
 
-  const godownMovements = allGodownMovements.filter(gm => !gm.product.isCylinder);
+  // Natural sorting: 0 to 9 numerical sequence first, then A to Z
+  // If user has customized order via drag & drop (non-zero sortOrder), respect sortOrder
+  const hasCustomSort = products.some((p) => (p as any).sortOrder !== 0);
+  if (!hasCustomSort) {
+    products.sort((a, b) => naturalSortCompare(a.name, b.name));
+  } else {
+    products.sort((a, b) => ((a as any).sortOrder ?? 0) - ((b as any).sortOrder ?? 0) || naturalSortCompare(a.name, b.name));
+  }
+
+  const godownMovements = allGodownMovements.filter(gm => gm.product && !gm.product.isCylinder);
 
   // Map of product ID -> latest stock record closingStock
   const latestStockMap = new Map<string, number>();
@@ -124,23 +172,29 @@ export default async function InventoryPage() {
   const salesMap = new Map<string, { productName: string; qtySold: number; revenue: number; cogs: number }>();
   
   deliveries.forEach((d) => {
+    if (!d.productId) return;
+    const prodName = d.product?.name ?? "Deleted Item";
+    const unitCost = d.product?.unitCost ?? 0;
     if (!salesMap.has(d.productId)) {
-      salesMap.set(d.productId, { productName: d.product.name, qtySold: 0, revenue: 0, cogs: 0 });
+      salesMap.set(d.productId, { productName: prodName, qtySold: 0, revenue: 0, cogs: 0 });
     }
     const val = salesMap.get(d.productId)!;
     val.qtySold += d.deliveredQty;
     val.revenue += d.cashCollected;
-    val.cogs += d.deliveredQty * d.product.unitCost;
+    val.cogs += d.deliveredQty * unitCost;
   });
 
   commercialSales.forEach((c) => {
+    if (!c.productId) return;
+    const prodName = c.product?.name ?? "Deleted Item";
+    const unitCost = c.product?.unitCost ?? 0;
     if (!salesMap.has(c.productId)) {
-      salesMap.set(c.productId, { productName: c.product.name, qtySold: 0, revenue: 0, cogs: 0 });
+      salesMap.set(c.productId, { productName: prodName, qtySold: 0, revenue: 0, cogs: 0 });
     }
     const val = salesMap.get(c.productId)!;
     val.qtySold += c.qty;
     val.revenue += c.amount;
-    val.cogs += c.qty * c.product.unitCost;
+    val.cogs += c.qty * unitCost;
   });
 
   let salesTotalQty = 0;
@@ -206,7 +260,12 @@ export default async function InventoryPage() {
           </div>
         </div>
         <div className="p-5">
-          <InventoryClient initialProducts={products} isAdmin={isAdmin} dashboardData={dashboardData} />
+          <InventoryClient
+            initialProducts={products}
+            initialDeletedProducts={deletedProducts as any}
+            isAdmin={isAdmin}
+            dashboardData={dashboardData}
+          />
         </div>
       </div>
 

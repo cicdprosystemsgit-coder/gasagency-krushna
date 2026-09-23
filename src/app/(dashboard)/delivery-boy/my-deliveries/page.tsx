@@ -59,6 +59,7 @@ export default async function MyDeliveriesPage() {
     todayTrip = await prisma.vehicleTripLog.findFirst({
       where: {
         vehicleId: assignedVehicle.id,
+        isDeleted: false,
         date: { gte: todayStart, lte: todayEnd },
       },
       orderBy: { createdAt: "desc" },

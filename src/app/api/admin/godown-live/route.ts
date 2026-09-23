@@ -39,6 +39,7 @@ export async function GET(request: Request) {
   const godownRecords = await prisma.godownRecord.findMany({
     where: {
       agencyId: session.agencyId,
+      isDeleted: false,
       entryDate: { gte: dateStart, lte: dateEnd },
     },
     include: {
@@ -51,6 +52,7 @@ export async function GET(request: Request) {
   const tripLogs = await prisma.vehicleTripLog.findMany({
     where: {
       agencyId: session.agencyId,
+      isDeleted: false,
       date: { gte: dateStart, lte: dateEnd },
     },
     include: {

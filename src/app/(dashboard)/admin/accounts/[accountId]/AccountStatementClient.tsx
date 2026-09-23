@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Modal } from "@/components/ui/Modal";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import {
   Download,
@@ -69,6 +70,7 @@ export function AccountStatementClient({ account, initialTransactions }: Account
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const confirm = useConfirm();
 
   // Filters State
   const [search, setSearch] = useState("");
@@ -234,7 +236,13 @@ export function AccountStatementClient({ account, initialTransactions }: Account
   }
 
   async function handleDelete(id: string) {
-    if (!confirm("Are you sure you want to delete this transaction? This will reverse its balance impact.")) return;
+    const ok = await confirm({
+      title: "Delete Transaction",
+      message: "Are you sure you want to delete this transaction? This will reverse its balance impact.",
+      confirmText: "Delete Transaction",
+      variant: "danger",
+    });
+    if (!ok) return;
     setError("");
     setSuccess("");
 

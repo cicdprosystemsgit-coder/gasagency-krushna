@@ -45,7 +45,7 @@ export default async function DeliveryBoyDashboard() {
       : Promise.resolve(null),
     hasDeliveries
       ? prisma.vehicleTripLog.findFirst({
-          where: { agencyId, date: { gte: todayStart, lte: todayEnd }, vehicle: { assignedToId: session.userId } },
+          where: { agencyId, isDeleted: false, date: { gte: todayStart, lte: todayEnd }, vehicle: { assignedToId: session.userId } },
           orderBy: { createdAt: "desc" },
           select: { cylindersLoaded: true, cylindersDelivered: true, cylindersReturned: true, tripStatus: true, departureTime: true, returnTime: true },
         })

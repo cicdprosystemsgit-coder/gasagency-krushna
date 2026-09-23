@@ -6,6 +6,7 @@ import { receiveGodownStock, dispatchToOffice, updateGodownMovement, deleteGodow
 import { useGodownGps } from "@/hooks/useGodownGps";
 import { LocationStatusCard } from "@/components/ui/GpsStatusBox";
 import { CustomSelect } from "@/components/ui/CustomSelect";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 
 interface Movement {
   id: string; date: Date | string; moveType: "RECEIVED" | "DISPATCHED";
@@ -47,6 +48,7 @@ export function GodownInventoryClient({ initialMovements, products, userId }: {
   const [form, setForm] = useState(blankForm());
   const [error, setError] = useState("");
   const [isPending, startTransition] = useTransition();
+  const confirm = useConfirm();
 
   const stock = computeStock(movements);
 
@@ -123,11 +125,19 @@ export function GodownInventoryClient({ initialMovements, products, userId }: {
     });
   }
 
-  function handleDelete(id: string) {
-    if (!confirm("Delete this movement?")) return;
+  async function handleDelete(id: string) {
+    const ok = await confirm({
+      title: "Delete Movement Record?",
+      message: "Are you sure you want to delete this stock movement record? This will adjust your stock balance.",
+      confirmText: "Delete Record",
+      cancelText: "Cancel",
+      variant: "danger",
+    });
+    if (!ok) return;
+
     startTransition(async () => {
       const res = await deleteGodownMovement(id);
-      if (res.error) { alert(res.error); return; }
+      if (res.error) { setError(res.error); return; }
       setMovements(p => p.filter(m => m.id !== id));
     });
   }

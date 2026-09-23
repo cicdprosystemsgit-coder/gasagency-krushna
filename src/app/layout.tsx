@@ -4,6 +4,7 @@ import "./globals.css";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages } from "next-intl/server";
 import Script from "next/script";
+import { ConfirmDialogProvider } from "@/components/ui/ConfirmDialog";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -55,7 +56,9 @@ export default async function RootLayout({
       </head>
       <body className="min-h-screen flex flex-col antialiased" suppressHydrationWarning>
         <NextIntlClientProvider messages={messages}>
-          {children}
+          <ConfirmDialogProvider>
+            {children}
+          </ConfirmDialogProvider>
         </NextIntlClientProvider>
         <Script id="register-sw" strategy="afterInteractive">
           {`

@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { Modal } from "@/components/ui/Modal";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { formatCurrency, formatDate, formatDateTime, ROLE_LABELS } from "@/lib/utils";
 import {
@@ -494,6 +495,7 @@ function SalaryRequestsSection({
   const [rejectModal, setRejectModal] = useState<SalaryRequest | null>(null);
   const [rejectNote, setRejectNote]   = useState("");
   const [isPending, startTransition]  = useTransition();
+  const confirm = useConfirm();
 
   const isAdmin  = role === "ADMIN";
   const isManager = role === "MANAGER";
@@ -514,9 +516,15 @@ function SalaryRequestsSection({
     .filter((r) => r.status === "PENDING" || r.status === "MANAGER_APPROVED")
     .reduce((s, r) => s + r.amount, 0);
 
-  function handleApprove(id: string, reqStatus: string) {
+  async function handleApprove(id: string, reqStatus: string) {
     const actionName = isAdmin ? "final approval" : "manager approval";
-    if (!confirm(`Confirm ${actionName} for this request?`)) return;
+    const ok = await confirm({
+      title: isAdmin ? "Confirm Final Approval" : "Confirm Manager Approval",
+      message: `Are you sure you want to provide ${actionName} for this request?`,
+      confirmText: "Approve",
+      variant: "primary",
+    });
+    if (!ok) return;
     startTransition(async () => {
       const result = isAdmin 
         ? await approveSalaryRequest(id)

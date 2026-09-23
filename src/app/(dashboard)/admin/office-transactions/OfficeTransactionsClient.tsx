@@ -13,6 +13,7 @@ import { createOfficeTransaction, deleteOfficeTransaction, verifyRegulatorNumber
 import { CalendarPicker } from "@/components/ui/CalendarPicker";
 import type { Product } from "@/generated/prisma";
 import { cn } from "@/lib/utils";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 
 interface Transaction {
   id: string;
@@ -196,6 +197,7 @@ export function OfficeTransactionsClient({
   canEdit = true,
 }: OfficeTransactionsClientProps) {
   const [transactions, setTransactions] = useState(initialTransactions);
+  const confirm = useConfirm();
   const [activeTab, setActiveTab] = useState<typeof TABS[number]>("Inventory");
   const [modalOpen, setModalOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -469,8 +471,16 @@ export function OfficeTransactionsClient({
     });
   }
 
-  function handleDelete(id: string) {
-    if (!confirm("Delete this transaction?")) return;
+  async function handleDelete(id: string) {
+    const ok = await confirm({
+      title: "Delete Transaction?",
+      message: "Are you sure you want to delete this office transaction? This will reverse its balance impact.",
+      confirmText: "Delete Transaction",
+      cancelText: "Cancel",
+      variant: "danger",
+    });
+    if (!ok) return;
+
     const fd = new FormData();
     fd.append("id", id);
     startTransition(async () => {

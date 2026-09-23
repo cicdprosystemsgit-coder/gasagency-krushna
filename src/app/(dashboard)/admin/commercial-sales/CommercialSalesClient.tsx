@@ -3,6 +3,7 @@
 import { useState, useTransition, useMemo } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 import {
   Plus,
   ShoppingCart,
@@ -101,6 +102,7 @@ export function CommercialSalesClient({
 
   // Sales tab states
   const [sales, setSales] = useState(initialSales);
+  const confirm = useConfirm();
   const [modalOpen, setModalOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState("");
@@ -241,8 +243,16 @@ export function CommercialSalesClient({
     });
   }
 
-  function handleDelete(id: string) {
-    if (!confirm("Remove this entry?")) return;
+  async function handleDelete(id: string) {
+    const ok = await confirm({
+      title: "Remove Commercial Sale Entry?",
+      message: "Are you sure you want to remove this commercial sale entry? This will update accounting balances.",
+      confirmText: "Remove Entry",
+      cancelText: "Cancel",
+      variant: "danger",
+    });
+    if (!ok) return;
+
     const fd = new FormData();
     fd.append("id", id);
     startTransition(async () => {

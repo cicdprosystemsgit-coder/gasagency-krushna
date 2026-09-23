@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { Modal } from "@/components/ui/Modal";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { SelectWithAdd, type SelectOption } from "@/components/ui/SelectWithAdd";
 import { formatCurrency, formatDate, getDaysUntilRenewal, getRenewalStatus } from "@/lib/utils";
 import { Plus, AlertTriangle, Car, Building2, Wallet, Trash2 } from "lucide-react";
@@ -58,6 +59,7 @@ export function ExpensesClient({
   const [expenseModal, setExpenseModal] = useState(false);
   const [assetModal, setAssetModal] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const confirm = useConfirm();
   const [error, setError] = useState("");
   const [categoryOptions, setCategoryOptions] = useState<SelectOption[]>(EXPENSE_CATEGORY_OPTIONS);
   const [dateFrom, setDateFrom] = useState("");
@@ -116,8 +118,14 @@ export function ExpensesClient({
     });
   }
 
-  function handleDeleteAsset(id: string) {
-    if (!confirm("Remove this asset?")) return;
+  async function handleDeleteAsset(id: string) {
+    const ok = await confirm({
+      title: "Remove Asset",
+      message: "Are you sure you want to remove this asset?",
+      confirmText: "Remove Asset",
+      variant: "danger",
+    });
+    if (!ok) return;
     startTransition(async () => {
       const result = await deleteAsset(id);
       if (result.success) setAssets((prev) => prev.filter((a) => a.id !== id));

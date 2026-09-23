@@ -34,6 +34,7 @@ export default async function GodownKeeperGodownPage({ searchParams }: PageProps
     prisma.godownRecord.findMany({
       where: {
         agencyId: session.agencyId!,
+        isDeleted: false,
         entryDate: { gte: dateStart, lte: dateEnd },
       },
       orderBy: { entryDate: "desc" },
@@ -43,6 +44,7 @@ export default async function GodownKeeperGodownPage({ searchParams }: PageProps
       _sum: { filledCylindersReceived: true, emptyCylindersReturned: true },
       where: {
         agencyId: session.agencyId!,
+        isDeleted: false,
         status: "APPROVED",
         entryDate: { gte: dateStart, lte: dateEnd },
       },
@@ -58,7 +60,7 @@ export default async function GodownKeeperGodownPage({ searchParams }: PageProps
       orderBy: { name: "asc" },
     }),
     prisma.vehicleTripLog.findMany({
-      where: { agencyId: session.agencyId!, date: { gte: dateStart, lte: dateEnd } },
+      where: { agencyId: session.agencyId!, isDeleted: false, date: { gte: dateStart, lte: dateEnd } },
       orderBy: { createdAt: "desc" },
       include: {
         vehicle: { select: { vehicleNo: true, vehicleName: true, assignedTo: { select: { name: true } } } },

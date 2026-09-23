@@ -2,6 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
+import { revalidatePath } from "next/cache";
 
 /* ── Types ──────────────────────────────────────────────────────────────────── */
 
@@ -415,3 +416,195 @@ export async function addCylinderType(name: string) {
     return { error: "Failed to add cylinder type." };
   }
 }
+
+/* ── Soft Delete Godown Record ────────────────────────────────────────────────── */
+
+export async function softDeleteGodownRecord(id: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const session = await getSession();
+    if (!session || !["ADMIN", "MANAGER"].includes(session.role) || !session.agencyId) {
+      return { success: false, error: "Unauthorized" };
+    }
+    if (!id) return { success: false, error: "Record ID is required" };
+
+    const record = await prisma.godownRecord.findUnique({
+      where: { id, agencyId: session.agencyId },
+    });
+    if (!record) return { success: false, error: "Record not found" };
+
+    await prisma.godownRecord.update({
+      where: { id },
+      data: {
+        isDeleted: true,
+        deletedAt: new Date(),
+      },
+    });
+
+    // If record was approved, remove associated inventory movements so stock count reflects deletion
+    if (record.status === "APPROVED") {
+      await prisma.godownInventory.deleteMany({
+        where: {
+          agencyId: session.agencyId,
+          notes: {
+            contains: `(${record.vehicleNo})`,
+          },
+        },
+      });
+    }
+
+    revalidatePath("/admin/godown");
+    revalidatePath("/manager/godown");
+    revalidatePath("/godown-keeper");
+    revalidatePath("/godown-keeper/godown");
+    revalidatePath("/godown-keeper/inventory");
+    revalidatePath("/admin/inventory");
+    revalidatePath("/manager/inventory");
+    return { success: true };
+  } catch (err: any) {
+    console.error("[softDeleteGodownRecord]", err);
+    return { success: false, error: err?.message || "Failed to delete record" };
+  }
+}
+
+/* ── Restore Godown Record ────────────────────────────────────────────────────── */
+
+export async function restoreGodownRecord(id: string): Promise<{ success: boolean; record?: any; error?: string }> {
+  try {
+    const session = await getSession();
+    if (!session || !["ADMIN", "MANAGER"].includes(session.role) || !session.agencyId) {
+      return { success: false, error: "Unauthorized" };
+    }
+    if (!id) return { success: false, error: "Record ID is required" };
+
+    const record = await prisma.godownRecord.findUnique({
+      where: { id, agencyId: session.agencyId },
+      include: { submittedBy: { select: { name: true } } },
+    });
+    if (!record) return { success: false, error: "Record not found" };
+
+    const updated = await prisma.godownRecord.update({
+      where: { id },
+      data: {
+        isDeleted: false,
+        deletedAt: null,
+      },
+      include: { submittedBy: { select: { name: true } } },
+    });
+
+    // If record was approved, restore GodownInventory movements
+    if (record.status === "APPROVED" && record.items) {
+      const items = record.items as any;
+      const entryItems = items.entryItems || [];
+      const exitItems = items.exitItems || [];
+
+      // Clean any existing first to avoid duplicate movements
+      await prisma.godownInventory.deleteMany({
+        where: {
+          agencyId: session.agencyId,
+          notes: {
+            contains: `(${record.vehicleNo})`,
+          },
+        },
+      });
+
+      for (const item of entryItems) {
+        if (item.productId && item.qty > 0) {
+          await prisma.godownInventory.create({
+            data: {
+              date: record.entryDate,
+              moveType: "RECEIVED",
+              productId: item.productId,
+              qty: item.qty,
+              notes: `Approved: Co. Vehicle Entry (${record.vehicleNo})`,
+              recordedById: record.submittedById,
+              agencyId: record.agencyId,
+            },
+          });
+        }
+      }
+
+      const exitDateStr = items.exitDate || record.entryDate.toISOString();
+      for (const item of exitItems) {
+        if (item.productId && item.qty > 0) {
+          await prisma.godownInventory.create({
+            data: {
+              date: new Date(exitDateStr),
+              moveType: "DISPATCHED",
+              productId: item.productId,
+              qty: item.qty,
+              notes: `Approved: Co. Vehicle Exit (${record.vehicleNo})`,
+              recordedById: record.submittedById,
+              agencyId: record.agencyId,
+            },
+          });
+        }
+      }
+    }
+
+    revalidatePath("/admin/godown");
+    revalidatePath("/manager/godown");
+    revalidatePath("/godown-keeper");
+    revalidatePath("/godown-keeper/godown");
+    revalidatePath("/godown-keeper/inventory");
+    revalidatePath("/admin/inventory");
+    revalidatePath("/manager/inventory");
+    return {
+      success: true,
+      record: {
+        ...updated,
+        entryDate: updated.entryDate.toISOString(),
+        ervDate: updated.ervDate?.toISOString() ?? null,
+        approvedAt: updated.approvedAt?.toISOString() ?? null,
+        createdAt: updated.createdAt.toISOString(),
+        updatedAt: updated.updatedAt.toISOString(),
+      },
+    };
+  } catch (err: any) {
+    console.error("[restoreGodownRecord]", err);
+    return { success: false, error: err?.message || "Failed to restore record" };
+  }
+}
+
+/* ── Permanent Delete Godown Record ───────────────────────────────────────────── */
+
+export async function permanentDeleteGodownRecord(id: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const session = await getSession();
+    if (!session || session.role !== "ADMIN" || !session.agencyId) {
+      return { success: false, error: "Unauthorized: Admin access required for permanent deletion" };
+    }
+    if (!id) return { success: false, error: "Record ID is required" };
+
+    const record = await prisma.godownRecord.findUnique({
+      where: { id, agencyId: session.agencyId },
+    });
+    if (!record) return { success: false, error: "Record not found" };
+
+    // Clean up any inventory movement records
+    await prisma.godownInventory.deleteMany({
+      where: {
+        agencyId: session.agencyId,
+        notes: {
+          contains: `(${record.vehicleNo})`,
+        },
+      },
+    });
+
+    await prisma.godownRecord.delete({
+      where: { id },
+    });
+
+    revalidatePath("/admin/godown");
+    revalidatePath("/manager/godown");
+    revalidatePath("/godown-keeper");
+    revalidatePath("/godown-keeper/godown");
+    revalidatePath("/godown-keeper/inventory");
+    revalidatePath("/admin/inventory");
+    revalidatePath("/manager/inventory");
+    return { success: true };
+  } catch (err: any) {
+    console.error("[permanentDeleteGodownRecord]", err);
+    return { success: false, error: err?.message || "Failed to permanently delete record" };
+  }
+}
+

@@ -3,6 +3,7 @@ import { useRouter } from "next/navigation";
 import { format, parseISO } from "date-fns";
 import { toast } from "sonner";
 import { Modal } from "@/components/ui/Modal";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { CustomSelect } from "@/components/ui/CustomSelect";
 import { formatDateTime } from "@/lib/utils";
@@ -17,6 +18,9 @@ import {
   createVehicleTripLog,
   updateTripStatus,
   updateTripLog,
+  softDeleteTripLog,
+  restoreTripLog,
+  permanentDeleteTripLog,
 } from "@/app/actions/delivery-vehicles";
 import { addCylinderType } from "@/app/actions/godown";
 import { fulfillDeliveryCountRequest } from "@/app/actions/delivery-count-requests";
@@ -58,6 +62,8 @@ interface TripLog {
   returnLat?: number | null;
   returnLng?: number | null;
   returnAccuracy?: number | null;
+  isDeleted?: boolean;
+  deletedAt?: Date | string | null;
 }
 interface DeliveryBoy { id: string; name: string; }
 
@@ -94,9 +100,11 @@ function getTripItems(t: TripLog): CylinderRowItem[] {
 export function InternalVehiclesClient({
   initialVehicles,
   initialTripLogs,
+  initialDeletedTripLogs = [],
   deliveryBoys,
   isAdmin,
   userId,
+  userRole = "ADMIN",
   cylinderTypes = [],
   selectedDate,
   deliveryRequests = [],
@@ -104,9 +112,11 @@ export function InternalVehiclesClient({
 }: {
   initialVehicles: DeliveryVehicle[];
   initialTripLogs: TripLog[];
+  initialDeletedTripLogs?: TripLog[];
   deliveryBoys: DeliveryBoy[];
   isAdmin: boolean;
   userId: string;
+  userRole?: string;
   cylinderTypes?: Product[];
   selectedDate?: string;
   deliveryRequests?: GodownDeliveryRequest[];
@@ -115,16 +125,25 @@ export function InternalVehiclesClient({
   const router = useRouter();
   const [vehicles, setVehicles] = useState(initialVehicles);
   const [tripLogs, setTripLogs] = useState(initialTripLogs);
+  const [deletedTripLogs, setDeletedTripLogs] = useState<TripLog[]>(initialDeletedTripLogs);
+  const confirm = useConfirm();
+
+  const canDelete = isAdmin || userRole === "MANAGER";
+  const canPermanentDelete = isAdmin;
 
   useEffect(() => {
     setTripLogs(initialTripLogs);
   }, [initialTripLogs]);
 
   useEffect(() => {
+    setDeletedTripLogs(initialDeletedTripLogs);
+  }, [initialDeletedTripLogs]);
+
+  useEffect(() => {
     setVehicles(initialVehicles);
   }, [initialVehicles]);
 
-  const [activeTab, setActiveTab] = useState<"vehicles" | "trips">("trips");
+  const [activeTab, setActiveTab] = useState<"vehicles" | "trips" | "deleted_trips">("trips");
   const [vehicleModal, setVehicleModal] = useState(false);
   const [tripModal, setTripModal] = useState(false);
   const [updateModal, setUpdateModal] = useState<TripLog | null>(null);
@@ -464,6 +483,69 @@ export function InternalVehiclesClient({
     });
   }
 
+  // ── Soft Delete Trip Log ──
+  async function handleSoftDeleteTripLog(t: TripLog) {
+    const ok = await confirm({
+      title: "Delete Internal Trip Log",
+      message: `Are you sure you want to move the trip log for vehicle "${t.vehicle.vehicleNo}" to deleted records? You can restore it later from the Deleted Trips tab.`,
+      confirmText: "Delete Trip Log",
+      variant: "danger",
+    });
+    if (!ok) return;
+    startTransition(async () => {
+      const res = await softDeleteTripLog(t.id);
+      if (res.success) {
+        setTripLogs((prev) => prev.filter((item) => item.id !== t.id));
+        setDeletedTripLogs((prev) => [{ ...t, isDeleted: true, deletedAt: new Date().toISOString() }, ...prev]);
+        toast.success(`Trip log for vehicle ${t.vehicle.vehicleNo} moved to deleted records.`);
+      } else {
+        toast.error(res.error || "Failed to delete trip log");
+      }
+    });
+  }
+
+  // ── Restore Trip Log ──
+  async function handleRestoreTripLog(t: TripLog) {
+    const ok = await confirm({
+      title: "Restore Internal Trip Log",
+      message: `Are you sure you want to restore the trip log for vehicle "${t.vehicle.vehicleNo}" back to active trips?`,
+      confirmText: "Restore Trip Log",
+      variant: "primary",
+    });
+    if (!ok) return;
+    startTransition(async () => {
+      const res = await restoreTripLog(t.id);
+      if (res.success) {
+        setDeletedTripLogs((prev) => prev.filter((item) => item.id !== t.id));
+        const restored = res.tripLog || { ...t, isDeleted: false, deletedAt: null };
+        setTripLogs((prev) => [restored as TripLog, ...prev]);
+        toast.success(`Trip log for vehicle ${t.vehicle.vehicleNo} restored successfully.`);
+      } else {
+        toast.error(res.error || "Failed to restore trip log");
+      }
+    });
+  }
+
+  // ── Permanent Delete Trip Log ──
+  async function handlePermanentDeleteTripLog(t: TripLog) {
+    const ok = await confirm({
+      title: "Permanently Delete Trip Log",
+      message: `WARNING: This action is permanent and cannot be undone! The trip log for vehicle "${t.vehicle.vehicleNo}" will be completely removed from the database. Are you absolutely sure?`,
+      confirmText: "Permanently Delete",
+      variant: "danger",
+    });
+    if (!ok) return;
+    startTransition(async () => {
+      const res = await permanentDeleteTripLog(t.id);
+      if (res.success) {
+        setDeletedTripLogs((prev) => prev.filter((item) => item.id !== t.id));
+        toast.success(`Trip log for vehicle ${t.vehicle.vehicleNo} permanently deleted.`);
+      } else {
+        toast.error(res.error || "Failed to permanently delete trip log");
+      }
+    });
+  }
+
   return (
     <>
       {/* Header stats */}
@@ -482,14 +564,23 @@ export function InternalVehiclesClient({
       </div>
 
       {/* Tab bar */}
-      <div className="flex items-center gap-1 p-1 rounded-lg mb-4" style={{ background: "#F4F4F5", width: "fit-content" }}>
-        {(["trips", "vehicles"] as const).map((tab) => (
-          <button key={tab} onClick={() => setActiveTab(tab)}
-            className="px-4 py-1.5 rounded-md text-[13px] font-medium transition-all"
-            style={activeTab === tab ? { background: "#fff", color: "#18181B", boxShadow: "0 1px 2px rgba(0,0,0,0.08)" } : { color: "#71717A" }}>
-            {tab === "trips" ? "Today's Trips" : "Vehicle Fleet"}
-          </button>
-        ))}
+      <div className="flex flex-wrap items-center gap-1 p-1 rounded-lg mb-4" style={{ background: "#F4F4F5", width: "fit-content" }}>
+        {(["trips", "vehicles", "deleted_trips"] as const).map((tab) => {
+          const label = tab === "trips" ? "Today's Trips" : tab === "vehicles" ? "Vehicle Fleet" : "Deleted Trips";
+          const count = tab === "deleted_trips" ? deletedTripLogs.length : undefined;
+          return (
+            <button key={tab} onClick={() => setActiveTab(tab)}
+              className="px-4 py-1.5 rounded-md text-[13px] font-medium transition-all flex items-center gap-1.5"
+              style={activeTab === tab ? { background: tab === "deleted_trips" ? "#FEF2F2" : "#fff", color: tab === "deleted_trips" ? "#DC2626" : "#18181B", boxShadow: "0 1px 2px rgba(0,0,0,0.08)" } : { color: tab === "deleted_trips" && deletedTripLogs.length > 0 ? "#DC2626" : "#71717A" }}>
+              <span>{label}</span>
+              {count !== undefined && count > 0 && (
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-rose-100 text-rose-700">
+                  {count}
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
       {/* TODAY TRIPS TAB */}
@@ -661,6 +752,95 @@ export function InternalVehiclesClient({
                               title="Modify Return details"
                             >
                               <RotateCcw className="w-3 h-3" /> Edit Ret
+                            </button>
+                          )}
+
+                          {/* Delete Trip Log */}
+                          {canDelete && (
+                            <button
+                              onClick={() => handleSoftDeleteTripLog(t)}
+                              disabled={isPending}
+                              className="btn text-[11px] py-1 px-2 border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100 font-bold inline-flex items-center gap-0.5 shadow-2xs whitespace-nowrap"
+                              title="Delete trip log"
+                            >
+                              <Trash2 className="w-3 h-3" /> Delete
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* DELETED TRIPS TAB */}
+      {activeTab === "deleted_trips" && (
+        <>
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <p className="text-[13px] font-semibold text-rose-800">Deleted Internal Trip Logs</p>
+              <p className="text-[11px] text-slate-500">Soft-deleted vehicle trips. You can restore them to active status or permanently delete them.</p>
+            </div>
+          </div>
+          <div className="rounded-lg overflow-hidden" style={{ background: "#fff", border: "1px solid #E4E4E7", boxShadow: "0 1px 2px rgba(0,0,0,0.04)" }}>
+            <div className="overflow-x-auto">
+              <table className="table">
+                <thead><tr>
+                  <th>Vehicle</th><th>Delivery Boy</th><th>Cylinders Loaded</th>
+                  <th>Departure</th><th>Return</th><th>Delivered</th><th>Returned</th>
+                  <th>Deleted On</th>
+                  <th className="text-center">Action</th>
+                </tr></thead>
+                <tbody>
+                  {deletedTripLogs.length === 0 ? (
+                    <tr><td colSpan={9} className="py-14 text-center">
+                      <Truck className="w-8 h-8 mx-auto mb-2 text-slate-300" />
+                      <p className="font-semibold text-slate-700 text-[13px]">No deleted trip logs</p>
+                      <p className="text-[11px] text-slate-400 mt-0.5">Any deleted trip logs will appear here for restoration.</p>
+                    </td></tr>
+                  ) : deletedTripLogs.map((t) => (
+                    <tr key={t.id}>
+                      <td>
+                        <p className="font-mono font-semibold text-[13px]" style={{ color: "#18181B" }}>{t.vehicle.vehicleNo}</p>
+                        <p className="text-[11px]" style={{ color: "#A1A1AA" }}>{t.vehicle.vehicleName}</p>
+                      </td>
+                      <td className="text-[13px]" style={{ color: "#52525B" }}>{t.vehicle.assignedTo?.name ?? "—"}</td>
+                      <td className="text-center font-bold text-[13px] text-blue-600">
+                        {t.cylindersLoaded}
+                      </td>
+                      <td className="muted text-[12px]">{t.departureTime ? formatDateTime(t.departureTime) : "—"}</td>
+                      <td className="muted text-[12px]">{t.returnTime ? formatDateTime(t.returnTime) : "—"}</td>
+                      <td className="text-center font-bold text-emerald-600">
+                        {t.cylindersDelivered || "—"}
+                      </td>
+                      <td className="text-center font-bold text-amber-600">
+                        {t.cylindersReturned || "—"}
+                      </td>
+                      <td className="text-[12px] font-medium text-rose-600">
+                        {t.deletedAt ? formatDateTime(t.deletedAt) : "Deleted"}
+                      </td>
+                      <td className="text-center py-4">
+                        <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                          <button
+                            onClick={() => handleRestoreTripLog(t)}
+                            disabled={isPending}
+                            className="btn text-[11px] py-1 px-2.5 border border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100 font-bold inline-flex items-center gap-1 shadow-2xs whitespace-nowrap"
+                            title="Restore trip log"
+                          >
+                            <RotateCcw className="w-3 h-3" /> Restore
+                          </button>
+                          {canPermanentDelete && (
+                            <button
+                              onClick={() => handlePermanentDeleteTripLog(t)}
+                              disabled={isPending}
+                              className="btn text-[11px] py-1 px-2.5 border border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100 font-bold inline-flex items-center gap-1 shadow-2xs whitespace-nowrap"
+                              title="Permanently remove from database"
+                            >
+                              <Trash2 className="w-3 h-3" /> Delete Permanently
                             </button>
                           )}
                         </div>
