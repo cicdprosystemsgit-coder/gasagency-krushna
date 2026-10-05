@@ -275,7 +275,14 @@ export function BulkImportModal({ open, onClose, onSuccess }: BulkImportModalPro
               <FileCheck className="w-5 h-5 text-emerald-600 flex-shrink-0" />
               <div className="truncate">
                 <p className="font-semibold text-zinc-800 truncate">{file.name}</p>
-                <p className="text-zinc-500 text-[11px]">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <span className="text-zinc-500 text-[11px]">{(file.size / 1024 / 1024).toFixed(2)} MB</span>
+                  {file.size > 2 * 1024 * 1024 && file.name.endsWith(".xlsx") && (
+                    <span className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded font-medium">
+                      💡 Tip: Saving as .csv makes uploads 10x faster
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
             {!loading && (

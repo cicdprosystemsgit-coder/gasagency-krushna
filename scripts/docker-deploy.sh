@@ -10,9 +10,10 @@ echo "🚀 Starting Gasagency Docker Deployment..."
 echo "============================================"
 
 # ─── 1. Pull latest code ──────────────────────────────────────────────────────
-echo "📦 Pulling latest code from GitHub..."
+BRANCH="${1:-new-full-mearge}"
+echo "📦 Pulling latest code from GitHub ($BRANCH)..."
 cd "$APP_DIR"
-git pull origin main
+git pull origin "$BRANCH"
 
 # ─── 2. Build new Docker image ────────────────────────────────────────────────
 echo "🐳 Building Docker image (this may take 3-5 minutes)..."
