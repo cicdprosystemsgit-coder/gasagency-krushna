@@ -4,6 +4,9 @@ import { prisma } from "@/lib/prisma";
 import { checkPermission } from "@/lib/rbac";
 import ExcelJS from "exceljs";
 import { revalidatePath } from "next/cache";
+import os from "os";
+import fs from "fs";
+import path from "path";
 
 export const maxDuration = 300; // 5 minutes for processing 32,000+ records
 export const dynamic = "force-dynamic";
@@ -35,17 +38,61 @@ export async function POST(req: NextRequest) {
     }
 
     const formData = await req.formData();
-    const file = formData.get("file") as File | null;
+    const chunk = formData.get("chunk") as File | null;
+    const directFile = formData.get("file") as File | null;
 
-    if (!file) {
+    if (!chunk && !directFile) {
       return NextResponse.json({ error: "No Excel or CSV file provided." }, { status: 400 });
     }
 
-    const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
+    let buffer: Buffer;
+    let fileName = "";
+
+    // ── Chunked Upload Handling (Bypasses any Nginx/Cloudflare 1MB/10MB limits) ──
+    if (chunk) {
+      const uploadId = (formData.get("uploadId") as string) || "default";
+      const chunkIndex = parseInt((formData.get("chunkIndex") as string) || "0", 10);
+      const totalChunks = parseInt((formData.get("totalChunks") as string) || "1", 10);
+      fileName = (formData.get("fileName") as string) || "import.xlsx";
+
+      const chunkBuffer = Buffer.from(await chunk.arrayBuffer());
+      const tempDir = os.tmpdir();
+      const safeUploadId = uploadId.replace(/[^a-zA-Z0-9_-]/g, "");
+      const safeAgencyId = session.agencyId.replace(/[^a-zA-Z0-9_-]/g, "");
+      const tempFilePath = path.join(tempDir, `gasagency_upload_${safeAgencyId}_${safeUploadId}.part`);
+
+      if (chunkIndex === 0) {
+        await fs.promises.writeFile(tempFilePath, chunkBuffer);
+      } else {
+        await fs.promises.appendFile(tempFilePath, chunkBuffer);
+      }
+
+      // If more chunks are pending, acknowledge receipt
+      if (chunkIndex < totalChunks - 1) {
+        return NextResponse.json({
+          success: true,
+          chunkReceived: chunkIndex,
+          totalChunks,
+          done: false,
+        });
+      }
+
+      // All chunks received: read complete file buffer and clean up temp file
+      buffer = await fs.promises.readFile(tempFilePath);
+      try {
+        await fs.promises.unlink(tempFilePath);
+      } catch {
+        // ignore unlink error
+      }
+    } else {
+      const file = directFile!;
+      fileName = file.name;
+      const arrayBuffer = await file.arrayBuffer();
+      buffer = Buffer.from(arrayBuffer);
+    }
 
     const workbook = new ExcelJS.Workbook();
-    if (file.name.endsWith(".csv")) {
+    if (fileName.endsWith(".csv")) {
       const { Readable } = await import("stream");
       const stream = Readable.from(buffer);
       await workbook.csv.read(stream);

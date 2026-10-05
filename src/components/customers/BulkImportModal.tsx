@@ -26,6 +26,10 @@ export function BulkImportModal({ open, onClose, onSuccess }: BulkImportModalPro
   const [file, setFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<{
+    percent: number;
+    message: string;
+  } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<{
     totalRows: number;
@@ -49,6 +53,7 @@ export function BulkImportModal({ open, onClose, onSuccess }: BulkImportModalPro
     setError(null);
     setResult(null);
     setLoading(false);
+    setUploadProgress(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
@@ -78,42 +83,103 @@ export function BulkImportModal({ open, onClose, onSuccess }: BulkImportModalPro
     setLoading(true);
     setError(null);
     setResult(null);
+    setUploadProgress({ percent: 0, message: "Preparing file upload..." });
 
     try {
-      const formData = new FormData();
-      formData.append("file", file);
+      // 512 KB per chunk guarantees each HTTP request is well under any Nginx 1MB or 10MB limits
+      const CHUNK_SIZE = 512 * 1024;
+      const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+      const uploadId = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
-      const response = await fetch("/api/admin/customers/bulk-import", {
-        method: "POST",
-        body: formData,
-      });
+      let finalData: {
+        totalRows: number;
+        insertedCount: number;
+        updatedCount?: number;
+        sample?: Array<{
+          name: string;
+          customerCode: string;
+          phone: string;
+          address: string | null;
+          areaRoute: string | null;
+          type: string;
+        }>;
+      } | null = null;
 
-      if (response.status === 413) {
-        throw new Error("File size is too large for the server (HTTP 413: Request Entity Too Large). The server limits upload size. Please restart Nginx on the server with 'client_max_body_size 100M;' or save your Excel file as CSV and re-upload.");
+      for (let i = 0; i < totalChunks; i++) {
+        const start = i * CHUNK_SIZE;
+        const end = Math.min(file.size, start + CHUNK_SIZE);
+        const chunkBlob = file.slice(start, end);
+        const isLastChunk = i === totalChunks - 1;
+        const percent = Math.round(((i + 1) / totalChunks) * 100);
+
+        setUploadProgress({
+          percent,
+          message: isLastChunk
+            ? "Upload complete! Processing customer records..."
+            : `Uploading part ${i + 1} of ${totalChunks} (${percent}%)...`,
+        });
+
+        const formData = new FormData();
+        formData.append("chunk", chunkBlob, file.name);
+        formData.append("uploadId", uploadId);
+        formData.append("chunkIndex", String(i));
+        formData.append("totalChunks", String(totalChunks));
+        formData.append("fileName", file.name);
+
+        const response = await fetch("/api/admin/customers/bulk-import", {
+          method: "POST",
+          body: formData,
+        });
+
+        if (response.status === 413) {
+          throw new Error("File chunk was rejected by the server (HTTP 413). Please check server Nginx configuration.");
+        }
+
+        let data: {
+          error?: string;
+          totalRows?: number;
+          insertedCount?: number;
+          updatedCount?: number;
+          sample?: Array<{
+            name: string;
+            customerCode: string;
+            phone: string;
+            address: string | null;
+            areaRoute: string | null;
+            type: string;
+          }>;
+        };
+
+        const text = await response.text();
+        try {
+          data = JSON.parse(text);
+        } catch {
+          throw new Error(
+            !response.ok
+              ? `Server returned error (${response.status}): ${response.statusText || "Upload failed"}`
+              : "Invalid response received from server."
+          );
+        }
+
+        if (!response.ok || data.error) {
+          throw new Error(data.error || `Upload part ${i + 1} failed`);
+        }
+
+        if (isLastChunk) {
+          finalData = {
+            totalRows: data.totalRows || 0,
+            insertedCount: data.insertedCount || 0,
+            updatedCount: data.updatedCount || 0,
+            sample: data.sample || [],
+          };
+        }
       }
 
-      let data;
-      const text = await response.text();
-      try {
-        data = JSON.parse(text);
-      } catch {
-        throw new Error(
-          !response.ok
-            ? `Server returned error (${response.status}): ${response.statusText || "Upload failed"}`
-            : "Invalid response received from server."
-        );
+      if (!finalData) {
+        throw new Error("Import completed but no response data was returned.");
       }
 
-      if (!response.ok || data.error) {
-        throw new Error(data.error || "Failed to process customer data");
-      }
-
-      setResult({
-        totalRows: data.totalRows,
-        insertedCount: data.insertedCount,
-        updatedCount: data.updatedCount || 0,
-        sample: data.sample || [],
-      });
+      setResult(finalData);
 
       startTransition(() => {
         router.refresh();
@@ -125,6 +191,7 @@ export function BulkImportModal({ open, onClose, onSuccess }: BulkImportModalPro
       setError(msg);
     } finally {
       setLoading(false);
+      setUploadProgress(null);
     }
   }
 
@@ -297,6 +364,25 @@ export function BulkImportModal({ open, onClose, onSuccess }: BulkImportModalPro
                 <X className="w-4 h-4" />
               </button>
             )}
+          </div>
+        )}
+
+        {/* Real-time Chunked Upload Progress */}
+        {loading && uploadProgress && (
+          <div className="p-3.5 rounded-xl bg-blue-50/80 border border-blue-200 text-xs space-y-2">
+            <div className="flex items-center justify-between font-semibold text-blue-900">
+              <span className="flex items-center gap-2">
+                <RefreshCw className="w-3.5 h-3.5 text-blue-600 animate-spin flex-shrink-0" />
+                {uploadProgress.message}
+              </span>
+              <span className="text-blue-700 font-bold">{uploadProgress.percent}%</span>
+            </div>
+            <div className="w-full bg-blue-200/70 rounded-full h-2 overflow-hidden">
+              <div
+                className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                style={{ width: `${uploadProgress.percent}%` }}
+              />
+            </div>
           </div>
         )}
 
