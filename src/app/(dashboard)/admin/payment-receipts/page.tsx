@@ -1,4 +1,4 @@
-﻿import { getSessionWithFeatures, requireFeature } from "@/lib/feature-gate";
+import { getSessionWithFeatures, requireFeature } from "@/lib/feature-gate";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { PaymentReceiptsClient } from "./PaymentReceiptsClient";
@@ -23,6 +23,7 @@ export default async function PaymentReceiptsPage() {
       where: { agencyId: session.agencyId, isActive: true },
       select: { id: true, name: true, phone: true, customerCode: true },
       orderBy: { name: "asc" },
+      take: 200,
     }),
   ]);
 

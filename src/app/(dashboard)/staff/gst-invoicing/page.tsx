@@ -1,4 +1,4 @@
-﻿import { getSessionWithFeatures, requireFeature } from "@/lib/feature-gate";
+import { getSessionWithFeatures, requireFeature } from "@/lib/feature-gate";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -23,8 +23,9 @@ export default async function StaffGstInvoicingPage() {
       take: 50,
     }),
     prisma.customer.findMany({
-      where: { isActive: true, agencyId: session.agencyId },
+      where: { isActive: true, agencyId: session.agencyId, type: "COMMERCIAL" },
       orderBy: { name: "asc" },
+      take: 200,
     }),
     prisma.product.findMany({
       where: { isActive: true, agencyId: session.agencyId },

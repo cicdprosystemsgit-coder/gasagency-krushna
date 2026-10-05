@@ -1,4 +1,4 @@
-﻿import { getSessionWithFeatures, requireFeature } from "@/lib/feature-gate";
+import { getSessionWithFeatures } from "@/lib/feature-gate";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -10,14 +10,23 @@ export default async function ManagerCustomerManagementPage() {
   if (!session || session.role !== "MANAGER" || !session.agencyId)
     redirect("/login");
 
-  const customers = await prisma.customer.findMany({
-    where: { agencyId: session.agencyId },
-    orderBy: [{ type: "asc" }, { name: "asc" }],
-  });
+  const [customers, domesticCount, commercialCount, activeCount, inactiveCount, deletedCount] = await Promise.all([
+    prisma.customer.findMany({
+      where: { agencyId: session.agencyId, type: "DOMESTIC", isDeleted: false },
+      orderBy: { name: "asc" },
+      take: 50,
+    }),
+    prisma.customer.count({ where: { agencyId: session.agencyId, type: "DOMESTIC", isDeleted: false } }),
+    prisma.customer.count({ where: { agencyId: session.agencyId, type: "COMMERCIAL", isDeleted: false } }),
+    prisma.customer.count({ where: { agencyId: session.agencyId, isActive: true, isDeleted: false } }),
+    prisma.customer.count({ where: { agencyId: session.agencyId, isActive: false, isDeleted: false } }),
+    prisma.customer.count({ where: { agencyId: session.agencyId, isDeleted: true } }),
+  ]);
 
   const serialized = customers.map((c) => ({
     ...c,
     createdAt: c.createdAt.toISOString(),
+    deletedAt: c.deletedAt ? c.deletedAt.toISOString() : null,
     updatedAt: undefined,
   }));
 
@@ -31,6 +40,13 @@ export default async function ManagerCustomerManagementPage() {
       <CustomerManagementClient
         initialCustomers={serialized as Parameters<typeof CustomerManagementClient>[0]["initialCustomers"]}
         canDelete={false}
+        initialCounts={{
+          domestic: domesticCount,
+          commercial: commercialCount,
+          active: activeCount,
+          inactive: inactiveCount,
+          deleted: deletedCount,
+        }}
       />
     </div>
   );
