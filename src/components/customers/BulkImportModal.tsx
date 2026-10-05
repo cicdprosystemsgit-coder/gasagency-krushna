@@ -88,7 +88,21 @@ export function BulkImportModal({ open, onClose, onSuccess }: BulkImportModalPro
         body: formData,
       });
 
-      const data = await response.json();
+      if (response.status === 413) {
+        throw new Error("File size is too large for the server (HTTP 413). Please ask your server admin to increase Nginx client_max_body_size or upload a smaller file.");
+      }
+
+      let data;
+      const text = await response.text();
+      try {
+        data = JSON.parse(text);
+      } catch {
+        throw new Error(
+          !response.ok
+            ? `Server returned error (${response.status}): ${response.statusText || "Upload failed"}`
+            : "Invalid response received from server."
+        );
+      }
 
       if (!response.ok || data.error) {
         throw new Error(data.error || "Failed to process customer data");
