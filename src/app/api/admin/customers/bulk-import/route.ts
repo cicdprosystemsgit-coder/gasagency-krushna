@@ -6,6 +6,7 @@ import ExcelJS from "exceljs";
 import { revalidatePath } from "next/cache";
 
 export const maxDuration = 300; // 5 minutes for processing 32,000+ records
+export const dynamic = "force-dynamic";
 
 function cleanHeader(val: unknown): string {
   if (!val) return "";

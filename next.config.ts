@@ -31,6 +31,9 @@ const nextConfig: NextConfig = {
   transpilePackages: ["lucide-react"],
   experimental: {
     webpackBuildWorker: false,
+    serverActions: {
+      bodySizeLimit: "100mb",
+    },
   },
   async headers() {
     if (process.env.NODE_ENV !== "production") {

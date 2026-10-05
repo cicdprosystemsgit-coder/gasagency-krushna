@@ -35,7 +35,7 @@ docker compose -f "$COMPOSE_FILE" up -d --force-recreate app
 
 # ─── 6. Restart nginx ────────────────────────────────────────────────────────
 echo "🌐 Restarting Nginx..."
-docker compose -f "$COMPOSE_FILE" up -d nginx
+docker compose -f "$COMPOSE_FILE" restart nginx
 
 # ─── 7. Cleanup old images ────────────────────────────────────────────────────
 echo "🧹 Cleaning up dangling images..."

@@ -61,7 +61,8 @@ log "DB migrations applied"
 # ── Start / restart containers ────────────────────────────────────────────
 warn "Starting containers..."
 docker compose up -d --remove-orphans
-log "Containers started"
+docker compose restart nginx
+log "Containers started and Nginx reloaded"
 
 # ── Health check ──────────────────────────────────────────────────────────
 warn "Waiting 15s for app to initialise..."

@@ -89,7 +89,7 @@ export function BulkImportModal({ open, onClose, onSuccess }: BulkImportModalPro
       });
 
       if (response.status === 413) {
-        throw new Error("File size is too large for the server (HTTP 413). Please ask your server admin to increase Nginx client_max_body_size or upload a smaller file.");
+        throw new Error("File size is too large for the server (HTTP 413: Request Entity Too Large). The server limits upload size. Please restart Nginx on the server with 'client_max_body_size 100M;' or save your Excel file as CSV and re-upload.");
       }
 
       let data;
