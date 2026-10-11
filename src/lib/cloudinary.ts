@@ -5,6 +5,7 @@
  */
 
 import { v2 as cloudinary } from "cloudinary";
+import { buildAgencyFolderName } from "@/lib/s3-backup";
 
 // Initialise Cloudinary SDK from environment variables
 cloudinary.config({
@@ -24,7 +25,7 @@ interface UploadDeliveryProofResult {
 /**
  * Uploads a watermarked delivery proof photo Buffer to Cloudinary.
  *
- * Storage path: gasagency/agencies/{agencyId}/delivery-proofs/{YYYY-MM}/{deliveryId}_{type}
+ * Storage path: gasagency/agencies/{agencyName}_{agencyId}/delivery-proofs/{YYYY-MM}/{deliveryId}_{type}
  * Tagged for future S3 backup queries: agency_{agencyId}, delivery_proof, {YYYY-MM}
  */
 export async function uploadDeliveryProof(
@@ -36,14 +37,15 @@ export async function uploadDeliveryProof(
     agencyName?: string;
   }
 ): Promise<UploadDeliveryProofResult> {
-  const { agencyId, deliveryId, type } = params;
+  const { agencyId, deliveryId, type, agencyName } = params;
 
   // Build date-based folder path: YYYY-MM
   const now = new Date();
   const yearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 
   // Public ID for the asset (no extension — Cloudinary appends automatically)
-  const publicId = `gasagency/agencies/${agencyId}/delivery-proofs/${yearMonth}/${deliveryId}_${type}`;
+  const agencyFolder = buildAgencyFolderName(agencyId, agencyName);
+  const publicId = `gasagency/agencies/${agencyFolder}/delivery-proofs/${yearMonth}/${deliveryId}_${type}`;
 
   // Upload as a stream from buffer
   const result = await new Promise<{ secure_url: string; public_id: string }>(

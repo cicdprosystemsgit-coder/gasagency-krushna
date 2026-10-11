@@ -127,9 +127,9 @@ export async function executeFullBackup(
     customerCardUrl?: string | null;
     additionalImageUrl?: string | null;
   }>,
-  options: { bucket?: string; batchSize?: number } = {}
+  options: { bucket?: string; batchSize?: number; agencyName?: string | null } = {}
 ): Promise<BackupResult> {
-  const { bucket, batchSize = 10 } = options;
+  const { bucket, batchSize = 10, agencyName } = options;
 
   const s3Enabled = isS3Configured();
   const driveEnabled = isDriveBackupConfigured();
@@ -184,7 +184,7 @@ export async function executeFullBackup(
           s3Counts.skipped++;
           s3Success = true;
         } else {
-          const s3Key = buildS3Key(job.agencyId, job.deliveryId, job.type, job.date);
+          const s3Key = buildS3Key(job.agencyId, job.deliveryId, job.type, job.date, agencyName);
           const result = await uploadBufferToS3({
             imageBuffer,
             s3Key,
@@ -212,6 +212,7 @@ export async function executeFullBackup(
           deliveryId: job.deliveryId,
           type: job.type,
           date: job.date,
+          agencyName,
         });
 
         if (result.success) {

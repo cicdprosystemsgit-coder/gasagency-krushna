@@ -15,6 +15,7 @@
 
 import { google } from "googleapis";
 import { Readable } from "stream";
+import { buildAgencyFolderName } from "@/lib/s3-backup";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -159,17 +160,23 @@ async function ensureFolderPath(
 
 /**
  * Build the Drive folder path segments and file name for a delivery proof photo.
- * Mirrors S3 key structure: agencies/{agencyId}/{YYYY-MM}/{deliveryId}_{type}.jpg
+ * Mirrors S3 key structure (multi-tenant, daily sub-folders):
+ *   agencies/{agencyName}_{agencyId}/backups/{YYYY-MM-DD}/{deliveryId}_{type}.jpg
  */
 export function buildDrivePath(
   agencyId: string,
   deliveryId: string,
   type: "payment_receipt" | "customer_card" | "additional",
-  date: Date
+  date: Date,
+  agencyName?: string | null
 ): { pathSegments: string[]; fileName: string } {
-  const yearMonth = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+  const year  = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day   = String(date.getDate()).padStart(2, "0");
+  const dateStr = `${year}-${month}-${day}`;
+  const agencyFolder = buildAgencyFolderName(agencyId, agencyName);
   return {
-    pathSegments: ["agencies", agencyId, yearMonth],
+    pathSegments: ["agencies", agencyFolder, "backups", dateStr],
     fileName: `${deliveryId}_${type}.jpg`,
   };
 }
@@ -214,7 +221,7 @@ export function isDriveBackupConfigured(): boolean {
 
 /**
  * Copy a pre-downloaded image buffer to Google Drive.
- * - Creates the folder hierarchy (agencies/{agencyId}/{YYYY-MM}) if needed
+ * - Creates the folder hierarchy (agencies/{agencyName}_{agencyId}/backups/{YYYY-MM-DD}) if needed
  * - Checks Drive first for idempotency (skips if file already exists)
  * - Returns structured result object
  */
@@ -224,10 +231,11 @@ export async function copyBufferToDrive(params: {
   deliveryId: string;
   type: "payment_receipt" | "customer_card" | "additional";
   date: Date;
+  agencyName?: string | null;
   contentType?: string;
 }): Promise<DriveCopyResult> {
-  const { imageBuffer, agencyId, deliveryId, type, date, contentType = "image/jpeg" } = params;
-  const { pathSegments, fileName } = buildDrivePath(agencyId, deliveryId, type, date);
+  const { imageBuffer, agencyId, deliveryId, type, date, agencyName, contentType = "image/jpeg" } = params;
+  const { pathSegments, fileName } = buildDrivePath(agencyId, deliveryId, type, date, agencyName);
   const drivePath = `${BACKUP_ROOT_FOLDER_NAME}/${pathSegments.join("/")}/${fileName}`;
 
   try {

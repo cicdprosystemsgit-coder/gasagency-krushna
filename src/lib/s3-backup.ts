@@ -63,17 +63,49 @@ export interface CopyResult {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 /**
+ * Helper to build a clean, human-readable yet unique folder name for an agency:
+ * Format: {sanitizedAgencyName}_{agencyId}
+ * Example: "Krushna_Gas_Agency_cm2ouyktb000054l0rnbv0xez"
+ * If agencyName is not available, falls back to agencyId.
+ */
+export function buildAgencyFolderName(agencyId: string, agencyName?: string | null): string {
+  if (!agencyName || !agencyName.trim()) {
+    return agencyId;
+  }
+  // Sanitize agency name: keep alphanumeric, replace spaces/special chars with underscores
+  const cleanName = agencyName
+    .trim()
+    .replace(/[^a-zA-Z0-9_-]/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "");
+
+  return cleanName ? `${cleanName}_${agencyId}` : agencyId;
+}
+
+/**
  * Build the S3 key for a delivery proof photo.
- * Format: agencies/{agencyId}/{YYYY-MM}/{deliveryId}_{type}.jpg
+ * Format (multi-tenant, daily sub-folders):
+ *   agencies/{agencyName}_{agencyId}/backups/{YYYY-MM-DD}/{deliveryId}_{type}.jpg
+ *
+ * Structure rationale:
+ *  - agencies/{agencyName}_{agencyId}/ → human readable agency name joined with agency ID for audit & multi-tenant isolation
+ *  - backups/                          → logical namespace, separates from other assets
+ *  - {YYYY-MM-DD}/                     → daily granularity for targeted restore & audit
+ *  - {deliveryId}_{type}               → unique file per delivery proof type
  */
 export function buildS3Key(
   agencyId: string,
   deliveryId: string,
   type: "payment_receipt" | "customer_card" | "additional",
-  date: Date
+  date: Date,
+  agencyName?: string | null
 ): string {
-  const yearMonth = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-  return `agencies/${agencyId}/${yearMonth}/${deliveryId}_${type}.jpg`;
+  const year  = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day   = String(date.getDate()).padStart(2, "0");
+  const dateStr = `${year}-${month}-${day}`;
+  const agencyFolder = buildAgencyFolderName(agencyId, agencyName);
+  return `agencies/${agencyFolder}/backups/${dateStr}/${deliveryId}_${type}.jpg`;
 }
 
 /**
@@ -257,9 +289,9 @@ export async function backupDeliveryPhotos(
     customerCardUrl?: string | null;
     additionalImageUrl?: string | null;
   }>,
-  options: { batchSize?: number; bucket?: string } = {}
+  options: { batchSize?: number; bucket?: string; agencyName?: string | null } = {}
 ): Promise<{ total: number; copied: number; skipped: number; failed: number }> {
-  const { batchSize = 20, bucket = DEFAULT_BUCKET } = options;
+  const { batchSize = 20, bucket = DEFAULT_BUCKET, agencyName } = options;
 
   // Build flat list of (record, type, url) tuples
   type PhotoJob = {
@@ -292,7 +324,7 @@ export async function backupDeliveryPhotos(
     const batch = jobs.slice(i, i + batchSize);
     const results = await Promise.all(
       batch.map(async (job) => {
-        const s3Key = buildS3Key(job.agencyId, job.deliveryId, job.type, job.date);
+        const s3Key = buildS3Key(job.agencyId, job.deliveryId, job.type, job.date, agencyName);
         const result = await copyCloudinaryToS3({ cloudinaryUrl: job.url, s3Key, bucket });
 
         if (result.success) {
