@@ -16,6 +16,7 @@ import { CalendarPicker } from "@/components/ui/CalendarPicker";
 import { useLocation } from "@/hooks/useLocation";
 import { LocationStatusCard } from "@/components/ui/GpsStatusBox";
 import { compressImage } from "@/lib/imageCompression";
+import { getPhotoDisplayUrl, getPhotoFullResUrl } from "@/lib/photo-utils";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1594,10 +1595,20 @@ function ImagePreviewModal({
         </div>
         <div className="flex-1 overflow-auto p-2 flex items-center justify-center bg-black min-h-[250px]">
           <img
-            src={url}
+            src={getPhotoDisplayUrl(url)}
             alt={title || "Preview"}
             className="max-h-[70vh] w-auto max-w-full object-contain rounded-lg"
           />
+        </div>
+        <div className="px-4 py-2 border-t border-zinc-800 bg-zinc-900 flex justify-end">
+          <a
+            href={getPhotoFullResUrl(url)}
+            target="_blank"
+            rel="noreferrer"
+            className="text-xs text-blue-400 hover:text-blue-300 font-semibold"
+          >
+            Open Full Resolution →
+          </a>
         </div>
       </div>
     </div>
@@ -1864,7 +1875,7 @@ function Step3Review({
               className="rounded-lg overflow-hidden border border-gray-300 relative aspect-video bg-black cursor-pointer hover:opacity-90 transition-opacity"
               onClick={() => setSelectedReviewPhoto({ url: proofPhotos.paymentReceiptUrl!, label: "Payment Receipt" })}
             >
-              <img src={proofPhotos.paymentReceiptUrl} alt="Receipt" className="w-full h-full object-contain" />
+              <img src={getPhotoDisplayUrl(proofPhotos.paymentReceiptUrl)} alt="Receipt" className="w-full h-full object-contain" />
               <span className="absolute bottom-0 inset-x-0 bg-black/70 text-white text-[9px] font-medium text-center py-0.5">Receipt</span>
             </div>
           )}
@@ -1873,7 +1884,7 @@ function Step3Review({
               className="rounded-lg overflow-hidden border border-gray-300 relative aspect-video bg-black cursor-pointer hover:opacity-90 transition-opacity"
               onClick={() => setSelectedReviewPhoto({ url: proofPhotos.customerCardUrl!, label: "Customer Card Entry" })}
             >
-              <img src={proofPhotos.customerCardUrl} alt="Card" className="w-full h-full object-contain" />
+              <img src={getPhotoDisplayUrl(proofPhotos.customerCardUrl)} alt="Card" className="w-full h-full object-contain" />
               <span className="absolute bottom-0 inset-x-0 bg-black/70 text-white text-[9px] font-medium text-center py-0.5">Customer Card</span>
             </div>
           )}
@@ -1882,7 +1893,7 @@ function Step3Review({
               className="rounded-lg overflow-hidden border border-gray-300 relative aspect-video bg-black cursor-pointer hover:opacity-90 transition-opacity"
               onClick={() => setSelectedReviewPhoto({ url: proofPhotos.additionalImageUrl!, label: "Extra Photo" })}
             >
-              <img src={proofPhotos.additionalImageUrl} alt="Extra" className="w-full h-full object-contain" />
+              <img src={getPhotoDisplayUrl(proofPhotos.additionalImageUrl)} alt="Extra" className="w-full h-full object-contain" />
               <span className="absolute bottom-0 inset-x-0 bg-black/70 text-white text-[9px] font-medium text-center py-0.5">Extra Photo</span>
             </div>
           )}

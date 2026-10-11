@@ -21,6 +21,7 @@ import {
 
 import { DeliveryPhotoBackupPanel } from "@/components/delivery/DeliveryPhotoBackupPanel";
 import { Camera, Image as ImageIcon, ChevronDown, ChevronUp, Eye, ExternalLink } from "lucide-react";
+import { getPhotoDisplayUrl, getPhotoFullResUrl } from "@/lib/photo-utils";
 
 import { CylinderLoader } from "@/components/ui/CylinderLoader";
 
@@ -562,7 +563,7 @@ export function DeliveryPlanClient({ deliveries, selectedDate }: DeliveryPlanCli
                                 onClick={() => setLightboxUrl(d.paymentReceiptUrl!)}
                                 className="aspect-video bg-slate-900 rounded-lg overflow-hidden relative cursor-pointer"
                               >
-                                <img src={d.paymentReceiptUrl} alt="Receipt" className="w-full h-full object-cover" />
+                                <img src={getPhotoDisplayUrl(d.paymentReceiptUrl)} alt="Receipt" className="w-full h-full object-cover" />
                                 <span className="absolute bottom-1 left-1 text-[9px] bg-black/60 text-white px-1 rounded font-medium">Receipt</span>
                               </div>
                             )}
@@ -571,7 +572,7 @@ export function DeliveryPlanClient({ deliveries, selectedDate }: DeliveryPlanCli
                                 onClick={() => setLightboxUrl(d.customerCardUrl!)}
                                 className="aspect-video bg-slate-900 rounded-lg overflow-hidden relative cursor-pointer"
                               >
-                                <img src={d.customerCardUrl} alt="Customer Card" className="w-full h-full object-cover" />
+                                <img src={getPhotoDisplayUrl(d.customerCardUrl)} alt="Customer Card" className="w-full h-full object-cover" />
                                 <span className="absolute bottom-1 left-1 text-[9px] bg-black/60 text-white px-1 rounded font-medium">Card</span>
                               </div>
                             )}
@@ -580,7 +581,7 @@ export function DeliveryPlanClient({ deliveries, selectedDate }: DeliveryPlanCli
                                 onClick={() => setLightboxUrl(d.additionalImageUrl!)}
                                 className="aspect-video bg-slate-900 rounded-lg overflow-hidden relative cursor-pointer"
                               >
-                                <img src={d.additionalImageUrl} alt="Additional" className="w-full h-full object-cover" />
+                                <img src={getPhotoDisplayUrl(d.additionalImageUrl)} alt="Additional" className="w-full h-full object-cover" />
                                 <span className="absolute bottom-1 left-1 text-[9px] bg-black/60 text-white px-1 rounded font-medium">Photo 3</span>
                               </div>
                             )}
@@ -756,7 +757,7 @@ export function DeliveryPlanClient({ deliveries, selectedDate }: DeliveryPlanCli
                                           onClick={() => setLightboxUrl(d.paymentReceiptUrl!)}
                                           className="aspect-video bg-slate-900 cursor-pointer overflow-hidden relative group"
                                         >
-                                          <img src={d.paymentReceiptUrl} alt="Payment Receipt" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                                          <img src={getPhotoDisplayUrl(d.paymentReceiptUrl)} alt="Payment Receipt" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
                                           <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-bold gap-1">
                                             <Eye className="w-4 h-4" /> Expand
                                           </div>
@@ -779,7 +780,7 @@ export function DeliveryPlanClient({ deliveries, selectedDate }: DeliveryPlanCli
                                           onClick={() => setLightboxUrl(d.customerCardUrl!)}
                                           className="aspect-video bg-slate-900 cursor-pointer overflow-hidden relative group"
                                         >
-                                          <img src={d.customerCardUrl} alt="Customer Card" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                                          <img src={getPhotoDisplayUrl(d.customerCardUrl)} alt="Customer Card" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
                                           <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-bold gap-1">
                                             <Eye className="w-4 h-4" /> Expand
                                           </div>
@@ -802,7 +803,7 @@ export function DeliveryPlanClient({ deliveries, selectedDate }: DeliveryPlanCli
                                           onClick={() => setLightboxUrl(d.additionalImageUrl!)}
                                           className="aspect-video bg-slate-900 cursor-pointer overflow-hidden relative group"
                                         >
-                                          <img src={d.additionalImageUrl} alt="Additional Proof" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                                          <img src={getPhotoDisplayUrl(d.additionalImageUrl)} alt="Additional Proof" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
                                           <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-bold gap-1">
                                             <Eye className="w-4 h-4" /> Expand
                                           </div>
@@ -860,11 +861,11 @@ export function DeliveryPlanClient({ deliveries, selectedDate }: DeliveryPlanCli
             >
               <X className="w-5 h-5" />
             </button>
-            <img src={lightboxUrl} alt="Delivery Proof Watermarked Full" className="max-w-full max-h-[85vh] object-contain mx-auto" />
+            <img src={getPhotoDisplayUrl(lightboxUrl)} alt="Delivery Proof Watermarked Full" className="max-w-full max-h-[85vh] object-contain mx-auto" />
             <div className="p-3 bg-slate-900 text-white text-xs flex items-center justify-between">
               <span className="font-semibold text-slate-300">Watermarked Delivery Proof Photo</span>
               <a
-                href={lightboxUrl}
+                href={getPhotoFullResUrl(lightboxUrl)}
                 target="_blank"
                 rel="noreferrer"
                 className="text-blue-400 hover:text-blue-300 flex items-center gap-1 font-bold"

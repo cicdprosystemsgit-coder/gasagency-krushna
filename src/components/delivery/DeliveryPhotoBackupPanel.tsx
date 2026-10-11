@@ -28,6 +28,7 @@ import {
   ChevronDown,
   ChevronUp,
   Images,
+  ExternalLink,
 } from "lucide-react";
 import { CylinderLoader } from "@/components/ui/CylinderLoader";
 
@@ -575,6 +576,36 @@ export function DeliveryPhotoBackupPanel() {
                   <span>{latestBackup.errorMessage}</span>
                 </div>
               )}
+
+              {/* Direct links to view photos in AWS S3 and Google Drive */}
+              <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-emerald-100">
+                {latestBackup.s3Bucket && (
+                  <a
+                    href={`https://s3.console.aws.amazon.com/s3/buckets/${latestBackup.s3Bucket}?region=ap-south-1&prefix=agencies/`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-500/10 text-amber-800 hover:bg-amber-500/20 transition-colors border border-amber-300"
+                  >
+                    <Cloud className="w-3.5 h-3.5 text-amber-600" />
+                    Open AWS S3 Console <ExternalLink className="w-3 h-3 text-amber-600" />
+                  </a>
+                )}
+                {latestBackup.driveEnabled && (
+                  <a
+                    href="https://drive.google.com/drive/u/0/search?q=GasAgency-Delivery-Backups"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-500/10 text-blue-800 hover:bg-blue-500/20 transition-colors border border-blue-300"
+                  >
+                    <FolderArchive className="w-3.5 h-3.5 text-blue-600" />
+                    Open Google Drive <ExternalLink className="w-3 h-3 text-blue-600" />
+                  </a>
+                )}
+                <div className="text-[11px] text-emerald-700 font-medium flex items-center gap-1 ml-auto">
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                  Secure proxy active — all preview &amp; full-res links unlocked
+                </div>
+              </div>
             </div>
           </div>
         )}
@@ -621,16 +652,25 @@ export function DeliveryPhotoBackupPanel() {
                 <span className="text-gray-400 block text-[10px] uppercase font-semibold flex items-center gap-1">
                   <Cloud className="w-3 h-3 text-amber-500" /> AWS S3
                 </span>
-                <span className="font-semibold text-gray-900">
+                <span className="font-semibold text-gray-900 flex items-center gap-1">
                   {latestBackup.s3Bucket ? (
                     <>
-                      {latestBackup.copiedPhotos} copied
+                      <span>{latestBackup.copiedPhotos} copied</span>
                       {latestBackup.skippedPhotos > 0 && (
                         <span className="text-[10px] text-gray-500 font-normal">
                           {" "}
-                          ({latestBackup.skippedPhotos} existing)
+                          ({latestBackup.skippedPhotos} ex.)
                         </span>
                       )}
+                      <a
+                        href={`https://s3.console.aws.amazon.com/s3/buckets/${latestBackup.s3Bucket}?region=ap-south-1&prefix=agencies/`}
+                        target="_blank"
+                        rel="noreferrer"
+                        title="Open AWS S3 Console"
+                        className="text-amber-600 hover:text-amber-700 ml-1 inline-flex"
+                      >
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
                     </>
                   ) : (
                     <span className="text-gray-400 font-normal">Not configured</span>
@@ -641,16 +681,25 @@ export function DeliveryPhotoBackupPanel() {
                 <span className="text-gray-400 block text-[10px] uppercase font-semibold flex items-center gap-1">
                   <FolderArchive className="w-3 h-3 text-blue-500" /> Google Drive
                 </span>
-                <span className="font-semibold text-gray-900">
+                <span className="font-semibold text-gray-900 flex items-center gap-1">
                   {latestBackup.driveEnabled ? (
                     <>
-                      {latestBackup.driveCopiedPhotos} copied
+                      <span>{latestBackup.driveCopiedPhotos} copied</span>
                       {latestBackup.driveSkippedPhotos > 0 && (
                         <span className="text-[10px] text-gray-500 font-normal">
                           {" "}
-                          ({latestBackup.driveSkippedPhotos} existing)
+                          ({latestBackup.driveSkippedPhotos} ex.)
                         </span>
                       )}
+                      <a
+                        href="https://drive.google.com/drive/u/0/search?q=GasAgency-Delivery-Backups"
+                        target="_blank"
+                        rel="noreferrer"
+                        title="Open Google Drive Backups"
+                        className="text-blue-600 hover:text-blue-700 ml-1 inline-flex"
+                      >
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
                     </>
                   ) : (
                     <span className="text-gray-400 font-normal">Not configured</span>

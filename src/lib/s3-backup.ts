@@ -16,6 +16,7 @@ import {
   HeadObjectCommand,
   HeadObjectCommandOutput,
 } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 import { prisma } from "@/lib/prisma";
 import { extractCloudinaryPublicId, deleteFromCloudinary } from "@/lib/cloudinary";
@@ -24,7 +25,7 @@ import { extractCloudinaryPublicId, deleteFromCloudinary } from "@/lib/cloudinar
 
 let _s3: S3Client | null = null;
 
-function getS3Client(): S3Client {
+export function getS3Client(): S3Client {
   if (!_s3) {
     _s3 = new S3Client({
       region: process.env.AWS_REGION ?? "ap-south-1",
@@ -37,7 +38,71 @@ function getS3Client(): S3Client {
   return _s3;
 }
 
-const DEFAULT_BUCKET = process.env.AWS_S3_BACKUP_BUCKET ?? "gasagency-delivery-proofs-backup";
+export const DEFAULT_BUCKET = process.env.AWS_S3_BACKUP_BUCKET ?? "gasagency-delivery-proofs-backup";
+
+/**
+ * Extract the S3 bucket name from an S3 URL or return DEFAULT_BUCKET.
+ */
+export function extractS3Bucket(urlOrKey: string): string {
+  if (!urlOrKey || !urlOrKey.startsWith("http")) return DEFAULT_BUCKET;
+  try {
+    const parsed = new URL(urlOrKey);
+    // Virtual hosted style: bucket.s3.region.amazonaws.com or bucket.s3.amazonaws.com
+    const vhostMatch = parsed.hostname.match(/^([a-z0-9.\-_]+)\.s3[.-]/i);
+    if (vhostMatch && vhostMatch[1]) {
+      return vhostMatch[1];
+    }
+    // Path style: s3.region.amazonaws.com/bucket/... or s3.amazonaws.com/bucket/...
+    if (parsed.hostname.startsWith("s3.") || parsed.hostname.startsWith("s3-") || parsed.hostname === "s3.amazonaws.com") {
+      const parts = parsed.pathname.replace(/^\/+/, "").split("/");
+      if (parts.length > 1) {
+        return parts[0];
+      }
+    }
+  } catch {}
+  return DEFAULT_BUCKET;
+}
+
+/**
+ * Extract the raw S3 object key from an S3 URL or return the key if already relative.
+ */
+export function extractS3Key(urlOrKey: string): string {
+  if (!urlOrKey) return "";
+  if (!urlOrKey.startsWith("http")) return urlOrKey.replace(/^\/+/, "");
+  try {
+    const parsed = new URL(urlOrKey);
+    let path = decodeURIComponent(parsed.pathname.replace(/^\/+/, ""));
+    // If path-style URL (hostname starts with s3. or s3-), first segment is bucket name
+    if (parsed.hostname.startsWith("s3.") || parsed.hostname.startsWith("s3-") || parsed.hostname === "s3.amazonaws.com") {
+      const parts = path.split("/");
+      if (parts.length > 1) {
+        return parts.slice(1).join("/");
+      }
+    }
+    return path;
+  } catch {
+    return urlOrKey;
+  }
+}
+
+/**
+ * Generate a secure AWS S3 Pre-signed URL for direct browser access.
+ * Default expiration: 24 hours (86400s).
+ */
+export async function getPresignedS3Url(
+  s3KeyOrUrl: string,
+  expiresInSeconds: number = 86400,
+  bucket?: string
+): Promise<string> {
+  const s3Key = extractS3Key(s3KeyOrUrl);
+  const targetBucket = bucket || extractS3Bucket(s3KeyOrUrl) || DEFAULT_BUCKET;
+  const s3 = getS3Client();
+  const command = new GetObjectCommand({
+    Bucket: targetBucket,
+    Key: s3Key,
+  });
+  return await getSignedUrl(s3, command, { expiresIn: expiresInSeconds });
+}
 
 /**
  * Check if AWS S3 backup credentials are configured in env.

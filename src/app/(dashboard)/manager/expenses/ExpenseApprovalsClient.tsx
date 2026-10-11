@@ -21,6 +21,7 @@ import {
 import { managerReviewEmployeeExpense } from "@/app/actions/expenses";
 import { AddExpenseModal } from "@/components/expenses/AddExpenseModal";
 import { ExpenseCategoriesClient } from "../../admin/expense-categories/ExpenseCategoriesClient";
+import { getPhotoDisplayUrl, getPhotoFullResUrl } from "@/lib/photo-utils";
 
 interface ExpenseItem {
   id: string;
@@ -481,14 +482,14 @@ export default function ExpenseApprovalsClient({
             <div className="p-4 flex items-center justify-center bg-black/5 max-h-[75vh] overflow-auto">
               {/* eslint-disable-next-next/image-element */}
               <img
-                src={selectedReceiptUrl}
+                src={getPhotoDisplayUrl(selectedReceiptUrl)}
                 alt="Uploaded receipt"
                 className="max-h-[65vh] object-contain rounded-lg shadow-md"
               />
             </div>
             <div className="p-3 border-t bg-muted/20 flex justify-end">
               <a
-                href={selectedReceiptUrl}
+                href={getPhotoFullResUrl(selectedReceiptUrl)}
                 target="_blank"
                 rel="noreferrer"
                 className="px-4 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-semibold shadow-sm hover:opacity-90 transition"

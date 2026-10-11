@@ -16,6 +16,7 @@ import { adminReviewEmployeeExpense, managerReviewEmployeeExpense } from "@/app/
 import { reviewDeliveryCountRequest, bulkReviewDeliveryCountRequests } from "@/app/actions/delivery-count-requests";
 import { toast } from "sonner";
 import { Receipt, Truck, Fuel } from "lucide-react";
+import { getPhotoDisplayUrl, getPhotoFullResUrl } from "@/lib/photo-utils";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1507,11 +1508,11 @@ function EmployeeExpensesSection({
           <div className="space-y-3">
             <div className="flex justify-center bg-slate-100 p-3 rounded-xl max-h-[65vh] overflow-auto">
               {/* eslint-disable-next-next/image-element */}
-              <img src={selectedReceipt} alt="Receipt photo" className="max-h-[60vh] object-contain rounded-lg shadow-sm" />
+              <img src={getPhotoDisplayUrl(selectedReceipt)} alt="Receipt photo" className="max-h-[60vh] object-contain rounded-lg shadow-sm" />
             </div>
             <div className="flex justify-end">
               <a
-                href={selectedReceipt}
+                href={getPhotoFullResUrl(selectedReceipt)}
                 target="_blank"
                 rel="noreferrer"
                 className="px-4 py-2 rounded-lg bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 transition"
