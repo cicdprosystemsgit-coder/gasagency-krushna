@@ -1535,7 +1535,7 @@ export function MyDeliveriesClient({
 
       if (!res.ok || !data?.url) {
         if (res.status === 413) {
-          throw new Error("Photo is too large (maximum size is 15 MB). Please try again or take a new photo.");
+          throw new Error("Photo is too large (maximum size is 50 MB). Please try again or take a new photo.");
         }
         throw new Error(data?.error ?? `Upload failed (${res.status}: ${res.statusText || "Server error"})`);
       }

@@ -17,7 +17,10 @@ import { burnWatermark } from "@/lib/watermark";
 import { uploadDeliveryProof } from "@/lib/cloudinary";
 import { prisma } from "@/lib/prisma";
 
-const MAX_FILE_SIZE_BYTES = 15 * 1024 * 1024; // 15 MB
+export const dynamic = "force-dynamic";
+export const maxDuration = 60;
+
+const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024; // 50 MB
 
 export async function POST(req: NextRequest) {
   // 1 ── Auth check
@@ -42,19 +45,21 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "No file provided" }, { status: 400 });
   }
 
-  // 3 ── Validate file size
+  // 3 ── Validate file size (allows images up to 50 MB)
   if (file.size > MAX_FILE_SIZE_BYTES) {
     return NextResponse.json(
-      { error: `File too large. Maximum allowed size is 15 MB. Got ${(file.size / 1024 / 1024).toFixed(1)} MB.` },
+      { error: `File too large. Maximum allowed size is 50 MB. Got ${(file.size / 1024 / 1024).toFixed(1)} MB.` },
       { status: 413 }
     );
   }
 
   // 4 ── Validate file type
   const allowedMimes = ["image/jpeg", "image/jpg", "image/png", "image/heic", "image/heif", "image/webp"];
-  if (!allowedMimes.includes(file.type)) {
+  const isImageMime = allowedMimes.includes(file.type) || file.type.startsWith("image/");
+  const isImageExt = /\.(jpe?g|png|webp|heic|heif|bmp)$/i.test(file.name);
+  if (!isImageMime && !isImageExt) {
     return NextResponse.json(
-      { error: `Unsupported file type: ${file.type}. Please use JPEG or PNG.` },
+      { error: `Unsupported file type: ${file.type || "unknown"}. Please use a JPEG, PNG, or WEBP image.` },
       { status: 415 }
     );
   }
