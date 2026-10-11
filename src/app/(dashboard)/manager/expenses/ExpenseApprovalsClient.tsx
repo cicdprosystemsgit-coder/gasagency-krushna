@@ -22,6 +22,7 @@ import { managerReviewEmployeeExpense } from "@/app/actions/expenses";
 import { AddExpenseModal } from "@/components/expenses/AddExpenseModal";
 import { ExpenseCategoriesClient } from "../../admin/expense-categories/ExpenseCategoriesClient";
 import { getPhotoDisplayUrl, getPhotoFullResUrl } from "@/lib/photo-utils";
+import { PhotoPreviewModal } from "@/components/ui/PhotoPreviewModal";
 
 interface ExpenseItem {
   id: string;
@@ -465,41 +466,12 @@ export default function ExpenseApprovalsClient({
       )}
 
       {/* Receipt Photo Modal */}
-      {selectedReceiptUrl && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-          <div className="bg-background rounded-2xl overflow-hidden max-w-2xl w-full shadow-2xl border relative">
-            <div className="p-4 border-b flex items-center justify-between bg-muted/40">
-              <h3 className="font-semibold text-sm flex items-center gap-2">
-                <Receipt className="w-4 h-4 text-blue-600" /> Receipt Verification Photo
-              </h3>
-              <button
-                onClick={() => setSelectedReceiptUrl(null)}
-                className="p-1 rounded-lg hover:bg-muted text-muted-foreground"
-              >
-                <XCircle className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="p-4 flex items-center justify-center bg-black/5 max-h-[75vh] overflow-auto">
-              {/* eslint-disable-next-next/image-element */}
-              <img
-                src={getPhotoDisplayUrl(selectedReceiptUrl)}
-                alt="Uploaded receipt"
-                className="max-h-[65vh] object-contain rounded-lg shadow-md"
-              />
-            </div>
-            <div className="p-3 border-t bg-muted/20 flex justify-end">
-              <a
-                href={getPhotoFullResUrl(selectedReceiptUrl)}
-                target="_blank"
-                rel="noreferrer"
-                className="px-4 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-semibold shadow-sm hover:opacity-90 transition"
-              >
-                Open Full Resolution
-              </a>
-            </div>
-          </div>
-        </div>
-      )}
+      <PhotoPreviewModal
+        url={selectedReceiptUrl}
+        title="Receipt Verification Photo"
+        subtitle="Manager review of uploaded expense receipt"
+        onClose={() => setSelectedReceiptUrl(null)}
+      />
       </>
       )}
       {/* Add Expense Entry Modal */}

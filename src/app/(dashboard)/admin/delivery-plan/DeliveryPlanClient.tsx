@@ -22,6 +22,7 @@ import {
 import { DeliveryPhotoBackupPanel } from "@/components/delivery/DeliveryPhotoBackupPanel";
 import { Camera, Image as ImageIcon, ChevronDown, ChevronUp, Eye, ExternalLink } from "lucide-react";
 import { getPhotoDisplayUrl, getPhotoFullResUrl } from "@/lib/photo-utils";
+import { PhotoPreviewModal } from "@/components/ui/PhotoPreviewModal";
 
 import { CylinderLoader } from "@/components/ui/CylinderLoader";
 
@@ -848,35 +849,13 @@ export function DeliveryPlanClient({ deliveries, selectedDate }: DeliveryPlanCli
         )}
       </div>
 
-      {/* Lightbox Modal for high-res photo viewing */}
-      {lightboxUrl && (
-        <div
-          className="fixed inset-0 z-50 bg-black/90 backdrop-blur-xs flex items-center justify-center p-4"
-          onClick={() => setLightboxUrl(null)}
-        >
-          <div className="relative max-w-4xl max-h-[90vh] overflow-hidden rounded-2xl bg-black border border-white/20 shadow-2xl">
-            <button
-              onClick={() => setLightboxUrl(null)}
-              className="absolute top-4 right-4 z-10 p-2 rounded-full bg-black/60 text-white hover:bg-black/80 transition-colors"
-            >
-              <X className="w-5 h-5" />
-            </button>
-            <img src={getPhotoDisplayUrl(lightboxUrl)} alt="Delivery Proof Watermarked Full" className="max-w-full max-h-[85vh] object-contain mx-auto" />
-            <div className="p-3 bg-slate-900 text-white text-xs flex items-center justify-between">
-              <span className="font-semibold text-slate-300">Watermarked Delivery Proof Photo</span>
-              <a
-                href={getPhotoFullResUrl(lightboxUrl)}
-                target="_blank"
-                rel="noreferrer"
-                className="text-blue-400 hover:text-blue-300 flex items-center gap-1 font-bold"
-                onClick={(e) => e.stopPropagation()}
-              >
-                Open Full Resolution <ExternalLink className="w-3.5 h-3.5" />
-              </a>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Premium Photo Preview Modal */}
+      <PhotoPreviewModal
+        url={lightboxUrl}
+        title="Delivery Proof Photo"
+        subtitle="Watermarked verified delivery photo from agency records"
+        onClose={() => setLightboxUrl(null)}
+      />
     </div>
   );
 }

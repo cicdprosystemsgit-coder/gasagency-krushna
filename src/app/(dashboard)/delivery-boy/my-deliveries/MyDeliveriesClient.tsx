@@ -17,6 +17,7 @@ import { useLocation } from "@/hooks/useLocation";
 import { LocationStatusCard } from "@/components/ui/GpsStatusBox";
 import { compressImage } from "@/lib/imageCompression";
 import { getPhotoDisplayUrl, getPhotoFullResUrl } from "@/lib/photo-utils";
+import { PhotoPreviewModal } from "@/components/ui/PhotoPreviewModal";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1572,46 +1573,12 @@ function ImagePreviewModal({
   title?: string;
   onClose: () => void;
 }) {
-  if (!url) return null;
-
   return (
-    <div
-      className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4"
-      onClick={onClose}
-    >
-      <div
-        className="relative max-w-2xl w-full max-h-[85vh] bg-zinc-900 rounded-2xl overflow-hidden border border-zinc-700 flex flex-col shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800 bg-zinc-900">
-          <span className="text-white text-xs font-semibold truncate">{title || "Photo Preview"}</span>
-          <button
-            type="button"
-            onClick={onClose}
-            className="w-7 h-7 rounded-full flex items-center justify-center bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition-colors"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-        <div className="flex-1 overflow-auto p-2 flex items-center justify-center bg-black min-h-[250px]">
-          <img
-            src={getPhotoDisplayUrl(url)}
-            alt={title || "Preview"}
-            className="max-h-[70vh] w-auto max-w-full object-contain rounded-lg"
-          />
-        </div>
-        <div className="px-4 py-2 border-t border-zinc-800 bg-zinc-900 flex justify-end">
-          <a
-            href={getPhotoFullResUrl(url)}
-            target="_blank"
-            rel="noreferrer"
-            className="text-xs text-blue-400 hover:text-blue-300 font-semibold"
-          >
-            Open Full Resolution →
-          </a>
-        </div>
-      </div>
-    </div>
+    <PhotoPreviewModal
+      url={url}
+      title={title || "Delivery Proof Photo"}
+      onClose={onClose}
+    />
   );
 }
 

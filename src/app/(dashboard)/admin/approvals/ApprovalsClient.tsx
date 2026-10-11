@@ -17,6 +17,7 @@ import { reviewDeliveryCountRequest, bulkReviewDeliveryCountRequests } from "@/a
 import { toast } from "sonner";
 import { Receipt, Truck, Fuel } from "lucide-react";
 import { getPhotoDisplayUrl, getPhotoFullResUrl } from "@/lib/photo-utils";
+import { PhotoPreviewModal } from "@/components/ui/PhotoPreviewModal";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1503,26 +1504,12 @@ function EmployeeExpensesSection({
       )}
 
       {/* Receipt Modal */}
-      {selectedReceipt && (
-        <Modal open={!!selectedReceipt} onClose={() => setSelectedReceipt(null)} title="Receipt Verification Photo">
-          <div className="space-y-3">
-            <div className="flex justify-center bg-slate-100 p-3 rounded-xl max-h-[65vh] overflow-auto">
-              {/* eslint-disable-next-next/image-element */}
-              <img src={getPhotoDisplayUrl(selectedReceipt)} alt="Receipt photo" className="max-h-[60vh] object-contain rounded-lg shadow-sm" />
-            </div>
-            <div className="flex justify-end">
-              <a
-                href={getPhotoFullResUrl(selectedReceipt)}
-                target="_blank"
-                rel="noreferrer"
-                className="px-4 py-2 rounded-lg bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 transition"
-              >
-                Open Full Image
-              </a>
-            </div>
-          </div>
-        </Modal>
-      )}
+      <PhotoPreviewModal
+        url={selectedReceipt}
+        title="Receipt Verification Photo"
+        subtitle="Uploaded receipt verification document"
+        onClose={() => setSelectedReceipt(null)}
+      />
     </div>
   );
 }
