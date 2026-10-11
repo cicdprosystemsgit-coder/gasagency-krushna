@@ -518,7 +518,7 @@ export async function getAdminDashboardAttendanceSnapshot() {
   });
 
   const present = records.filter((r) => r.status === "PRESENT").length;
-  const absent = records.filter((r) => r.status === "ABSENT").length;
+  const explicitlyAbsent = records.filter((r) => r.status === "ABSENT").length;
   const halfDay = records.filter((r) => r.status === "HALF_DAY").length;
   const onLeave = records.filter((r) => r.status === "ON_LEAVE").length;
 
@@ -532,6 +532,9 @@ export async function getAdminDashboardAttendanceSnapshot() {
     },
     select: { name: true },
   });
+
+  // Employees who have not punched in yet are counted as absent until they punch in
+  const absent = explicitlyAbsent + missingEmployees.length;
 
   return {
     total: employeesCount,

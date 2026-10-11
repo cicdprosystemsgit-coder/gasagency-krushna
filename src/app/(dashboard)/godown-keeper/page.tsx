@@ -2,16 +2,14 @@ import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { StatusBadge } from "@/components/ui/StatusBadge";
-import { formatDateTime } from "@/lib/utils";
+import { formatDateTime, naturalSortCompare, getAgencyTodayRange } from "@/lib/utils";
 import {
   Truck, Package, ArrowRight, Warehouse, Activity, CheckCircle2,
   Clock, ShieldAlert, Navigation, Layers, History,
   Boxes, BadgeAlert, AlertCircle, RefreshCw
 } from "lucide-react";
 import Link from "next/link";
-import { getAgencyTodayRange } from "@/lib/utils";
 import { getTranslations } from "next-intl/server";
-
 
 import { checkPermission } from "@/lib/rbac";
 import { PunchWidget } from "@/components/ui/PunchWidget";
@@ -39,7 +37,8 @@ export default async function GodownKeeperDashboard() {
     todayTrips,
     totalVehicles,
     products,
-    approvedDeliveryLoads
+    approvedDeliveryLoads,
+    godownMovements
   ] = await Promise.all([
     // Arrivals submitted by today
     hasGodown
@@ -91,7 +90,7 @@ export default async function GodownKeeperDashboard() {
       : Promise.resolve(0),
     // Cylinder products
     prisma.product.findMany({
-      where: { agencyId, isCylinder: true, isActive: true }
+      where: { agencyId, isCylinder: true, isActive: true, isDeleted: false }
     }),
     // Approved delivery load requests waiting for vehicle loading
     prisma.deliveryCountRequest.findMany({
@@ -106,6 +105,11 @@ export default async function GodownKeeperDashboard() {
       },
       orderBy: { date: "desc" },
     }),
+    // Direct Godown movements
+    prisma.godownInventory.findMany({
+      where: { agencyId },
+      orderBy: { date: "desc" },
+    }),
   ]);
 
   const pendingDeliveryLoads = approvedDeliveryLoads || [];
@@ -115,51 +119,112 @@ export default async function GodownKeeperDashboard() {
   const pendingApprovalsCount = recentRecords.filter((r) => r.status === "PENDING").length;
 
   // ── Calculate Live Cylinder Stocks ──
-  const cylinderStocks = products.map((p) => {
+  const sortedProducts = [...products].sort((a, b) => naturalSortCompare(a.name, b.name));
+
+  const cylinderStocks = sortedProducts.map((p) => {
     let filledReceived = 0;
     let emptyReturnedToCompany = 0;
     let loadedOnVehicles = 0;
     let unsoldReturnedFromVehicles = 0;
     let emptyReturnedFromVehicles = 0;
+    let manualReceived = 0;
+    let manualDispatched = 0;
+
+    const isMatchingProduct = (item: any) => {
+      if (!item) return false;
+      if (item.productId && item.productId === p.id) return true;
+      if (item.productName && p.name && item.productName.trim().toLowerCase() === p.name.trim().toLowerCase()) return true;
+      return false;
+    };
 
     // 1. Sum company arrivals (GodownRecord)
     approvedGodownRecords.forEach((gr) => {
-      if (gr.items && Array.isArray(gr.items)) {
-        const item = (gr.items as any[]).find((it) => it.productId === p.id);
-        if (item) {
-          filledReceived += Number(item.filledReceived) || 0;
-          emptyReturnedToCompany += Number(item.emptyReturned) || 0;
-        }
-      } else {
-        // Fallback for legacy records without items array
-        filledReceived += gr.filledCylindersReceived;
-        emptyReturnedToCompany += gr.emptyCylindersReturned;
+      let rawItems: any = gr.items;
+      if (typeof rawItems === "string") {
+        try { rawItems = JSON.parse(rawItems); } catch {}
       }
+
+      let matchedEntry = 0;
+      let matchedExit = 0;
+      let hasParsedItems = false;
+
+      if (rawItems && typeof rawItems === "object" && !Array.isArray(rawItems)) {
+        // Object format: { entryItems: [...], exitItems: [...] }
+        if (Array.isArray(rawItems.entryItems) && rawItems.entryItems.length > 0) {
+          hasParsedItems = true;
+          const matched = rawItems.entryItems.filter(isMatchingProduct);
+          matchedEntry += matched.reduce((sum: number, it: any) => sum + (Number(it.qty) || Number(it.filledReceived) || 0), 0);
+        }
+        if (Array.isArray(rawItems.exitItems) && rawItems.exitItems.length > 0) {
+          hasParsedItems = true;
+          const matched = rawItems.exitItems.filter(isMatchingProduct);
+          matchedExit += matched.reduce((sum: number, it: any) => sum + (Number(it.qty) || Number(it.emptyReturned) || 0), 0);
+        }
+      } else if (Array.isArray(rawItems) && rawItems.length > 0) {
+        hasParsedItems = true;
+        const matched = rawItems.filter(isMatchingProduct);
+        matchedEntry += matched.reduce((sum: number, it: any) => sum + (Number(it.filledReceived ?? it.qty ?? 0) || 0), 0);
+        matchedExit += matched.reduce((sum: number, it: any) => sum + (Number(it.emptyReturned ?? 0) || 0), 0);
+      }
+
+      // If legacy record without item breakdown, only attribute if exactly 1 cylinder product exists
+      if (!hasParsedItems && sortedProducts.length === 1) {
+        matchedEntry = Number(gr.filledCylindersReceived) || 0;
+        matchedExit = Number(gr.emptyCylindersReturned) || 0;
+      }
+
+      filledReceived += matchedEntry;
+      emptyReturnedToCompany += matchedExit;
     });
 
     // 2. Sum vehicle trip logs
     allTripLogs.forEach((trip) => {
       const isReturned = trip.tripStatus === "RETURNED" || trip.tripStatus === "PARTIAL_RETURN";
-      if (trip.items && Array.isArray(trip.items)) {
-        const item = (trip.items as any[]).find((it) => it.productId === p.id);
-        if (item) {
-          loadedOnVehicles += Number(item.loaded) || 0;
-          if (isReturned) {
-            unsoldReturnedFromVehicles += Number(item.unsoldReturned) || 0;
-            emptyReturnedFromVehicles += Number(item.emptyReturned) || 0;
-          }
-        }
-      } else {
-        // Fallback for legacy trips
-        loadedOnVehicles += trip.cylindersLoaded;
+      let tripItems: any = trip.items;
+      if (typeof tripItems === "string") {
+        try { tripItems = JSON.parse(tripItems); } catch {}
+      }
+
+      let matchedLoaded = 0;
+      let matchedUnsold = 0;
+      let matchedEmpty = 0;
+      let hasParsedItems = false;
+
+      if (Array.isArray(tripItems) && tripItems.length > 0) {
+        hasParsedItems = true;
+        const matched = tripItems.filter(isMatchingProduct);
+        matchedLoaded += matched.reduce((sum: number, it: any) => sum + (Number(it.loaded) || 0), 0);
         if (isReturned) {
-          unsoldReturnedFromVehicles += trip.cylindersReturned;
-          emptyReturnedFromVehicles += trip.cylindersDelivered; // cylindersDelivered = empty returned in simple logic
+          matchedUnsold += matched.reduce((sum: number, it: any) => sum + (Number(it.unsoldReturned) || 0), 0);
+          matchedEmpty += matched.reduce((sum: number, it: any) => sum + (Number(it.emptyReturned) || 0), 0);
+        }
+      }
+
+      if (!hasParsedItems && sortedProducts.length === 1) {
+        matchedLoaded = Number(trip.cylindersLoaded) || 0;
+        if (isReturned) {
+          matchedUnsold = Number(trip.cylindersReturned) || 0;
+          matchedEmpty = Number(trip.cylindersDelivered) || 0;
+        }
+      }
+
+      loadedOnVehicles += matchedLoaded;
+      unsoldReturnedFromVehicles += matchedUnsold;
+      emptyReturnedFromVehicles += matchedEmpty;
+    });
+
+    // 3. Direct Godown Inventory movements (excluding auto-generated from approved GodownRecords)
+    godownMovements.forEach((gm) => {
+      if (gm.productId === p.id) {
+        const isAutoGenerated = gm.notes && (gm.notes.startsWith("Approved: Co. Vehicle") || gm.notes.startsWith("Co. Vehicle"));
+        if (!isAutoGenerated) {
+          if (gm.moveType === "RECEIVED") manualReceived += gm.qty;
+          if (gm.moveType === "DISPATCHED") manualDispatched += gm.qty;
         }
       }
     });
 
-    const filledStock = Math.max(0, filledReceived - loadedOnVehicles + unsoldReturnedFromVehicles);
+    const filledStock = Math.max(0, (filledReceived + manualReceived + unsoldReturnedFromVehicles) - (loadedOnVehicles + manualDispatched));
     const emptyStock = Math.max(0, emptyReturnedFromVehicles - emptyReturnedToCompany);
 
     return {

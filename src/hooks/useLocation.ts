@@ -150,7 +150,7 @@ export function useLocation(options?: { timeout?: number; highAccuracy?: boolean
           status = "denied";
           error = "Location permission was denied.";
           hint =
-            "Tap the 🔒 lock icon in your browser address bar → Site settings → Location → Allow. Then tap 'Retry'.";
+            "Tap the 🔒 lock / 🎛️ tune icon next to the website URL → Location → set to 'Allow'. Then tap 'Retry'.";
         } else if (err.code === err.POSITION_UNAVAILABLE) {
           status = "unavailable";
           error = "Your device could not determine its location.";

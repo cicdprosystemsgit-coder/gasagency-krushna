@@ -97,18 +97,23 @@ function getTripItems(t: TripLog): CylinderRowItem[] {
   return [];
 }
 
+const EMPTY_TRIP_LOGS: TripLog[] = [];
+const EMPTY_CYLINDER_TYPES: Product[] = [];
+const EMPTY_DELIVERY_REQUESTS: GodownDeliveryRequest[] = [];
+const EMPTY_PRODUCTS: Product[] = [];
+
 export function InternalVehiclesClient({
   initialVehicles,
   initialTripLogs,
-  initialDeletedTripLogs = [],
+  initialDeletedTripLogs = EMPTY_TRIP_LOGS,
   deliveryBoys,
   isAdmin,
   userId,
   userRole = "ADMIN",
-  cylinderTypes = [],
+  cylinderTypes = EMPTY_CYLINDER_TYPES,
   selectedDate,
-  deliveryRequests = [],
-  products = [],
+  deliveryRequests = EMPTY_DELIVERY_REQUESTS,
+  products = EMPTY_PRODUCTS,
 }: {
   initialVehicles: DeliveryVehicle[];
   initialTripLogs: TripLog[];

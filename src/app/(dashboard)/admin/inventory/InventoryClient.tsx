@@ -421,7 +421,9 @@ function InventoryDashboard({
   );
 }
 
-export function InventoryClient({ initialProducts, initialDeletedProducts = [], isAdmin, dashboardData }: InventoryClientProps) {
+const EMPTY_DELETED_PRODUCTS: DeletedProductItem[] = [];
+
+export function InventoryClient({ initialProducts, initialDeletedProducts = EMPTY_DELETED_PRODUCTS, isAdmin, dashboardData }: InventoryClientProps) {
   const router = useRouter();
   const confirm = useConfirm();
   const [products, setProducts] = useState(initialProducts);

@@ -36,7 +36,15 @@ export function TeamHeatmap({ employees, records, month, year }: Props) {
       const d = new Date(r.date);
       return d.getDate() === day && d.getMonth() === month - 1 && d.getFullYear() === year && r.employeeId === employeeId;
     });
-    return match ? match.status : null;
+    if (match) return match.status;
+
+    // If today and not punched in yet, show as ABSENT until they punch in
+    const now = new Date();
+    if (day === now.getDate() && month === now.getMonth() + 1 && year === now.getFullYear()) {
+      return "ABSENT";
+    }
+
+    return null;
   };
 
   // Compute daily presence percentage

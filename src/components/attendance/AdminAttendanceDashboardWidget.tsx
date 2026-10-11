@@ -80,18 +80,23 @@ export function AdminAttendanceDashboardWidget({
           </div>
         </div>
 
-        {/* Missing / Late Employees */}
+        {/* Missing / Unpunched Employees */}
         {missing.length > 0 && (
           <div className="border-t pt-3" style={{ borderColor: "#F4F4F5" }}>
-            <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-600 mb-1.5">
-              <AlertCircle className="w-3.5 h-3.5" />
-              <span>Not Punched In Yet ({missing.length})</span>
+            <div className="flex items-center justify-between gap-1.5 text-xs font-semibold text-amber-600 mb-1.5">
+              <div className="flex items-center gap-1.5">
+                <AlertCircle className="w-3.5 h-3.5" />
+                <span>Not Punched In Yet ({missing.length})</span>
+              </div>
+              <span className="text-[10px] font-semibold text-red-600 bg-red-50 border border-red-100 px-1.5 py-0.5 rounded">
+                Marked Absent
+              </span>
             </div>
             <div className="flex flex-wrap gap-1">
               {missing.slice(0, 5).map((name) => (
                 <span
                   key={name}
-                  className="text-[10px] px-2 py-0.5 rounded bg-zinc-50 border border-zinc-100 text-zinc-600 font-medium"
+                  className="text-[10px] px-2 py-0.5 rounded bg-red-50/60 border border-red-100 text-red-700 font-medium"
                 >
                   {name}
                 </span>

@@ -620,7 +620,13 @@ export function AttendancePageClient({
                         <td className="p-3 text-center">
                           <div className="flex flex-col items-center">
                             <span className="text-xs font-semibold text-zinc-700">
-                              {formatTime(r.punchIn)}
+                              {r.punchIn ? (
+                                formatTime(r.punchIn)
+                              ) : (
+                                <span className="text-[11px] text-zinc-400 font-medium italic">
+                                  Not punched in
+                                </span>
+                              )}
                             </span>
                             {r.punchInLat && (
                               <span className="inline-flex items-center gap-0.5 text-[9px] font-bold text-blue-600 bg-blue-50 px-1 rounded mt-0.5" title={`${r.punchInLat}, ${r.punchInLng}`}>

@@ -107,7 +107,7 @@ export function PunchWidget() {
 
           let friendlyMsg = "Could not get location. ";
           if (error.code === error.PERMISSION_DENIED) {
-            friendlyMsg += "Permission denied. Please click the padlock icon next to your URL bar and reset 'Location' to ALLOW.";
+            friendlyMsg += "Permission denied. Please click the 🔒 lock / 🎛️ tune icon next to your URL bar and set 'Location' to ALLOW.";
           } else if (error.code === error.POSITION_UNAVAILABLE) {
             friendlyMsg += "Position unavailable. Please make sure your device GPS/Location Services is enabled.";
           } else if (error.code === error.TIMEOUT) {
@@ -168,7 +168,22 @@ export function PunchWidget() {
           <span className="text-xs font-mono font-extrabold text-zinc-500">{time || "--:--:--"}</span>
         </div>
 
-        <p className="text-[11px] text-zinc-400 font-medium mb-4">{dateStr || "Loading..."}</p>
+        <p className="text-[11px] text-zinc-400 font-medium mb-2">{dateStr || "Loading..."}</p>
+
+        {/* Live Attendance Status Pill */}
+        <div className="mb-4">
+          {!hasPunchedIn ? (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-red-50 text-red-700 border border-red-200">
+              <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+              Status: Absent (Pending Punch In)
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+              <span className="w-2 h-2 rounded-full bg-emerald-500" />
+              Status: Present
+            </span>
+          )}
+        </div>
 
         {/* Location Status Message */}
         <div className="flex items-center gap-1.5 justify-center mb-4 text-[10px] font-bold">

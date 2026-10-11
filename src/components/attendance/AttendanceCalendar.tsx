@@ -101,11 +101,35 @@ export function AttendanceCalendar({ initialRecords, userId }: Props) {
     return match || null;
   };
 
+  const isToday = (day: number | null): boolean => {
+    if (!day) return false;
+    const now = new Date();
+    return (
+      day === now.getDate() &&
+      currentMonth === now.getMonth() &&
+      currentYear === now.getFullYear()
+    );
+  };
+
+  const isTodayPendingPunch =
+    !records.some((r) => {
+      const recDate = new Date(r.date);
+      const now = new Date();
+      return (
+        recDate.getDate() === now.getDate() &&
+        recDate.getMonth() === now.getMonth() &&
+        recDate.getFullYear() === now.getFullYear()
+      );
+    }) &&
+    currentMonth === new Date().getMonth() &&
+    currentYear === new Date().getFullYear();
+
   // Compute stats
-  const presentCount = records.filter(r => r.status === "PRESENT").length;
-  const absentCount = records.filter(r => r.status === "ABSENT").length;
-  const leaveCount = records.filter(r => r.status === "ON_LEAVE").length;
-  const halfDayCount = records.filter(r => r.status === "HALF_DAY").length;
+  const presentCount = records.filter((r) => r.status === "PRESENT").length;
+  const absentCount =
+    records.filter((r) => r.status === "ABSENT").length + (isTodayPendingPunch ? 1 : 0);
+  const leaveCount = records.filter((r) => r.status === "ON_LEAVE").length;
+  const halfDayCount = records.filter((r) => r.status === "HALF_DAY").length;
 
   const handleRegSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -214,7 +238,9 @@ export function AttendanceCalendar({ initialRecords, userId }: Props) {
               }
 
               const rec = getRecordForDay(day);
-              const styling = rec ? STATUS_STYLING[rec.status] : null;
+              const isCurrentDay = isToday(day);
+              const effectiveStatus = rec?.status || (isCurrentDay ? "ABSENT" : null);
+              const styling = effectiveStatus ? STATUS_STYLING[effectiveStatus] : null;
 
               return (
                 <button
@@ -231,7 +257,7 @@ export function AttendanceCalendar({ initialRecords, userId }: Props) {
                     <div className="mt-auto flex items-center gap-1 w-full">
                       <span className={`w-1.5 h-1.5 rounded-full ${styling.dot}`} />
                       <span className="text-[9px] font-medium hidden sm:inline-block truncate">
-                        {styling.label}
+                        {rec ? styling.label : (isCurrentDay ? "Absent" : styling.label)}
                       </span>
                     </div>
                   )}
@@ -262,9 +288,17 @@ export function AttendanceCalendar({ initialRecords, userId }: Props) {
                   <label className="text-[11px] text-zinc-500 font-semibold uppercase">Status</label>
                   <p className="text-sm mt-1">
                     <span className={`px-2 py-1 rounded text-xs font-bold ${
-                      selectedDay.record ? STATUS_STYLING[selectedDay.record.status]?.bg : "bg-zinc-100 text-zinc-600"
+                      selectedDay.record
+                        ? STATUS_STYLING[selectedDay.record.status]?.bg
+                        : isToday(selectedDay.day)
+                        ? "bg-red-50 text-red-700 border border-red-200"
+                        : "bg-zinc-100 text-zinc-600"
                     }`}>
-                      {selectedDay.record ? STATUS_STYLING[selectedDay.record.status]?.label : "Not Marked / Absent"}
+                      {selectedDay.record
+                        ? STATUS_STYLING[selectedDay.record.status]?.label
+                        : isToday(selectedDay.day)
+                        ? "Absent (Pending Punch In)"
+                        : "Not Marked / Absent"}
                     </span>
                   </p>
                 </div>

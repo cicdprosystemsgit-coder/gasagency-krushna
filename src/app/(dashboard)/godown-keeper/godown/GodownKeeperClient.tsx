@@ -20,6 +20,9 @@ interface GodownKeeperClientProps {
   products?: any[];
 }
 
+const EMPTY_DELIVERY_REQUESTS: any[] = [];
+const EMPTY_PRODUCTS: any[] = [];
+
 export function GodownKeeperClient({
   initialRecords,
   totalFilled,
@@ -29,10 +32,11 @@ export function GodownKeeperClient({
   initialVehicles,
   initialTripLogs,
   deliveryBoys,
-  selectedDate = new Date().toISOString().slice(0, 10),
-  deliveryRequests = [],
-  products = [],
+  selectedDate,
+  deliveryRequests = EMPTY_DELIVERY_REQUESTS,
+  products = EMPTY_PRODUCTS,
 }: GodownKeeperClientProps) {
+  const activeDate = selectedDate || new Date().toISOString().slice(0, 10);
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -43,7 +47,7 @@ export function GodownKeeperClient({
         />
         <div className="flex items-center gap-2 self-end sm:self-auto">
           <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Date:</span>
-          <DateNavigationHeader selectedDate={selectedDate} />
+          <DateNavigationHeader selectedDate={activeDate} />
         </div>
       </div>
 
@@ -60,7 +64,7 @@ export function GodownKeeperClient({
           isAdmin={false}
           userId={userId}
           cylinderTypes={cylinderTypes}
-          selectedDate={selectedDate}
+          selectedDate={activeDate}
         />
       </div>
 
@@ -80,7 +84,7 @@ export function GodownKeeperClient({
           isAdmin={false}
           userId={userId}
           cylinderTypes={cylinderTypes}
-          selectedDate={selectedDate}
+          selectedDate={activeDate}
           deliveryRequests={deliveryRequests}
           products={products.length > 0 ? products : cylinderTypes}
         />

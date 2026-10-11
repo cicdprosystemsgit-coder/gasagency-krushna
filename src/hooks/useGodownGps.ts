@@ -117,7 +117,7 @@ export function useGodownGps() {
         if (err.code === err.PERMISSION_DENIED) {
           error = "Location permission was denied.";
           hint =
-            "Tap the 🔒 lock icon in your browser address bar → Site settings → Location → Allow. Then tap 'Retry GPS'.";
+            "Tap the 🔒 lock / 🎛️ tune icon next to the website URL → Location → set to 'Allow'. Then tap 'Retry GPS'.";
         } else if (err.code === err.POSITION_UNAVAILABLE) {
           error = "Your device could not determine its location.";
           hint =

@@ -105,6 +105,16 @@ export function AttendanceCalendarAdmin({ employees, initialRecords }: Props) {
     return match || null;
   };
 
+  const isToday = (day: number | null): boolean => {
+    if (!day) return false;
+    const now = new Date();
+    return (
+      day === now.getDate() &&
+      currentMonth === now.getMonth() &&
+      currentYear === now.getFullYear()
+    );
+  };
+
   const handleUpdateStatus = async () => {
     if (!selectedDay || !selectedEmployeeId) return;
     setLoading(true);
@@ -197,7 +207,9 @@ export function AttendanceCalendarAdmin({ employees, initialRecords }: Props) {
               }
 
               const rec = getRecordForDay(day);
-              const styling = rec ? STATUS_STYLING[rec.status] : null;
+              const isCurrentDay = isToday(day);
+              const effectiveStatus = rec?.status || (isCurrentDay ? "ABSENT" : null);
+              const styling = effectiveStatus ? STATUS_STYLING[effectiveStatus] : null;
 
               return (
                 <button
@@ -209,7 +221,7 @@ export function AttendanceCalendarAdmin({ employees, initialRecords }: Props) {
                       setNewStatus(rec.status);
                       setNewNotes(rec.notes || "");
                     } else {
-                      setNewStatus("PRESENT");
+                      setNewStatus(isCurrentDay ? "ABSENT" : "PRESENT");
                       setNewNotes("");
                     }
                   }}
@@ -224,7 +236,7 @@ export function AttendanceCalendarAdmin({ employees, initialRecords }: Props) {
                     <div className="mt-auto flex items-center gap-1 w-full">
                       <span className={`w-1.5 h-1.5 rounded-full ${styling.dot}`} />
                       <span className="text-[9px] font-medium hidden sm:inline-block truncate">
-                        {styling.label}
+                        {rec ? styling.label : (isCurrentDay ? "Absent" : styling.label)}
                       </span>
                     </div>
                   )}
@@ -253,9 +265,17 @@ export function AttendanceCalendarAdmin({ employees, initialRecords }: Props) {
                     <label className="text-[11px] text-zinc-500 font-semibold uppercase">Status</label>
                     <p className="text-sm mt-1">
                       <span className={`px-2 py-1 rounded text-xs font-bold ${
-                        selectedDay.record ? STATUS_STYLING[selectedDay.record.status]?.bg : "bg-zinc-100 text-zinc-600"
+                        selectedDay.record
+                          ? STATUS_STYLING[selectedDay.record.status]?.bg
+                          : isToday(selectedDay.day)
+                          ? "bg-red-50 text-red-700 border border-red-200"
+                          : "bg-zinc-100 text-zinc-600"
                       }`}>
-                        {selectedDay.record ? STATUS_STYLING[selectedDay.record.status]?.label : "Not Marked / Absent"}
+                        {selectedDay.record
+                          ? STATUS_STYLING[selectedDay.record.status]?.label
+                          : isToday(selectedDay.day)
+                          ? "Absent (Pending Punch In)"
+                          : "Not Marked / Absent"}
                       </span>
                     </p>
                   </div>

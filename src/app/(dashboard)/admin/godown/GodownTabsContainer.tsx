@@ -50,15 +50,20 @@ interface Props {
   products?: any[];
 }
 
+const EMPTY_RECORDS: any[] = [];
+const EMPTY_TRIP_LOGS: any[] = [];
+const EMPTY_DELIVERY_REQUESTS: GodownDeliveryRequest[] = [];
+const EMPTY_PRODUCTS: any[] = [];
+
 export function GodownTabsContainer({
   initialRecords,
-  initialDeletedRecords = [],
+  initialDeletedRecords = EMPTY_RECORDS,
   totalFilled,
   totalEmpty,
   deliveryVehicles,
   deliveryBoys,
   todayTripLogs,
-  initialDeletedTripLogs = [],
+  initialDeletedTripLogs = EMPTY_TRIP_LOGS,
   cylinderTypes,
   isAdmin,
   userId,
@@ -67,8 +72,8 @@ export function GodownTabsContainer({
   mapTrips,
   mapMovements,
   selectedDate,
-  deliveryRequests = [],
-  products = [],
+  deliveryRequests = EMPTY_DELIVERY_REQUESTS,
+  products = EMPTY_PRODUCTS,
 }: Props) {
   const [activeTab, setActiveTab] = useState<"supply" | "fleet" | "requests" | "live">("supply");
 

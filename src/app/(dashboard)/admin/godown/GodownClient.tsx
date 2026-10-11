@@ -389,11 +389,11 @@ function AddTypeModal({
   );
 }
 
-/* â”€â”€ Main Component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+const EMPTY_GODOWN_RECORDS: GodownRecord[] = [];
 
 export function GodownClient({
   initialRecords,
-  initialDeletedRecords = [],
+  initialDeletedRecords = EMPTY_GODOWN_RECORDS,
   totalFilled,
   totalEmpty,
   isAdmin,
