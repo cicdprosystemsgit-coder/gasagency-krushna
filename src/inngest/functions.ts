@@ -1,6 +1,6 @@
 import { inngest } from "./client";
 import { prisma } from "@/lib/prisma";
-import { backupDeliveryPhotos } from "@/lib/s3-backup";
+import { executeFullBackup } from "@/lib/backup-orchestrator";
 
 // ── Job 1: Daily Stock Snapshot ───────────────────────────────────────────────
 export const dailyStockSnapshot = inngest.createFunction(
@@ -374,24 +374,47 @@ export const deliveryPhotoBackupJob = inngest.createFunction(
         });
       });
 
-      // Step 2: Copy all photos to S3 in batches of 20
-      const results = await step.run("copy-photos-to-s3", async () => {
-        return backupDeliveryPhotos(records as any[], {
-          batchSize: 20,
+      // Step 2: Copy all photos to S3 and Google Drive
+      const results = await step.run("copy-photos-to-s3-and-gdrive", async () => {
+        return executeFullBackup(records as any[], {
           bucket: process.env.AWS_S3_BACKUP_BUCKET,
         });
       });
 
-      // Step 3: Finalize backup log as COMPLETED
+      // Step 3: Finalize backup log as COMPLETED or FAILED
       await step.run("finalize-backup-log", async () => {
+        const s3AllFailed = results.s3.enabled &&
+          results.s3.copied === 0 && results.s3.skipped === 0 && results.s3.failed > 0;
+        const driveAllFailed = results.drive.enabled &&
+          results.drive.copied === 0 && results.drive.skipped === 0 && results.drive.failed > 0;
+
+        const allEnabledFailed =
+          (results.s3.enabled ? s3AllFailed : true) &&
+          (results.drive.enabled ? driveAllFailed : true);
+
+        const status = allEnabledFailed && results.total > 0 ? "FAILED" : "COMPLETED";
+
+        const errorParts: string[] = [];
+        if (results.s3.enabled && results.s3.failed > 0)
+          errorParts.push(`S3: ${results.s3.failed} photo(s) failed`);
+        if (results.drive.enabled && results.drive.failed > 0)
+          errorParts.push(`Drive: ${results.drive.failed} photo(s) failed`);
+
         await prisma.deliveryPhotoBackup.update({
           where: { id: backupId },
           data: {
-            status: "COMPLETED",
+            status,
             totalPhotos: results.total,
-            copiedPhotos: results.copied,
-            skippedPhotos: results.skipped,
-            failedPhotos: results.failed,
+            // S3 stats
+            copiedPhotos: results.s3.copied,
+            skippedPhotos: results.s3.skipped,
+            failedPhotos: results.s3.failed,
+            // Google Drive stats
+            driveEnabled: results.drive.enabled,
+            driveCopiedPhotos: results.drive.copied,
+            driveSkippedPhotos: results.drive.skipped,
+            driveFailedPhotos: results.drive.failed,
+            errorMessage: errorParts.length > 0 ? errorParts.join("; ") : null,
             finishedAt: new Date(),
           },
         });
@@ -400,9 +423,8 @@ export const deliveryPhotoBackupJob = inngest.createFunction(
       return {
         backupId,
         total: results.total,
-        copied: results.copied,
-        skipped: results.skipped,
-        failed: results.failed,
+        s3: results.s3,
+        drive: results.drive,
       };
     } catch (err) {
       // Mark backup as FAILED

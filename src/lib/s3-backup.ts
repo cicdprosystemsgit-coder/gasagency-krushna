@@ -12,6 +12,7 @@
 import {
   S3Client,
   PutObjectCommand,
+  GetObjectCommand,
   HeadObjectCommand,
   HeadObjectCommandOutput,
 } from "@aws-sdk/client-s3";
@@ -37,6 +38,17 @@ function getS3Client(): S3Client {
 }
 
 const DEFAULT_BUCKET = process.env.AWS_S3_BACKUP_BUCKET ?? "gasagency-delivery-proofs-backup";
+
+/**
+ * Check if AWS S3 backup credentials are configured in env.
+ */
+export function isS3Configured(): boolean {
+  return !!(
+    process.env.AWS_ACCESS_KEY_ID &&
+    process.env.AWS_SECRET_ACCESS_KEY &&
+    process.env.AWS_S3_BACKUP_BUCKET
+  );
+}
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -96,13 +108,88 @@ export async function doesS3ObjectExist(
 /**
  * Download an image from a URL and return it as a Buffer.
  */
-async function fetchImageBuffer(url: string): Promise<Buffer> {
+export async function fetchImageBuffer(url: string): Promise<Buffer> {
   const response = await fetch(url, { cache: "no-store" });
   if (!response.ok) {
     throw new Error(`Failed to fetch image from ${url}: HTTP ${response.status}`);
   }
   const arrayBuffer = await response.arrayBuffer();
   return Buffer.from(arrayBuffer);
+}
+
+/**
+ * Download an image buffer from either S3 (using AWS credentials) or an external HTTP URL (Cloudinary).
+ */
+export async function fetchBufferFromS3OrHttp(url: string, bucket: string = DEFAULT_BUCKET): Promise<Buffer> {
+  if (url.includes("amazonaws.com")) {
+    try {
+      const urlObj = new URL(url);
+      const s3Key = decodeURIComponent(urlObj.pathname.replace(/^\//, ""));
+      const s3 = getS3Client();
+      const response = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: s3Key }));
+      const stream = response.Body;
+      if (!stream) throw new Error(`Empty body for S3 key: ${s3Key}`);
+      const bytes = await stream.transformToByteArray();
+      return Buffer.from(bytes);
+    } catch (s3Err) {
+      throw new Error(`Failed to fetch from S3: ${s3Err instanceof Error ? s3Err.message : String(s3Err)}`);
+    }
+  }
+  return fetchImageBuffer(url);
+}
+
+/**
+ * Upload a pre-downloaded image buffer to S3.
+ * - Checks S3 first for idempotency (skips if already exists)
+ * - Returns a structured result object
+ *
+ * Used by the backup-orchestrator to avoid downloading each image twice
+ * (once for S3, once for Google Drive).
+ */
+export async function uploadBufferToS3(params: {
+  imageBuffer: Buffer;
+  s3Key: string;
+  sourceUrl?: string;
+  contentType?: string;
+  bucket?: string;
+}): Promise<CopyResult> {
+  const {
+    imageBuffer,
+    s3Key,
+    sourceUrl = "",
+    contentType = "image/jpeg",
+    bucket = DEFAULT_BUCKET,
+  } = params;
+  const s3Url = `https://${bucket}.s3.${process.env.AWS_REGION ?? "ap-south-1"}.amazonaws.com/${s3Key}`;
+
+  try {
+    // Idempotency check — skip if already in S3
+    const exists = await doesS3ObjectExist(s3Key, bucket);
+    if (exists) {
+      return { success: true, s3Key, s3Url, skipped: true };
+    }
+
+    // Upload buffer to S3
+    const s3 = getS3Client();
+    await s3.send(
+      new PutObjectCommand({
+        Bucket: bucket,
+        Key: s3Key,
+        Body: imageBuffer,
+        ContentType: contentType,
+        ServerSideEncryption: "AES256",
+        Metadata: {
+          "source-url": sourceUrl,
+          "backup-timestamp": new Date().toISOString(),
+        },
+      })
+    );
+
+    return { success: true, s3Key, s3Url, skipped: false };
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    return { success: false, s3Key, s3Url, skipped: false, error: errorMsg };
+  }
 }
 
 /**

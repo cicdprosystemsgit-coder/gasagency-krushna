@@ -1,22 +1,26 @@
 /**
  * src/app/api/backup/delivery-photos/route.ts
  *
- * POST — Admin triggers a backup of all delivery proof photos (last 15 days) to S3.
- *        Creates a DeliveryPhotoBackup log record and fires an Inngest event.
- *        Returns immediately with backupId.
+ * POST — Admin triggers a backup of all delivery proof photos (last 15 days)
+ *        to AWS S3 and/or Google Drive. Creates a DeliveryPhotoBackup log record.
+ *        Returns immediately with backupId and results.
  *
  * GET  — Returns the last 15 backup log entries for the current agency.
+ *
+ * HEAD — Poll a single backup status by ID.
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { backupDeliveryPhotos } from "@/lib/s3-backup";
+import { executeFullBackup } from "@/lib/backup-orchestrator";
+import { isS3Configured } from "@/lib/s3-backup";
+import { isDriveBackupConfigured } from "@/lib/gdrive-backup";
 
 /**
- * Direct async background runner for S3 sync (No Inngest account required)
+ * Direct async backup runner — coordinates S3 + Google Drive via orchestrator
  */
-async function executeDirectS3Backup(
+async function executeBackup(
   backupId: string,
   agencyId: string,
   fromDate: Date,
@@ -43,23 +47,48 @@ async function executeDirectS3Backup(
       },
     });
 
-    const bucket = process.env.AWS_S3_BACKUP_BUCKET!;
-    const counts = await backupDeliveryPhotos(records, { bucket });
+    const bucket = process.env.AWS_S3_BACKUP_BUCKET;
+    const result = await executeFullBackup(records, { bucket: bucket || undefined });
+
+    // Determine overall status
+    const s3AllFailed = result.s3.enabled &&
+      result.s3.copied === 0 && result.s3.skipped === 0 && result.s3.failed > 0;
+    const driveAllFailed = result.drive.enabled &&
+      result.drive.copied === 0 && result.drive.skipped === 0 && result.drive.failed > 0;
+
+    // FAILED only if ALL enabled backends failed completely
+    const allEnabledFailed =
+      (result.s3.enabled ? s3AllFailed : true) &&
+      (result.drive.enabled ? driveAllFailed : true);
+
+    const status = allEnabledFailed && result.total > 0 ? "FAILED" : "COMPLETED";
+
+    const errorParts: string[] = [];
+    if (result.s3.enabled && result.s3.failed > 0)
+      errorParts.push(`S3: ${result.s3.failed} failed${result.s3.lastError ? ` (${result.s3.lastError})` : ""}`);
+    if (result.drive.enabled && result.drive.failed > 0)
+      errorParts.push(`Drive: ${result.drive.failed} failed${result.drive.lastError ? ` (${result.drive.lastError})` : ""}`);
 
     await prisma.deliveryPhotoBackup.update({
       where: { id: backupId },
       data: {
-        status: counts.failed > 0 && counts.copied === 0 && counts.skipped === 0 ? "FAILED" : "COMPLETED",
+        status,
         finishedAt: new Date(),
-        totalPhotos: counts.total,
-        copiedPhotos: counts.copied,
-        skippedPhotos: counts.skipped,
-        failedPhotos: counts.failed,
-        errorMessage: counts.failed > 0 ? `${counts.failed} photo(s) failed to sync` : null,
+        totalPhotos: result.total,
+        // S3 stats
+        copiedPhotos: result.s3.copied,
+        skippedPhotos: result.s3.skipped,
+        failedPhotos: result.s3.failed,
+        // Drive stats
+        driveEnabled: result.drive.enabled,
+        driveCopiedPhotos: result.drive.copied,
+        driveSkippedPhotos: result.drive.skipped,
+        driveFailedPhotos: result.drive.failed,
+        errorMessage: errorParts.length > 0 ? errorParts.join("; ") : null,
       },
     });
   } catch (err) {
-    console.error("[Direct S3 Backup Error]:", err);
+    console.error("[Backup Error]:", err);
     await prisma.deliveryPhotoBackup.update({
       where: { id: backupId },
       data: {
@@ -87,12 +116,14 @@ export async function POST(_req: NextRequest) {
       );
     }
 
-    // Check for AWS credentials
-    if (!process.env.AWS_ACCESS_KEY_ID || !process.env.AWS_SECRET_ACCESS_KEY || !process.env.AWS_S3_BACKUP_BUCKET) {
+    // Check for at least one backup backend
+    const s3Ready = isS3Configured();
+    const driveReady = isDriveBackupConfigured();
+    if (!s3Ready && !driveReady) {
       return NextResponse.json(
         {
           error:
-            "AWS credentials not configured. Add AWS_REGION, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, and AWS_S3_BACKUP_BUCKET to your .env file.",
+            "No backup backend configured. Add AWS credentials (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_S3_BACKUP_BUCKET) or Google Drive credentials (GOOGLE_DRIVE_CLIENT_ID, GOOGLE_DRIVE_CLIENT_SECRET, GOOGLE_DRIVE_REFRESH_TOKEN) to your .env file.",
         },
         { status: 503 }
       );
@@ -109,13 +140,14 @@ export async function POST(_req: NextRequest) {
         status: "RUNNING",
         fromDate,
         toDate: now,
-        s3Bucket: process.env.AWS_S3_BACKUP_BUCKET,
-        s3Prefix: `agencies/${session.agencyId}`,
+        s3Bucket: s3Ready ? process.env.AWS_S3_BACKUP_BUCKET : null,
+        s3Prefix: s3Ready ? `agencies/${session.agencyId}` : null,
+        driveEnabled: driveReady,
       },
     });
 
-    // Fire direct backup execution
-    await executeDirectS3Backup(backup.id, session.agencyId, fromDate, now);
+    // Fire backup execution
+    await executeBackup(backup.id, session.agencyId, fromDate, now);
 
     // Fetch updated backup record
     const updatedBackup = await prisma.deliveryPhotoBackup.findUnique({
@@ -127,9 +159,15 @@ export async function POST(_req: NextRequest) {
         backupId: backup.id,
         status: updatedBackup?.status ?? "COMPLETED",
         totalPhotos: updatedBackup?.totalPhotos ?? 0,
+        // S3 stats
         copiedPhotos: updatedBackup?.copiedPhotos ?? 0,
         skippedPhotos: updatedBackup?.skippedPhotos ?? 0,
         failedPhotos: updatedBackup?.failedPhotos ?? 0,
+        // Drive stats
+        driveEnabled: updatedBackup?.driveEnabled ?? false,
+        driveCopiedPhotos: updatedBackup?.driveCopiedPhotos ?? 0,
+        driveSkippedPhotos: updatedBackup?.driveSkippedPhotos ?? 0,
+        driveFailedPhotos: updatedBackup?.driveFailedPhotos ?? 0,
       },
       { status: 200 }
     );
@@ -184,7 +222,7 @@ export async function GET(_req: NextRequest) {
   }
 }
 
-// ── GET by ID: Poll single backup status ──────────────────────────────────────
+// ── HEAD: Poll single backup status ───────────────────────────────────────────
 // Used by UI to poll until COMPLETED/FAILED
 export async function HEAD(req: NextRequest) {
   try {

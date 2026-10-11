@@ -1,13 +1,24 @@
 /**
  * src/components/delivery/DeliveryPhotoBackupPanel.tsx
- * Admin UI panel for manual S3 backup trigger and backup history display.
- * Includes status polling and AWS credential warning modal/alert.
+ * Admin UI panel for manual S3 & Google Drive backup trigger and backup history display.
+ * Includes status polling and dual-provider (S3 + Google Drive) stats.
  */
 
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { CloudUpload, CheckCircle2, XCircle, Loader2, Calendar, ShieldCheck, AlertTriangle, RefreshCw } from "lucide-react";
+import {
+  CloudUpload,
+  CheckCircle2,
+  XCircle,
+  Loader2,
+  Calendar,
+  ShieldCheck,
+  AlertTriangle,
+  RefreshCw,
+  FolderArchive,
+  Cloud,
+} from "lucide-react";
 
 interface BackupRecord {
   id: string;
@@ -16,6 +27,11 @@ interface BackupRecord {
   copiedPhotos: number;
   skippedPhotos: number;
   failedPhotos: number;
+  driveEnabled: boolean;
+  driveCopiedPhotos: number;
+  driveSkippedPhotos: number;
+  driveFailedPhotos: number;
+  s3Bucket: string | null;
   fromDate: string;
   toDate: string;
   startedAt: string;
@@ -99,14 +115,14 @@ export function DeliveryPhotoBackupPanel() {
             <CloudUpload className="w-5 h-5" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <h3 className="font-bold text-gray-900 text-sm">AWS S3 Photo Backup</h3>
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="font-bold text-gray-900 text-sm">Dual Cloud Photo Backup</h3>
               <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                <ShieldCheck className="w-3 h-3" /> Compliant Storage
+                <ShieldCheck className="w-3 h-3" /> AWS S3 + Google Drive
               </span>
             </div>
             <p className="text-xs text-gray-500 mt-0.5">
-              Automated & manual 15-day snapshot archival from Cloudinary to isolated AWS S3 bucket.
+              15-day snapshot archival from Cloudinary mirrored to company AWS S3 bucket and Google Drive.
             </p>
           </div>
         </div>
@@ -155,46 +171,120 @@ export function DeliveryPhotoBackupPanel() {
 
       {/* Status banner for latest backup */}
       {latestBackup && !loading && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-gray-50 p-3 rounded-xl border border-gray-100 text-xs">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 bg-gray-50 p-3.5 rounded-xl border border-gray-100 text-xs">
           <div>
             <span className="text-gray-400 block text-[10px] uppercase font-semibold">Last Execution</span>
             <span className="font-medium text-gray-800">
-              {new Date(latestBackup.startedAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
+              {new Date(latestBackup.startedAt).toLocaleDateString("en-IN", {
+                day: "2-digit",
+                month: "short",
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
             </span>
           </div>
+
           <div>
             <span className="text-gray-400 block text-[10px] uppercase font-semibold">Status</span>
             <span className="inline-flex items-center gap-1 font-bold text-emerald-600">
-              {latestBackup.status === "COMPLETED" && <><CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Completed</>}
-              {latestBackup.status === "RUNNING" && <><Loader2 className="w-3.5 h-3.5 animate-spin text-blue-600" /> Archiving...</>}
-              {latestBackup.status === "FAILED" && <><XCircle className="w-3.5 h-3.5 text-red-600" /> Failed</>}
+              {latestBackup.status === "COMPLETED" && (
+                <>
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Completed
+                </>
+              )}
+              {latestBackup.status === "RUNNING" && (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-600" /> Archiving...
+                </>
+              )}
+              {latestBackup.status === "FAILED" && (
+                <>
+                  <XCircle className="w-3.5 h-3.5 text-red-600" /> Failed
+                </>
+              )}
             </span>
           </div>
+
           <div>
-            <span className="text-gray-400 block text-[10px] uppercase font-semibold">Photos Backed Up</span>
+            <span className="text-gray-400 block text-[10px] uppercase font-semibold flex items-center gap-1">
+              <Cloud className="w-3 h-3 text-amber-500" /> AWS S3
+            </span>
             <span className="font-semibold text-gray-900">
-              {latestBackup.copiedPhotos + latestBackup.skippedPhotos} / {latestBackup.totalPhotos}
-              {latestBackup.skippedPhotos > 0 && <span className="text-[10px] text-gray-500 font-normal"> ({latestBackup.skippedPhotos} existing)</span>}
+              {latestBackup.s3Bucket ? (
+                <>
+                  {latestBackup.copiedPhotos} copied
+                  {latestBackup.skippedPhotos > 0 && (
+                    <span className="text-[10px] text-gray-500 font-normal">
+                      {" "}
+                      ({latestBackup.skippedPhotos} existing)
+                    </span>
+                  )}
+                  {latestBackup.failedPhotos > 0 && (
+                    <span className="text-[10px] text-red-500 font-normal">
+                      {" "}
+                      ({latestBackup.failedPhotos} failed)
+                    </span>
+                  )}
+                </>
+              ) : (
+                <span className="text-gray-400 font-normal">Not configured</span>
+              )}
             </span>
           </div>
+
           <div>
+            <span className="text-gray-400 block text-[10px] uppercase font-semibold flex items-center gap-1">
+              <FolderArchive className="w-3 h-3 text-blue-500" /> Google Drive
+            </span>
+            <span className="font-semibold text-gray-900">
+              {latestBackup.driveEnabled ? (
+                <>
+                  {latestBackup.driveCopiedPhotos} copied
+                  {latestBackup.driveSkippedPhotos > 0 && (
+                    <span className="text-[10px] text-gray-500 font-normal">
+                      {" "}
+                      ({latestBackup.driveSkippedPhotos} existing)
+                    </span>
+                  )}
+                  {latestBackup.driveFailedPhotos > 0 && (
+                    <span className="text-[10px] text-red-500 font-normal">
+                      {" "}
+                      ({latestBackup.driveFailedPhotos} failed)
+                    </span>
+                  )}
+                </>
+              ) : (
+                <span className="text-gray-400 font-normal">Not configured</span>
+              )}
+            </span>
+          </div>
+
+          <div className="col-span-2 md:col-span-1">
             <span className="text-gray-400 block text-[10px] uppercase font-semibold">Triggered By</span>
             <span className="font-medium text-gray-800">{latestBackup.triggeredBy?.name ?? "Admin"}</span>
           </div>
+
+          {latestBackup.errorMessage && (
+            <div className="col-span-2 md:col-span-5 flex items-center gap-2 p-2.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-[11px] mt-1">
+              <AlertTriangle className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />
+              <span>{latestBackup.errorMessage}</span>
+            </div>
+          )}
         </div>
       )}
 
       {/* History table (collapsible/recent 5) */}
       {backups.length > 0 && (
         <div>
-          <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2">Recent S3 Backup Logs</p>
+          <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2">Recent Backup Logs</p>
           <div className="rounded-xl border border-gray-200 overflow-hidden text-xs">
             <table className="w-full text-left">
               <thead className="bg-gray-50 text-gray-500 font-semibold border-b border-gray-200">
                 <tr>
                   <th className="px-3 py-2">Date & Time</th>
                   <th className="px-3 py-2">Window</th>
-                  <th className="px-3 py-2">Photos</th>
+                  <th className="px-3 py-2">AWS S3</th>
+                  <th className="px-3 py-2">Google Drive</th>
                   <th className="px-3 py-2">Status</th>
                   <th className="px-3 py-2 text-right">Admin</th>
                 </tr>
@@ -203,20 +293,66 @@ export function DeliveryPhotoBackupPanel() {
                 {backups.slice(0, 5).map((b) => (
                   <tr key={b.id} className="hover:bg-gray-50/50">
                     <td className="px-3 py-2 font-medium text-gray-900">
-                      {new Date(b.startedAt).toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
+                      {new Date(b.startedAt).toLocaleString("en-IN", {
+                        day: "2-digit",
+                        month: "short",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
                     </td>
                     <td className="px-3 py-2 text-gray-500 flex items-center gap-1">
                       <Calendar className="w-3 h-3 text-gray-400" />
-                      {new Date(b.fromDate).toLocaleDateString("en-IN", { month: "short", day: "numeric" })} - {new Date(b.toDate).toLocaleDateString("en-IN", { month: "short", day: "numeric" })}
+                      {new Date(b.fromDate).toLocaleDateString("en-IN", {
+                        month: "short",
+                        day: "numeric",
+                      })}{" "}
+                      -{" "}
+                      {new Date(b.toDate).toLocaleDateString("en-IN", {
+                        month: "short",
+                        day: "numeric",
+                      })}
                     </td>
                     <td className="px-3 py-2 text-gray-700">
-                      <span className="font-semibold">{b.copiedPhotos + b.skippedPhotos}</span>
-                      <span className="text-gray-400 text-[10px]"> photos</span>
+                      {b.s3Bucket ? (
+                        <>
+                          <span className="font-semibold text-gray-900">{b.copiedPhotos + b.skippedPhotos}</span>
+                          <span className="text-gray-400 text-[10px]"> photos</span>
+                        </>
+                      ) : (
+                        <span className="text-gray-400 text-[10px]">—</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 text-gray-700">
+                      {b.driveEnabled ? (
+                        <>
+                          <span className="font-semibold text-gray-900">
+                            {b.driveCopiedPhotos + b.driveSkippedPhotos}
+                          </span>
+                          <span className="text-gray-400 text-[10px]"> photos</span>
+                        </>
+                      ) : (
+                        <span className="text-gray-400 text-[10px]">—</span>
+                      )}
                     </td>
                     <td className="px-3 py-2">
-                      {b.status === "COMPLETED" && <span className="inline-block px-2 py-0.5 text-[10px] font-bold rounded-full bg-emerald-100 text-emerald-800">✅ COMPLETED</span>}
-                      {b.status === "RUNNING" && <span className="inline-block px-2 py-0.5 text-[10px] font-bold rounded-full bg-blue-100 text-blue-800 animate-pulse">⏳ RUNNING</span>}
-                      {b.status === "FAILED" && <span className="inline-block px-2 py-0.5 text-[10px] font-bold rounded-full bg-red-100 text-red-800" title={b.errorMessage ?? "Error"}>❌ FAILED</span>}
+                      {b.status === "COMPLETED" && (
+                        <span className="inline-block px-2 py-0.5 text-[10px] font-bold rounded-full bg-emerald-100 text-emerald-800">
+                          ✅ COMPLETED
+                        </span>
+                      )}
+                      {b.status === "RUNNING" && (
+                        <span className="inline-block px-2 py-0.5 text-[10px] font-bold rounded-full bg-blue-100 text-blue-800 animate-pulse">
+                          ⏳ RUNNING
+                        </span>
+                      )}
+                      {b.status === "FAILED" && (
+                        <span
+                          className="inline-block px-2 py-0.5 text-[10px] font-bold rounded-full bg-red-100 text-red-800"
+                          title={b.errorMessage ?? "Error"}
+                        >
+                          ❌ FAILED
+                        </span>
+                      )}
                     </td>
                     <td className="px-3 py-2 text-right text-gray-500 font-medium">{b.triggeredBy?.name}</td>
                   </tr>
