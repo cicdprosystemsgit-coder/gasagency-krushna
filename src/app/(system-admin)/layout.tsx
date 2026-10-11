@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { SystemAdminSidebar } from "@/components/layout/SystemAdminSidebar";
 
+import { CylinderLoader } from "@/components/ui/CylinderLoader";
+
 interface Session {
   userId: string;
   email: string;
@@ -43,8 +45,13 @@ export default function SystemAdminLayout({ children }: { children: React.ReactN
 
   if (loading) {
     return (
-      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#0F172A" }}>
-        <div style={{ width: 20, height: 20, borderRadius: "50%", border: "2px solid #6366F1", borderTopColor: "transparent", animation: "spin 0.7s linear infinite" }} />
+      <div className="min-h-screen flex items-center justify-center bg-slate-900">
+        <CylinderLoader
+          size="lg"
+          color="blue"
+          message="Loading System Console"
+          subtitle="Initializing administrator session..."
+        />
       </div>
     );
   }

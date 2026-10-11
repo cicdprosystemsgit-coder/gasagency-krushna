@@ -224,5 +224,5 @@ export async function logoutAction() {
   }
 
   await clearAuthCookies();
-  redirect("/session-expired?reason=logout");
+  redirect("/login");
 }

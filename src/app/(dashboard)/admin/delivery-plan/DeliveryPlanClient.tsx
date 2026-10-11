@@ -22,9 +22,18 @@ import {
 import { DeliveryPhotoBackupPanel } from "@/components/delivery/DeliveryPhotoBackupPanel";
 import { Camera, Image as ImageIcon, ChevronDown, ChevronUp, Eye, ExternalLink } from "lucide-react";
 
+import { CylinderLoader } from "@/components/ui/CylinderLoader";
+
 const AdminDeliveryMap = dynamic(
   () => import("@/components/attendance/AdminDeliveryMap"),
-  { ssr: false }
+  {
+    ssr: false,
+    loading: () => (
+      <div className="w-full h-[600px] bg-slate-50 dark:bg-slate-900 flex items-center justify-center rounded-xl border border-slate-200 dark:border-slate-800">
+        <CylinderLoader size="md" color="blue" message="Loading Live Delivery Map" subtitle="Connecting to delivery boy GPS and route status..." />
+      </div>
+    ),
+  }
 );
 
 interface Delivery {

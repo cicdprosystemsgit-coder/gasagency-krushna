@@ -68,22 +68,51 @@ export async function POST(req: NextRequest) {
   const arrayBuffer = await file.arrayBuffer();
   const inputBuffer = Buffer.from(arrayBuffer);
 
-  // 6 ── Fetch agency name for watermark
+  // 6 ── Fetch agency name & delivery boy name for Geo-tag watermark
   let agencyName = "Gas Agency";
+  let deliveryBoyName = (formData.get("deliveryBoyName") as string) || "";
   try {
-    const agency = await prisma.agency.findUnique({
-      where: { id: session.agencyId },
-      select: { name: true },
-    });
+    const [agency, user] = await Promise.all([
+      prisma.agency.findUnique({
+        where: { id: session.agencyId },
+        select: { name: true },
+      }),
+      !deliveryBoyName
+        ? prisma.user.findUnique({
+            where: { id: session.userId },
+            select: { name: true },
+          })
+        : null,
+    ]);
     if (agency?.name) agencyName = agency.name;
+    if (user?.name) deliveryBoyName = user.name;
   } catch {
-    // Non-fatal — use fallback name
+    // Non-fatal — use fallback names
   }
 
-  // 7 ── Burn IST timestamp watermark
+  // Parse GPS & Customer details for Geo-tag
+  const latRaw = formData.get("lat");
+  const lngRaw = formData.get("lng");
+  const accuracyRaw = formData.get("accuracy");
+  const customerId = (formData.get("customerId") as string) || "";
+  const customerName = (formData.get("customerName") as string) || "";
+
+  const lat = latRaw && !isNaN(Number(latRaw)) ? Number(latRaw) : null;
+  const lng = lngRaw && !isNaN(Number(lngRaw)) ? Number(lngRaw) : null;
+  const accuracy = accuracyRaw && !isNaN(Number(accuracyRaw)) ? Number(accuracyRaw) : null;
+
+  // 7 ── Burn Geo-tag structure watermark
   let watermarkedBuffer: Buffer;
   try {
-    watermarkedBuffer = await burnWatermark(inputBuffer, { agencyName });
+    watermarkedBuffer = await burnWatermark(inputBuffer, {
+      agencyName,
+      deliveryBoyName: deliveryBoyName || "Delivery Agent",
+      customerName: customerName || "Customer",
+      customerId: customerId || "N/A",
+      lat,
+      lng,
+      accuracy,
+    });
   } catch (err) {
     console.error("[upload-delivery-proof] Watermark error:", err);
     return NextResponse.json({ error: "Failed to process image" }, { status: 500 });

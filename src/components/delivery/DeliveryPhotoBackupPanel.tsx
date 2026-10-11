@@ -28,8 +28,8 @@ import {
   ChevronDown,
   ChevronUp,
   Images,
-  Info,
 } from "lucide-react";
+import { CylinderLoader } from "@/components/ui/CylinderLoader";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -267,21 +267,6 @@ export function DeliveryPhotoBackupPanel() {
       </div>
 
       <div className="p-5 space-y-4">
-        {/* ── Folder Structure Info Box ────────────────────────────────── */}
-        <div className="flex items-start gap-2.5 p-3 rounded-xl bg-sky-50 border border-sky-200 text-sky-800 text-xs">
-          <Info className="w-4 h-4 text-sky-500 flex-shrink-0 mt-0.5" />
-          <div>
-            <p className="font-semibold mb-0.5">Multi-Tenant Backup Structure</p>
-            <p className="text-sky-700 font-mono text-[11px] leading-relaxed">
-              agencies/<span className="font-bold text-blue-700">{"{agencyName}_{agencyId}"}</span>/backups/
-              <span className="font-bold">{"{YYYY-MM-DD}"}</span>/
-              {"{deliveryId}"}_{"{type}"}.jpg
-            </p>
-            <p className="mt-1 text-sky-600">
-              Each agency&apos;s photos are stored in their own folder named with their <strong>Agency Name joined with Agency ID</strong>, partitioned by date for easy audit and restoration.
-            </p>
-          </div>
-        </div>
 
         {/* ── Error Alert ──────────────────────────────────────────────── */}
         {errorMsg && (
@@ -370,9 +355,8 @@ export function DeliveryPhotoBackupPanel() {
         {/* STEP 1b: Previewing (loading)                                 */}
         {/* ══════════════════════════════════════════════════════════════ */}
         {step === "previewing" && (
-          <div className="rounded-xl border border-blue-200 bg-blue-50 p-6 flex flex-col items-center gap-3">
-            <Loader2 className="w-6 h-6 text-blue-600 animate-spin" />
-            <p className="text-sm font-medium text-blue-700">Counting photos in selected range…</p>
+          <div className="rounded-xl border border-blue-200 bg-blue-50/60 p-6 flex flex-col items-center justify-center">
+            <CylinderLoader size="md" color="blue" message="Scanning Delivery Photos" subtitle="Counting photos in selected date range…" />
           </div>
         )}
 
@@ -789,8 +773,8 @@ export function DeliveryPhotoBackupPanel() {
         )}
 
         {historyLoading && (
-          <div className="flex items-center justify-center py-4 text-gray-400 text-xs gap-2">
-            <Loader2 className="w-4 h-4 animate-spin" /> Loading backup history…
+          <div className="flex flex-col items-center justify-center py-6">
+            <CylinderLoader size="sm" message="Loading backup history" subtitle="Fetching cloud sync logs..." />
           </div>
         )}
       </div>

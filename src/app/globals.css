@@ -940,3 +940,134 @@ html body { top: 0 !important; }
   animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
+/* ─── Animated LPG Cylinder Loader Keyframes ───────────────────────── */
+@keyframes cylinderFloat {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  25% {
+    transform: translateY(-8px) rotate(-1.5deg);
+  }
+  50% {
+    transform: translateY(-16px) rotate(0deg);
+  }
+  75% {
+    transform: translateY(-8px) rotate(1.5deg);
+  }
+}
+
+@keyframes cylinderShadow {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.35;
+  }
+  50% {
+    transform: scale(0.62);
+    opacity: 0.15;
+  }
+}
+
+@keyframes gasPuff1 {
+  0% {
+    transform: translateY(0) scale(0.4);
+    opacity: 0;
+  }
+  30% {
+    opacity: 0.85;
+  }
+  100% {
+    transform: translateY(-30px) translateX(-6px) scale(1.4);
+    opacity: 0;
+  }
+}
+
+@keyframes gasPuff2 {
+  0% {
+    transform: translateY(0) scale(0.4);
+    opacity: 0;
+  }
+  30% {
+    opacity: 0.85;
+  }
+  100% {
+    transform: translateY(-36px) translateX(8px) scale(1.6);
+    opacity: 0;
+  }
+}
+
+@keyframes gasPuff3 {
+  0% {
+    transform: translateY(0) scale(0.3);
+    opacity: 0;
+  }
+  40% {
+    opacity: 0.9;
+  }
+  100% {
+    transform: translateY(-44px) translateX(-2px) scale(1.8);
+    opacity: 0;
+  }
+}
+
+@keyframes cylinderShimmer {
+  0% {
+    transform: translateX(-150%);
+  }
+  50%, 100% {
+    transform: translateX(250%);
+  }
+}
+
+@keyframes cylinderFlamePulse {
+  0%, 100% {
+    transform: scale(0.9) translateY(0);
+    opacity: 0.75;
+  }
+  50% {
+    transform: scale(1.2) translateY(-3px);
+    opacity: 1;
+  }
+}
+
+@keyframes cylinderGlowPulse {
+  0%, 100% {
+    box-shadow: 0 0 15px rgba(220, 38, 38, 0.25);
+  }
+  50% {
+    box-shadow: 0 0 35px rgba(220, 38, 38, 0.55), 0 0 60px rgba(59, 130, 246, 0.2);
+  }
+}
+
+.animate-cylinder-float {
+  animation: cylinderFloat 2.4s ease-in-out infinite;
+}
+
+.animate-cylinder-shadow {
+  animation: cylinderShadow 2.4s ease-in-out infinite;
+}
+
+.animate-gas-puff-1 {
+  animation: gasPuff1 2s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+}
+
+.animate-gas-puff-2 {
+  animation: gasPuff2 2s cubic-bezier(0.16, 1, 0.3, 1) infinite 0.65s;
+}
+
+.animate-gas-puff-3 {
+  animation: gasPuff3 2s cubic-bezier(0.16, 1, 0.3, 1) infinite 1.3s;
+}
+
+.animate-cylinder-shimmer {
+  animation: cylinderShimmer 3s ease-in-out infinite;
+}
+
+.animate-cylinder-flame {
+  animation: cylinderFlamePulse 1.2s ease-in-out infinite;
+}
+
+.animate-cylinder-glow {
+  animation: cylinderGlowPulse 2.4s ease-in-out infinite;
+}
+
+

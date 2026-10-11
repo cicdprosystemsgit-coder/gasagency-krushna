@@ -39,11 +39,19 @@ import { TeamHeatmap } from "@/components/attendance/TeamHeatmap";
 import { AttendanceCalendarAdmin } from "@/components/attendance/AttendanceCalendarAdmin";
 import { StreakBadge } from "@/components/attendance/StreakBadge";
 import dynamic from "next/dynamic";
+import { CylinderLoader } from "@/components/ui/CylinderLoader";
 
-// Dynamic import for Leaflet map to prevent SSR issues
+// Dynamic import for map to prevent SSR issues
 const AdminAttendanceMap = dynamic(
   () => import("@/components/attendance/AdminAttendanceMap"),
-  { ssr: false }
+  {
+    ssr: false,
+    loading: () => (
+      <div className="w-full h-[500px] bg-slate-50 dark:bg-slate-900 flex items-center justify-center rounded-xl border border-slate-200 dark:border-slate-800">
+        <CylinderLoader size="md" color="red" message="Loading Attendance Map" subtitle="Loading staff locations and GPS coordinates..." />
+      </div>
+    ),
+  }
 );
 
 type Employee = { id: string; name: string; role: string };

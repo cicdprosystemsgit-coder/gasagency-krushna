@@ -270,16 +270,17 @@ function SessionExpiredContent() {
   );
 }
 
+import { CylinderLoader } from "@/components/ui/CylinderLoader";
+
 // ── Page export (wraps in Suspense for useSearchParams) ──────────────────────
 export default function SessionExpiredPage() {
   return (
     <Suspense
       fallback={
         <div
-          className="min-h-screen flex items-center justify-center"
-          style={{ background: "#f8fafc" }}
+          className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950"
         >
-          <div className="w-6 h-6 rounded-full border-2 border-blue-600 border-t-transparent animate-spin" />
+          <CylinderLoader size="md" message="Verifying session..." />
         </div>
       }
     >

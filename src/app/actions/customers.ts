@@ -765,6 +765,7 @@ export async function getCustomersPaginated({
       ];
     }
 
+    const isSearching = Boolean(search.trim());
     const [total, customers, deletedCount, domesticCount, commercialCount] = await Promise.all([
       prisma.customer.count({ where }),
       prisma.customer.findMany({
@@ -773,9 +774,9 @@ export async function getCustomersPaginated({
         skip: (page - 1) * limit,
         take: limit,
       }),
-      prisma.customer.count({ where: { agencyId: session.agencyId, isDeleted: true } }),
-      prisma.customer.count({ where: { agencyId: session.agencyId, isDeleted: false, type: "DOMESTIC" } }),
-      prisma.customer.count({ where: { agencyId: session.agencyId, isDeleted: false, type: "COMMERCIAL" } }),
+      isSearching ? Promise.resolve(0) : prisma.customer.count({ where: { agencyId: session.agencyId, isDeleted: true } }),
+      isSearching ? Promise.resolve(0) : prisma.customer.count({ where: { agencyId: session.agencyId, isDeleted: false, type: "DOMESTIC" } }),
+      isSearching ? Promise.resolve(0) : prisma.customer.count({ where: { agencyId: session.agencyId, isDeleted: false, type: "COMMERCIAL" } }),
     ]);
 
     return {

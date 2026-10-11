@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useRef, useEffect } from "react";
+import { useState, useTransition, useRef, useEffect, useMemo } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { StatsCard } from "@/components/ui/StatsCard";
 import { formatCurrency } from "@/lib/utils";
@@ -65,6 +65,7 @@ export interface TodayTrip {
   returnTime: string | null;
   tripStatus: string;
   cylindersLoaded?: number;
+  items?: Array<{ productId: string; productName?: string; loaded: number }> | null;
 }
 
 interface Props {
@@ -72,6 +73,7 @@ interface Props {
   customers: CustomerRecord[];
   products: ProductRecord[];
   userId: string;
+  userName?: string;
   assignedVehicle?: AssignedVehicle | null;
   todayTrip?: TodayTrip | null;
   todayCountRequest?: {
@@ -79,6 +81,7 @@ interface Props {
     status: string;
     totalRequested: number;
     totalLoaded: number | null;
+    fulfilledItems?: Array<{ productId: string; productName?: string; loadedQty: number }> | null;
   } | null;
 }
 
@@ -149,16 +152,48 @@ function StepIndicator({ step }: { step: 1 | 2 | 3 }) {
 
 // ─── Customer Card ────────────────────────────────────────────────────────────
 
-function CustomerCard({ c, selected, onClick }: { c: CustomerRecord; selected?: boolean; onClick?: () => void }) {
+function highlightMatch(text: string | null | undefined, query: string) {
+  if (!text) return text ?? "";
+  const q = query.trim();
+  if (!q) return text;
+  const lower = text.toLowerCase();
+  const idx = lower.indexOf(q.toLowerCase());
+  if (idx === -1) return text;
+  return (
+    <>
+      {text.slice(0, idx)}
+      <mark className="bg-amber-200 text-amber-950 font-semibold px-0.5 rounded-xs">{text.slice(idx, idx + q.length)}</mark>
+      {text.slice(idx + q.length)}
+    </>
+  );
+}
+
+function CustomerCard({
+  c,
+  selected,
+  onClick,
+  highlightQuery,
+  isExact,
+  sourceBadge,
+}: {
+  c: CustomerRecord;
+  selected?: boolean;
+  onClick?: () => void;
+  highlightQuery?: string;
+  isExact?: boolean;
+  sourceBadge?: string;
+}) {
   const isDomestic = c.type === "DOMESTIC";
   return (
     <button
       type="button"
       onClick={onClick}
-      className="w-full text-left rounded-xl p-3.5 transition-all"
+      className={`w-full text-left rounded-xl p-3.5 transition-all relative ${
+        isExact ? "ring-2 ring-emerald-500 shadow-xs" : ""
+      }`}
       style={{
-        border: selected ? "2px solid #2563EB" : "1px solid #E4E4E7",
-        background: selected ? "#EFF6FF" : "#FAFAFA",
+        border: selected ? "2px solid #2563EB" : isExact ? "1px solid #10B981" : "1px solid #E4E4E7",
+        background: selected ? "#EFF6FF" : isExact ? "#F0FDF4" : "#FAFAFA",
         cursor: onClick ? "pointer" : "default",
       }}
     >
@@ -171,7 +206,9 @@ function CustomerCard({ c, selected, onClick }: { c: CustomerRecord; selected?: 
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-semibold text-[14px]" style={{ color: "#18181B" }}>{c.name}</span>
+            <span className="font-semibold text-[14px]" style={{ color: "#18181B" }}>
+              {highlightQuery ? highlightMatch(c.name, highlightQuery) : c.name}
+            </span>
             <span
               className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold"
               style={isDomestic
@@ -181,14 +218,26 @@ function CustomerCard({ c, selected, onClick }: { c: CustomerRecord; selected?: 
               {isDomestic ? <User className="w-2.5 h-2.5" /> : <Building2 className="w-2.5 h-2.5" />}
               {isDomestic ? "Regular" : "Commercial"}
             </span>
+            {isExact && (
+              <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                <Check className="w-2.5 h-2.5" /> Exact Match
+              </span>
+            )}
+            {sourceBadge && (
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-medium bg-slate-100 text-slate-600 border border-slate-200">
+                {sourceBadge}
+              </span>
+            )}
           </div>
           <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
             <span className="flex items-center gap-1 text-[12px]" style={{ color: "#71717A" }}>
-              <Phone className="w-3 h-3" />{c.phone}
+              <Phone className="w-3 h-3" />
+              {highlightQuery ? highlightMatch(c.phone, highlightQuery) : c.phone}
             </span>
             {c.customerCode && (
-              <span className="flex items-center gap-1 text-[12px] font-mono" style={{ color: "#2563EB" }}>
-                <Hash className="w-3 h-3" />{c.customerCode}
+              <span className="flex items-center gap-1 text-[12px] font-mono font-semibold" style={{ color: "#2563EB" }}>
+                <Hash className="w-3 h-3" />
+                {highlightQuery ? highlightMatch(c.customerCode, highlightQuery) : c.customerCode}
               </span>
             )}
             {!isDomestic && c.contactPerson && (
@@ -209,13 +258,19 @@ function CustomerCard({ c, selected, onClick }: { c: CustomerRecord; selected?: 
             </div>
           )}
         </div>
-        {selected && <CheckCircle2 className="w-5 h-5 flex-shrink-0" style={{ color: "#2563EB" }} />}
+        {selected ? (
+          <CheckCircle2 className="w-5 h-5 flex-shrink-0" style={{ color: "#2563EB" }} />
+        ) : isExact ? (
+          <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-100 px-2 py-1 rounded-md hidden sm:inline-block">
+            Press Enter ↵
+          </span>
+        ) : null}
       </div>
     </button>
   );
 }
 
-// ─── Step 1: Find Customer ────────────────────────────────────────────────────
+// ─── Step 1: Find Customer (High Performance Instant Search) ─────────────────
 
 function Step1FindCustomer({
   customers,
@@ -229,54 +284,216 @@ function Step1FindCustomer({
   const [connNo, setConnNo] = useState("");
   const [nameQuery, setNameQuery] = useState("");
   const [searchMode, setSearchMode] = useState<"conn" | "name">("conn");
+  const [serverResults, setServerResults] = useState<CustomerRecord[]>([]);
+  const [isSearchingServer, setIsSearchingServer] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => { inputRef.current?.focus(); }, []);
+  useEffect(() => { inputRef.current?.focus(); }, [searchMode]);
 
-  const connResults: CustomerRecord[] = connNo.trim()
-    ? customers.filter((c) =>
-      c.customerCode != null &&
-      c.customerCode.toLowerCase().includes(connNo.trim().toLowerCase())
-    )
-    : [];
+  // Pre-index customers in memory for 0ms sub-millisecond filtering
+  const indexedCustomers = useMemo(() => {
+    return customers.map((c) => ({
+      raw: c,
+      cleanCode: (c.customerCode || "").toLowerCase().replace(/[\s\-_]/g, ""),
+      rawCode: (c.customerCode || "").toLowerCase(),
+      cleanPhone: (c.phone || "").replace(/[\s\-+()]/g, ""),
+      lowerName: (c.name || "").toLowerCase(),
+      lowerContact: (c.contactPerson || "").toLowerCase(),
+      lowerAddress: (c.address || "").toLowerCase(),
+    }));
+  }, [customers]);
 
-  const nameResults: CustomerRecord[] = nameQuery.trim().length >= 2
-    ? customers.filter((c) => {
-      const q = nameQuery.toLowerCase();
-      return (
-        c.name.toLowerCase().includes(q) ||
-        c.phone.includes(q) ||
-        (c.contactPerson ?? "").toLowerCase().includes(q)
-      );
-    }).slice(0, 8)
-    : [];
+  // Instant in-memory search for Connection Number tab
+  const { connResults, connExactMatch, connTotalMatches } = useMemo(() => {
+    const q = connNo.trim().toLowerCase();
+    if (!q) return { connResults: [], connExactMatch: null, connTotalMatches: 0 };
+    const cleanQ = q.replace(/[\s\-_]/g, "");
+
+    const scored: { customer: CustomerRecord; score: number }[] = [];
+    let exact: CustomerRecord | null = null;
+
+    for (const item of indexedCustomers) {
+      let score = 0;
+      // 1. Exact match on customer code
+      if (item.rawCode === q || item.cleanCode === cleanQ) {
+        score = 1000;
+        exact = item.raw;
+      }
+      // 2. Starts with customer code
+      else if (item.rawCode.startsWith(q) || item.cleanCode.startsWith(cleanQ)) {
+        score = 500;
+      }
+      // 3. Substring of customer code
+      else if (item.rawCode.includes(q) || item.cleanCode.includes(cleanQ)) {
+        score = 200;
+      }
+      // 4. Exact match on phone number
+      else if (item.cleanPhone === cleanQ) {
+        score = 800;
+        if (!exact) exact = item.raw;
+      }
+      // 5. Phone starts with or contains
+      else if (cleanQ.length >= 3 && item.cleanPhone.includes(cleanQ)) {
+        score = 150;
+      }
+      // 6. Name match if typed letters in connection number box
+      else if (q.length >= 2 && item.lowerName.includes(q)) {
+        score = 100;
+      }
+
+      if (score > 0) {
+        scored.push({ customer: item.raw, score });
+      }
+    }
+
+    scored.sort((a, b) => b.score - a.score);
+    return {
+      connResults: scored.slice(0, 10).map((s) => s.customer),
+      connExactMatch: exact,
+      connTotalMatches: scored.length,
+    };
+  }, [connNo, indexedCustomers]);
+
+  // Instant in-memory search for Name / Phone tab
+  const { nameResults, nameExactMatch, nameTotalMatches } = useMemo(() => {
+    const q = nameQuery.trim().toLowerCase();
+    if (!q) return { nameResults: [], nameExactMatch: null, nameTotalMatches: 0 };
+    const cleanQ = q.replace(/[\s\-_]/g, "");
+
+    const scored: { customer: CustomerRecord; score: number }[] = [];
+    let exact: CustomerRecord | null = null;
+
+    for (const item of indexedCustomers) {
+      let score = 0;
+      // 1. Exact match on name or phone
+      if (item.lowerName === q || item.cleanPhone === cleanQ) {
+        score = 1000;
+        exact = item.raw;
+      }
+      // 2. Name starts with query
+      else if (item.lowerName.startsWith(q)) {
+        score = 600;
+      }
+      // 3. Phone starts with or contains
+      else if (cleanQ.length >= 2 && item.cleanPhone.includes(cleanQ)) {
+        score = 500;
+      }
+      // 4. Customer code match
+      else if (item.cleanCode.includes(cleanQ)) {
+        score = 400;
+      }
+      // 5. Name contains query
+      else if (item.lowerName.includes(q)) {
+        score = 300;
+      }
+      // 6. Contact person or address
+      else if (item.lowerContact.includes(q) || item.lowerAddress.includes(q)) {
+        score = 150;
+      }
+
+      if (score > 0) {
+        scored.push({ customer: item.raw, score });
+      }
+    }
+
+    scored.sort((a, b) => b.score - a.score);
+    return {
+      nameResults: scored.slice(0, 10).map((s) => s.customer),
+      nameExactMatch: exact,
+      nameTotalMatches: scored.length,
+    };
+  }, [nameQuery, indexedCustomers]);
+
+  // Live Server Fallback Lookup (runs only if query is typed but 0 local matches found)
+  useEffect(() => {
+    const activeQ = (searchMode === "conn" ? connNo : nameQuery).trim();
+    const localCount = searchMode === "conn" ? connResults.length : nameResults.length;
+
+    if (activeQ.length < 2 || localCount > 0) {
+      setServerResults([]);
+      setIsSearchingServer(false);
+      return;
+    }
+
+    let isMounted = true;
+    setIsSearchingServer(true);
+
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/delivery-boy/search-customer?q=${encodeURIComponent(activeQ)}`);
+        if (!res.ok) throw new Error("Search failed");
+        const data = await res.json();
+        if (isMounted) {
+          setServerResults(data.customers || []);
+        }
+      } catch (err) {
+        console.error("Live customer search error:", err);
+      } finally {
+        if (isMounted) setIsSearchingServer(false);
+      }
+    }, 200);
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timer);
+    };
+  }, [connNo, nameQuery, searchMode, connResults.length, nameResults.length]);
+
+  const activeQuery = searchMode === "conn" ? connNo.trim() : nameQuery.trim();
+  const isServerSource = (searchMode === "conn" ? connResults.length : nameResults.length) === 0 && serverResults.length > 0;
+  const activeResults = searchMode === "conn"
+    ? (connResults.length > 0 ? connResults : serverResults)
+    : (nameResults.length > 0 ? nameResults : serverResults);
+  const totalMatches = searchMode === "conn" ? connTotalMatches : nameTotalMatches;
+  const exactMatch = searchMode === "conn" ? connExactMatch : nameExactMatch;
+
+  // Handle Enter Key for instant 1-tap confirmation
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      if (exactMatch) {
+        onSelect(exactMatch);
+      } else if (activeResults.length > 0) {
+        onSelect(activeResults[0]);
+      }
+    }
+  };
 
   return (
     <div>
       <StepIndicator step={1} />
 
       {/* Mode toggle */}
-      <div className="flex items-center gap-1 p-1 rounded-xl mb-4 w-fit" style={{ background: "#F4F4F5" }}>
-        <button
-          type="button"
-          onClick={() => setSearchMode("conn")}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium transition-all"
-          style={searchMode === "conn"
-            ? { background: "#FFFFFF", color: "#18181B", boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }
-            : { color: "#71717A" }}
-        >
-          <Barcode className="w-3.5 h-3.5" /> Connection No.
-        </button>
-        <button
-          type="button"
-          onClick={() => setSearchMode("name")}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium transition-all"
-          style={searchMode === "name"
-            ? { background: "#FFFFFF", color: "#18181B", boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }
-            : { color: "#71717A" }}
-        >
-          <Search className="w-3.5 h-3.5" /> Name / Phone
-        </button>
+      <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+        <div className="flex items-center gap-1 p-1 rounded-xl w-fit" style={{ background: "#F4F4F5" }}>
+          <button
+            type="button"
+            onClick={() => setSearchMode("conn")}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium transition-all"
+            style={searchMode === "conn"
+              ? { background: "#FFFFFF", color: "#18181B", boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }
+              : { color: "#71717A" }}
+          >
+            <Barcode className="w-3.5 h-3.5" /> Connection No.
+          </button>
+          <button
+            type="button"
+            onClick={() => setSearchMode("name")}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium transition-all"
+            style={searchMode === "name"
+              ? { background: "#FFFFFF", color: "#18181B", boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }
+              : { color: "#71717A" }}
+          >
+            <Search className="w-3.5 h-3.5" /> Name / Phone
+          </button>
+        </div>
+
+        {activeQuery && (
+          <span className="text-[11px] font-medium text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200 flex items-center gap-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+            Instant Search (0ms)
+          </span>
+        )}
       </div>
 
       {/* Connection number search */}
@@ -286,7 +503,7 @@ function Step1FindCustomer({
             <label className={labelCls} style={labelSty}>
               Enter Connection Number
               <span className="ml-1 text-[11px] font-normal" style={{ color: "#A1A1AA" }}>
-                (from gas company registration paper)
+                (or scan / type customer registration code)
               </span>
             </label>
             <div className="relative">
@@ -299,7 +516,8 @@ function Step1FindCustomer({
                   setConnNo(e.target.value);
                   if (selected) onSelect(null as unknown as CustomerRecord);
                 }}
-                placeholder="e.g. 1234567890"
+                onKeyDown={handleKeyDown}
+                placeholder="e.g. 1234567890 (or phone number)"
                 className={inputCls}
                 style={{ ...inputSty, paddingLeft: "2.5rem", fontSize: "16px", letterSpacing: "0.05em" }}
               />
@@ -315,30 +533,75 @@ function Step1FindCustomer({
             </div>
           </div>
 
-          {/* Results */}
-          {connNo.trim() && connResults.length === 0 && (
+          {/* Exact Match Banner with 1-click select */}
+          {connExactMatch && !selected && (
+            <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0" />
+                <div>
+                  <p className="text-[13px] font-bold text-emerald-900">
+                    Exact Match Found: {connExactMatch.name}
+                  </p>
+                  <p className="text-[11px] text-emerald-700">
+                    Code #{connExactMatch.customerCode} · {connExactMatch.phone}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => onSelect(connExactMatch)}
+                className="px-3 py-1.5 rounded-lg text-[12px] font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition-colors whitespace-nowrap"
+              >
+                Select Customer ↵
+              </button>
+            </div>
+          )}
+
+          {/* Live Searching Indicator */}
+          {isSearchingServer && (
+            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-50 text-blue-700 text-xs border border-blue-200">
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-600" />
+              <span>Checking complete database in real time...</span>
+            </div>
+          )}
+
+          {/* Results List */}
+          {activeResults.length > 0 && !selected && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-[11px] font-medium uppercase tracking-wide text-zinc-500">
+                <span>
+                  {totalMatches > 10 ? `Top 10 of ${totalMatches} Matches` : `${activeResults.length} Match${activeResults.length > 1 ? "es" : ""}`}
+                </span>
+                <span className="text-[10px] lowercase text-zinc-400">press enter to select first</span>
+              </div>
+              {activeResults.map((cust: CustomerRecord) => (
+                <CustomerCard
+                  key={cust.id}
+                  c={cust}
+                  selected={false}
+                  onClick={() => onSelect(cust)}
+                  highlightQuery={connNo.trim()}
+                  isExact={Boolean(connExactMatch && cust.id === connExactMatch.id)}
+                  sourceBadge={isServerSource ? "Database" : undefined}
+                />
+              ))}
+            </div>
+          )}
+
+          {/* No results notice */}
+          {connNo.trim() && activeResults.length === 0 && !isSearchingServer && (
             <div className="flex items-center gap-2 px-3 py-3 rounded-lg" style={{ background: "#FEF2F2", border: "1px solid #FCA5A5" }}>
               <AlertCircle className="w-4 h-4 flex-shrink-0" style={{ color: "#DC2626" }} />
               <div>
                 <p className="text-[12px] font-medium" style={{ color: "#DC2626" }}>No customer found</p>
                 <p className="text-[11px]" style={{ color: "#DC2626" }}>
-                  No customer with connection number <strong>{connNo}</strong>. Try the Name/Phone search.
+                  No match for <strong>{connNo}</strong>. Try typing customer name or mobile number in the Name/Phone tab.
                 </p>
               </div>
             </div>
           )}
 
-          {connResults.length > 0 && !selected && (
-            <div className="space-y-2">
-              <p className="text-[11px] font-medium uppercase tracking-wide" style={{ color: "#A1A1AA" }}>
-                {connResults.length} MATCH{connResults.length > 1 ? "ES" : ""} FOUND
-              </p>
-              {connResults.map((cust: CustomerRecord) => (
-                <CustomerCard key={cust.id} c={cust} selected={false} onClick={() => onSelect(cust)} />
-              ))}
-            </div>
-          )}
-
+          {/* Selected Customer View */}
           {selected && (
             <div>
               <div className="flex items-center gap-2 mb-2">
@@ -359,12 +622,13 @@ function Step1FindCustomer({
             </div>
           )}
 
+          {/* Empty Prompt */}
           {!selected && !connNo && (
             <div className="px-4 py-6 rounded-xl text-center" style={{ background: "#F8F8F8", border: "1px dashed #D4D4D8" }}>
               <Barcode className="w-8 h-8 mx-auto mb-2" style={{ color: "#D4D4D8" }} />
-              <p className="text-[13px] font-medium" style={{ color: "#71717A" }}>Enter the connection number</p>
+              <p className="text-[13px] font-medium" style={{ color: "#71717A" }}>Enter or scan the connection number</p>
               <p className="text-[11px] mt-1" style={{ color: "#A1A1AA" }}>
-                This number is printed on the customer&apos;s gas company registration card
+                Matches appear instantly as you type each digit
               </p>
             </div>
           )}
@@ -375,7 +639,9 @@ function Step1FindCustomer({
       {searchMode === "name" && (
         <div className="space-y-3">
           <div>
-            <label className={labelCls} style={labelSty}>Search by Name or Phone</label>
+            <label className={labelCls} style={labelSty}>
+              Search by Name, Mobile, or Address
+            </label>
             <div className="relative">
               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: "#A1A1AA" }} />
               <input
@@ -386,7 +652,8 @@ function Step1FindCustomer({
                   setNameQuery(e.target.value);
                   if (selected) onSelect(null as unknown as CustomerRecord);
                 }}
-                placeholder="Type at least 2 characters..."
+                onKeyDown={handleKeyDown}
+                placeholder="Type customer name, phone, or connection number..."
                 className={inputCls}
                 style={{ ...inputSty, paddingLeft: "2.5rem" }}
               />
@@ -402,6 +669,39 @@ function Step1FindCustomer({
             </div>
           </div>
 
+          {/* Exact Match Banner with 1-click select */}
+          {nameExactMatch && !selected && (
+            <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0" />
+                <div>
+                  <p className="text-[13px] font-bold text-emerald-900">
+                    Exact Match Found: {nameExactMatch.name}
+                  </p>
+                  <p className="text-[11px] text-emerald-700">
+                    Phone: {nameExactMatch.phone} {nameExactMatch.customerCode ? `· Code #${nameExactMatch.customerCode}` : ""}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => onSelect(nameExactMatch)}
+                className="px-3 py-1.5 rounded-lg text-[12px] font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition-colors whitespace-nowrap"
+              >
+                Select Customer ↵
+              </button>
+            </div>
+          )}
+
+          {/* Live Searching Indicator */}
+          {isSearchingServer && (
+            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-50 text-blue-700 text-xs border border-blue-200">
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-600" />
+              <span>Checking complete database in real time...</span>
+            </div>
+          )}
+
+          {/* Selected Customer View */}
           {selected && (
             <div>
               <div className="flex items-center gap-2 mb-2">
@@ -422,29 +722,42 @@ function Step1FindCustomer({
             </div>
           )}
 
-          {!selected && nameQuery.trim().length >= 2 && nameResults.length === 0 && (
+          {/* Results List */}
+          {activeResults.length > 0 && !selected && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-[11px] font-medium uppercase tracking-wide text-zinc-500">
+                <span>
+                  {totalMatches > 10 ? `Top 10 of ${totalMatches} Results` : `${activeResults.length} Result${activeResults.length > 1 ? "s" : ""}`}
+                </span>
+                <span className="text-[10px] lowercase text-zinc-400">press enter to select first</span>
+              </div>
+              {activeResults.map((cust: CustomerRecord) => (
+                <CustomerCard
+                  key={cust.id}
+                  c={cust}
+                  onClick={() => onSelect(cust)}
+                  highlightQuery={nameQuery.trim()}
+                  isExact={Boolean(nameExactMatch && cust.id === nameExactMatch.id)}
+                  sourceBadge={isServerSource ? "Database" : undefined}
+                />
+              ))}
+            </div>
+          )}
+
+          {/* No results notice */}
+          {!selected && nameQuery.trim().length >= 1 && activeResults.length === 0 && !isSearchingServer && (
             <div className="flex items-center gap-2 px-3 py-3 rounded-lg" style={{ background: "#FEF2F2", border: "1px solid #FCA5A5" }}>
               <AlertCircle className="w-4 h-4 flex-shrink-0" style={{ color: "#DC2626" }} />
               <p className="text-[12px]" style={{ color: "#DC2626" }}>No customers found matching &quot;{nameQuery}&quot;</p>
             </div>
           )}
 
-          {!selected && nameResults.length > 0 && (
-            <div className="space-y-2">
-              <p className="text-[11px] font-medium uppercase tracking-wide" style={{ color: "#A1A1AA" }}>
-                {nameResults.length} RESULT{nameResults.length > 1 ? "S" : ""}
-              </p>
-              {nameResults.map((c) => (
-                <CustomerCard key={c.id} c={c} onClick={() => onSelect(c)} />
-              ))}
-            </div>
-          )}
-
-          {!selected && nameQuery.trim().length < 2 && (
+          {/* Empty Prompt */}
+          {!selected && !nameQuery && (
             <div className="px-4 py-6 rounded-xl text-center" style={{ background: "#F8F8F8", border: "1px dashed #D4D4D8" }}>
               <Search className="w-8 h-8 mx-auto mb-2" style={{ color: "#D4D4D8" }} />
-              <p className="text-[13px] font-medium" style={{ color: "#71717A" }}>Search by name or phone</p>
-              <p className="text-[11px] mt-1" style={{ color: "#A1A1AA" }}>Type at least 2 characters to see results</p>
+              <p className="text-[13px] font-medium" style={{ color: "#71717A" }}>Instant search by name, phone, or code</p>
+              <p className="text-[11px] mt-1" style={{ color: "#A1A1AA" }}>Results appear in real time without any delay</p>
             </div>
           )}
         </div>
@@ -461,7 +774,8 @@ interface DeliveryForm {
   returnedQty: string;
   pendingQty: string;
   emptyPending: string;            // Empty cylinders not yet returned by commercial customer
-  bookingQty: string;              // Number of cylinders booked (default 1)
+  bookingQty: string;              // Number of cylinders booked (default 1, editable)
+  extraCharges: string;            // Additional / delivery charges based on customer location
   cashCollected: string;
   creditAmount: string;
   paymentMode: string;
@@ -470,6 +784,30 @@ interface DeliveryForm {
   notes: string;
   date: string;
   otherPaymentApp?: string;        // Custom app name for main "Others" payment mode
+}
+
+function calcAutoPayment(
+  pId: string,
+  products: ProductRecord[],
+  dQty: string,
+  extraStr: string,
+  mode: string
+): { cashCollected?: string; creditAmount?: string } {
+  const prod = products.find((p) => p.id === pId);
+  const rate = prod && prod.saleRate > 0 ? prod.saleRate : 0;
+  const qty = Number(dQty) > 0 ? Number(dQty) : 1;
+  const extra = Number(extraStr) > 0 ? Number(extraStr) : 0;
+  const total = rate > 0 ? (rate * qty) + extra : extra;
+
+  if (total <= 0) return {};
+
+  if (mode === "CREDIT") {
+    return { creditAmount: total.toFixed(0), cashCollected: "" };
+  } else if (mode === "PARTIAL") {
+    return { cashCollected: total.toFixed(0), creditAmount: "0" };
+  } else {
+    return { cashCollected: total.toFixed(0), creditAmount: "" };
+  }
 }
 
 function Step2DeliveryDetails({
@@ -481,6 +819,9 @@ function Step2DeliveryDetails({
   proofPhotos,
   photoUploading,
   onUploadPhoto,
+  location,
+  hasVehicleLoadedProducts,
+  loadedCountMap,
 }: {
   customer: CustomerRecord;
   products: ProductRecord[];
@@ -490,11 +831,16 @@ function Step2DeliveryDetails({
   proofPhotos: { paymentReceiptUrl: string | null; customerCardUrl: string | null; additionalImageUrl: string | null };
   photoUploading: { payment_receipt: boolean; customer_card: boolean; additional: boolean };
   onUploadPhoto: (file: File, type: "payment_receipt" | "customer_card" | "additional") => void;
+  location?: { lat: number | null; lng: number | null; accuracy: number | null };
+  hasVehicleLoadedProducts?: boolean;
+  loadedCountMap?: Map<string, number>;
 }) {
   const selectedProduct = products.find((p) => p.id === form.productId);
-  const totalValue = selectedProduct && selectedProduct.saleRate > 0
-    ? selectedProduct.saleRate * (Number(form.deliveredQty) || 0)
-    : 0;
+  const baseRate = selectedProduct && selectedProduct.saleRate > 0 ? selectedProduct.saleRate : 0;
+  const dQty = Number(form.deliveredQty) || 0;
+  const extraCharge = Number(form.extraCharges) || 0;
+  const productSubtotal = baseRate * dQty;
+  const totalValue = productSubtotal + extraCharge;
 
   const isDomestic = customer.type === "DOMESTIC";
 
@@ -585,20 +931,48 @@ function Step2DeliveryDetails({
 
         {/* ── STEP B: Product ───────────────────────────────────────────── */}
         <div className="rounded-xl p-4" style={{ background: "#F8F8F8", border: "1px solid #E4E4E7" }}>
-          <p className="text-[11px] font-semibold uppercase tracking-wide mb-3" style={{ color: "#71717A" }}>② Product / Cylinder</p>
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "#71717A" }}>② Product / Cylinder</p>
+            {hasVehicleLoadedProducts ? (
+              <span className="text-[10px] font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-200 flex items-center gap-1">
+                <Truck className="w-3 h-3 text-blue-600" />
+                Loaded in Vehicle Only
+              </span>
+            ) : (
+              <span className="text-[10px] text-zinc-500 bg-zinc-100 px-2 py-0.5 rounded-full border border-zinc-200">
+                All Agency Products
+              </span>
+            )}
+          </div>
           <select
             value={form.productId}
-            onChange={(e) => onChange({ productId: e.target.value })}
+            onChange={(e) => {
+              const newPId = e.target.value;
+              const auto = calcAutoPayment(newPId, products, form.deliveredQty || form.bookingQty || "1", form.extraCharges, form.paymentMode);
+              onChange({
+                productId: newPId,
+                ...auto,
+              });
+            }}
             className={inputCls}
             style={inputSty}
           >
             <option value="">Select product...</option>
-            {products.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}{p.saleRate > 0 ? ` — ₹${p.saleRate}` : ""}
-              </option>
-            ))}
+            {products.map((p) => {
+              const loadedQty = loadedCountMap?.get(p.id);
+              const loadedLabel = loadedQty != null ? ` (${loadedQty} loaded in vehicle)` : "";
+              return (
+                <option key={p.id} value={p.id}>
+                  {p.name}{p.saleRate > 0 ? ` — ₹${p.saleRate}` : ""}{loadedLabel}
+                </option>
+              );
+            })}
           </select>
+          {selectedProduct && (
+            <p className="text-[11px] mt-2 text-emerald-700 font-medium flex items-center gap-1">
+              <Check className="w-3 h-3" /> Rate ₹{selectedProduct.saleRate} auto-filled into payment amount
+            </p>
+          )}
         </div>
 
         {/* ── STEP C: Cylinder Count ────────────────────────────────────── */}
@@ -608,22 +982,24 @@ function Step2DeliveryDetails({
           {/* COMMERCIAL: 5-column layout */}
           {!isDomestic ? (
             <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-              {/* 1. Booking Cylinder */}
+              {/* 1. Booking Cylinder (Default 1, fully editable) */}
               <div>
                 <label className="block text-[11px] font-medium mb-1" style={{ color: "#4F46E5" }}>Booking Cylinder</label>
                 <input
                   type="number" inputMode="numeric" min="0"
-                  value={form.bookingQty || "1"}
+                  value={form.bookingQty}
                   onChange={(e) => {
-                    const bVal = Number(e.target.value) || 0;
+                    const bVal = e.target.value;
+                    const numB = Number(bVal) || 0;
                     const dVal = Number(form.deliveredQty) || 0;
-                    const pVal = Math.max(0, bVal - dVal);
-                    onChange({ bookingQty: e.target.value, pendingQty: pVal.toString() });
+                    const pVal = Math.max(0, numB - dVal);
+                    const auto = calcAutoPayment(form.productId, products, form.deliveredQty, form.extraCharges, form.paymentMode);
+                    onChange({ bookingQty: bVal, pendingQty: pVal.toString(), ...auto });
                   }}
                   className="w-full px-3 py-2 rounded-lg text-[15px] font-bold text-center border outline-none transition-colors focus:border-indigo-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                   style={{ borderColor: "#D4D4D8", background: "#FFFFFF", color: "#4F46E5" }}
                 />
-                <p className="text-[10px] mt-1 text-center" style={{ color: "#A1A1AA" }}>Cylinders ordered</p>
+                <p className="text-[10px] mt-1 text-center" style={{ color: "#A1A1AA" }}>Cylinders ordered (default 1)</p>
               </div>
 
               {/* 2. Delivered */}
@@ -633,12 +1009,14 @@ function Step2DeliveryDetails({
                   type="number" inputMode="numeric" min="0"
                   value={form.deliveredQty}
                   onChange={(e) => {
-                    const dVal = Number(e.target.value) || 0;
+                    const dVal = e.target.value;
+                    const numD = Number(dVal) || 0;
                     const rVal = Number(form.returnedQty) || 0;
                     const bVal = Number(form.bookingQty) || 0;
-                    const ep   = Math.max(0, dVal - rVal);
-                    const pVal = Math.max(0, bVal - dVal);
-                    onChange({ deliveredQty: e.target.value, emptyPending: ep.toString(), pendingQty: pVal.toString() });
+                    const ep   = Math.max(0, numD - rVal);
+                    const pVal = Math.max(0, bVal - numD);
+                    const auto = calcAutoPayment(form.productId, products, dVal, form.extraCharges, form.paymentMode);
+                    onChange({ deliveredQty: dVal, emptyPending: ep.toString(), pendingQty: pVal.toString(), ...auto });
                   }}
                   className="w-full px-3 py-2 rounded-lg text-[15px] font-bold text-center border outline-none transition-colors focus:border-blue-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                   style={{ borderColor: "#D4D4D8", background: "#FFFFFF", color: "#2563EB" }}
@@ -691,22 +1069,24 @@ function Step2DeliveryDetails({
           ) : (
             /* DOMESTIC: 4-column layout */
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              {/* 1. Booking Cylinder */}
+              {/* 1. Booking Cylinder (Default 1, fully editable) */}
               <div>
                 <label className="block text-[11px] font-medium mb-1" style={{ color: "#4F46E5" }}>Booking Cylinder</label>
                 <input
                   type="number" inputMode="numeric" min="0"
-                  value={form.bookingQty || "1"}
+                  value={form.bookingQty}
                   onChange={(e) => {
-                    const bVal = Number(e.target.value) || 0;
+                    const bVal = e.target.value;
+                    const numB = Number(bVal) || 0;
                     const dVal = Number(form.deliveredQty) || 0;
-                    const pVal = Math.max(0, bVal - dVal);
-                    onChange({ bookingQty: e.target.value, pendingQty: pVal.toString() });
+                    const pVal = Math.max(0, numB - dVal);
+                    const auto = calcAutoPayment(form.productId, products, form.deliveredQty, form.extraCharges, form.paymentMode);
+                    onChange({ bookingQty: bVal, pendingQty: pVal.toString(), ...auto });
                   }}
                   className="w-full px-3 py-2 rounded-lg text-[15px] font-bold text-center border outline-none transition-colors focus:border-indigo-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                   style={{ borderColor: "#D4D4D8", background: "#FFFFFF", color: "#4F46E5" }}
                 />
-                <p className="text-[10px] mt-1 text-center" style={{ color: "#A1A1AA" }}>Cylinders ordered</p>
+                <p className="text-[10px] mt-1 text-center" style={{ color: "#A1A1AA" }}>Cylinders ordered (default 1)</p>
               </div>
 
               {/* 2. Delivered */}
@@ -716,10 +1096,12 @@ function Step2DeliveryDetails({
                   type="number" inputMode="numeric" min="0"
                   value={form.deliveredQty}
                   onChange={(e) => {
-                    const dVal = Number(e.target.value) || 0;
+                    const dVal = e.target.value;
+                    const numD = Number(dVal) || 0;
                     const bVal = Number(form.bookingQty) || 0;
-                    const pVal = Math.max(0, bVal - dVal);
-                    onChange({ deliveredQty: e.target.value, pendingQty: pVal.toString() });
+                    const pVal = Math.max(0, bVal - numD);
+                    const auto = calcAutoPayment(form.productId, products, dVal, form.extraCharges, form.paymentMode);
+                    onChange({ deliveredQty: dVal, pendingQty: pVal.toString(), ...auto });
                   }}
                   className="w-full px-3 py-2 rounded-lg text-[15px] font-bold text-center border outline-none transition-colors focus:border-blue-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                   style={{ borderColor: "#D4D4D8", background: "#FFFFFF", color: "#2563EB" }}
@@ -751,6 +1133,42 @@ function Step2DeliveryDetails({
                 />
                 <p className="text-[10px] mt-1 text-center" style={{ color: "#A1A1AA" }}>Cancelled (auto)</p>
               </div>
+            </div>
+          )}
+        </div>
+
+        {/* ── STEP D: Additional / Delivery Charges ─────────────────────── */}
+        <div className="rounded-xl p-4" style={{ background: "#F8F8F8", border: "1px solid #E4E4E7" }}>
+          <div className="flex items-center justify-between mb-1.5">
+            <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "#71717A" }}>
+              ④ Additional / Extra Charges (Location Based)
+            </p>
+            <span className="text-[10px] text-zinc-500 bg-zinc-200/60 px-2 py-0.5 rounded-full font-medium">
+              Optional · Distance / Floor Fee
+            </span>
+          </div>
+          <p className="text-[11px] text-zinc-500 mb-2.5">
+            Extra charge according to customer location or distance (directly updates total collected price)
+          </p>
+          <div className="relative">
+            <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5" style={{ color: "#A1A1AA" }} />
+            <input
+              type="number" min="0" step="1"
+              value={form.extraCharges}
+              onChange={(e) => {
+                const newExtra = e.target.value;
+                const auto = calcAutoPayment(form.productId, products, form.deliveredQty, newExtra, form.paymentMode);
+                onChange({ extraCharges: newExtra, ...auto });
+              }}
+              placeholder="0.00 (e.g. 20, 50)"
+              className={inputCls}
+              style={{ ...inputSty, paddingLeft: "2.25rem" }}
+            />
+          </div>
+          {Number(form.extraCharges) > 0 && selectedProduct && (
+            <div className="mt-2 text-[11px] text-blue-700 bg-blue-50 px-2.5 py-1.5 rounded-lg border border-blue-200 flex items-center justify-between">
+              <span>Cylinders (₹{selectedProduct.saleRate} × {form.deliveredQty || 0} = ₹{(selectedProduct.saleRate * (Number(form.deliveredQty) || 0)).toFixed(0)}) + Extra (₹{form.extraCharges})</span>
+              <span className="font-bold">= Total ₹{totalValue.toFixed(0)}</span>
             </div>
           )}
         </div>
@@ -1075,15 +1493,40 @@ function Step2DeliveryDetails({
           </div>
         </div>
 
-        {/* ── STEP G: Delivery Proof Photos (Phase 1 + Phase 2) ─────────── */}
+        {/* ── STEP G: Delivery Proof Photos (with Geo-tag) ─────────────── */}
         <div className="rounded-xl p-4 space-y-3" style={{ background: "#F8F8F8", border: "1px solid #E4E4E7" }}>
           <div className="flex items-center justify-between">
             <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "#71717A" }}>
               ⑦ Delivery Proof Photos
             </p>
-            <span className="text-[10px] font-medium text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-200">
-              IST Timestamp Watermarked
+            <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1">
+              <MapPin className="w-3 h-3 text-emerald-600" />
+              Geo-tag & IST Timestamp Stamped
             </span>
+          </div>
+
+          {/* Geo-tag status banner */}
+          <div className="p-3 rounded-xl bg-slate-900 border border-slate-700 text-slate-100 text-[12px] flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <MapPin className={`w-4 h-4 flex-shrink-0 ${location?.lat ? "text-emerald-400" : "text-amber-400"}`} />
+              <div>
+                <p className="font-semibold text-xs flex items-center gap-1.5 text-white">
+                  {location?.lat ? "GPS Geo-tag Active" : "GPS Location Not Selected"}
+                  <span className={`text-[10px] px-1.5 py-0.2 rounded-sm font-medium ${location?.lat ? "bg-emerald-950 text-emerald-300 border border-emerald-600/40" : "bg-amber-950 text-amber-300 border border-amber-600/40"}`}>
+                    {location?.lat ? "Will be burned on photo" : "Optional"}
+                  </span>
+                </p>
+                <p className="text-[11px] text-slate-300 font-mono mt-0.5">
+                  {location?.lat
+                    ? `Lat ${location.lat.toFixed(5)}°, Lng ${location.lng?.toFixed(5)}° (±${Math.round(location.accuracy || 0)}m)`
+                    : "Tap 'Capture Location' button above if you want GPS coordinates stamped"}
+                </p>
+              </div>
+            </div>
+            <div className="text-right hidden sm:block">
+              <span className="text-[10px] font-semibold text-blue-400 block">Tamper-Proof</span>
+              <span className="text-[10px] text-slate-400">Date, Time, Agent, Customer ID</span>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -1325,11 +1768,13 @@ function Step3Review({
   form,
   product,
   proofPhotos,
+  location,
 }: {
   customer: CustomerRecord;
   form: DeliveryForm;
   product: ProductRecord | undefined;
   proofPhotos: { paymentReceiptUrl: string | null; customerCardUrl: string | null; additionalImageUrl: string | null };
+  location?: { lat: number | null; lng: number | null; accuracy: number | null };
 }) {
   const [selectedReviewPhoto, setSelectedReviewPhoto] = useState<{ url: string; label: string } | null>(null);
   const isDomestic = customer.type === "DOMESTIC";
@@ -1360,6 +1805,8 @@ function Step3Review({
     Number(form.returnedQty) > 0 ? { label: "Empty Returned", value: `${form.returnedQty} empty cylinder${Number(form.returnedQty) !== 1 ? "s" : ""}` } : null,
     !isDomestic && Number(form.emptyPending) > 0 ? { label: "Empty Pending", value: `${form.emptyPending} empty not returned`, warn: true } : null,
     Number(form.pendingQty) > 0 ? { label: "Not Delivered", value: `${form.pendingQty} cylinder${Number(form.pendingQty) !== 1 ? "s" : ""}`, warn: true } : null,
+    Number(form.extraCharges) > 0 ? { label: "Extra Charges", value: `₹${Number(form.extraCharges).toFixed(2)}` } : null,
+    location?.lat ? { label: "GPS Geo-tag", value: `Lat ${location.lat.toFixed(5)}°, Lng ${location.lng?.toFixed(5)}°` } : null,
     { label: "Payment Mode", value: paymentLabel },
     form.paymentMode !== "CREDIT"
       ? { label: form.paymentMode === "PARTIAL" ? "Cash Received" : form.paymentMode === "Paybook" ? "Prepaid Amount" : "Amount Collected", value: `₹${Number(form.cashCollected || 0).toFixed(2)}`, highlight: true }
@@ -1464,6 +1911,7 @@ export function MyDeliveriesClient({
   customers,
   products,
   userId,
+  userName,
   assignedVehicle,
   todayTrip,
   todayCountRequest,
@@ -1476,15 +1924,43 @@ export function MyDeliveriesClient({
   const [wizardOpen, setWizardOpen] = useState(false);
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerRecord | null>(null);
+
+  // ── Loaded Products in Vehicle from Godown ──────────────────────────────────
+  const loadedProductMap = new Map<string, number>();
+  if (todayTrip?.items && Array.isArray(todayTrip.items)) {
+    for (const item of todayTrip.items) {
+      if (item.productId && Number(item.loaded) > 0) {
+        loadedProductMap.set(item.productId, (loadedProductMap.get(item.productId) || 0) + Number(item.loaded));
+      }
+    }
+  }
+  if (loadedProductMap.size === 0 && todayCountRequest?.fulfilledItems && Array.isArray(todayCountRequest.fulfilledItems)) {
+    for (const item of todayCountRequest.fulfilledItems) {
+      if (item.productId && Number(item.loadedQty) > 0) {
+        loadedProductMap.set(item.productId, (loadedProductMap.get(item.productId) || 0) + Number(item.loadedQty));
+      }
+    }
+  }
+
+  const hasVehicleLoadedProducts = loadedProductMap.size > 0;
+  // If products were loaded into vehicle at godown, strictly filter dropdown ONLY to those products!
+  const availableProducts = hasVehicleLoadedProducts
+    ? products.filter((p) => loadedProductMap.has(p.id))
+    : products;
+
+  const defaultInitialProd = availableProducts.length === 1 ? availableProducts[0].id : "";
+  const initialAutoPay = defaultInitialProd ? calcAutoPayment(defaultInitialProd, availableProducts, "1", "", "CASH") : {};
+
   const [form, setForm] = useState<DeliveryForm>({
-    productId: "",
-    deliveredQty: "0",
+    productId: defaultInitialProd,
+    deliveredQty: "1",
     returnedQty: "0",
-    pendingQty: "1",
+    pendingQty: "0",
     emptyPending: "0",
     bookingQty: "1",
-    cashCollected: "",
-    creditAmount: "",
+    extraCharges: "",
+    cashCollected: initialAutoPay.cashCollected || "",
+    creditAmount: initialAutoPay.creditAmount || "",
     paymentMode: "CASH",
     partialCollectionMode: "CASH",
     partialCollectionOther: "",
@@ -1510,6 +1986,9 @@ export function MyDeliveriesClient({
     additional: boolean;
   }>({ payment_receipt: false, customer_card: false, additional: false });
 
+  // ── Location (optional — captured fresh every time wizard opens) ─────────────
+  const { location, captureLocation, resetLocation } = useLocation({ timeout: 10000, highAccuracy: true });
+
   async function uploadProofPhoto(
     file: File,
     type: "payment_receipt" | "customer_card" | "additional"
@@ -1524,6 +2003,19 @@ export function MyDeliveriesClient({
       fd.append("file", processedFile);
       fd.append("deliveryId", "pending");
       fd.append("type", type);
+      // Pass location GPS if selected/captured
+      if (location.lat != null) fd.append("lat", location.lat.toString());
+      if (location.lng != null) fd.append("lng", location.lng.toString());
+      if (location.accuracy != null) fd.append("accuracy", location.accuracy.toString());
+      // Pass customer & delivery agent info for tamper-evident Geo-tag stamp
+      if (selectedCustomer) {
+        fd.append("customerId", selectedCustomer.customerCode || selectedCustomer.id);
+        fd.append("customerName", selectedCustomer.name);
+      }
+      if (userName) {
+        fd.append("deliveryBoyName", userName);
+      }
+
       const res = await fetch("/api/upload-delivery-proof", { method: "POST", body: fd });
       
       let data: any = null;
@@ -1552,9 +2044,6 @@ export function MyDeliveriesClient({
       setPhotoUploading((prev) => ({ ...prev, [type]: false }));
     }
   }
-
-  // ── Location (optional — captured fresh every time wizard opens) ─────────────
-  const { location, captureLocation, resetLocation } = useLocation({ timeout: 10000, highAccuracy: true });
 
   const todayDeliveries = deliveries.filter((d) => isToday(d.date));
   const pastDeliveries = deliveries.filter((d) => !isToday(d.date));
@@ -1600,14 +2089,32 @@ export function MyDeliveriesClient({
   function openWizard() {
     setStep(1);
     setSelectedCustomer(null);
-    setForm({ productId: "", deliveredQty: "0", returnedQty: "0", pendingQty: "1", emptyPending: "0", bookingQty: "1", cashCollected: "", creditAmount: "", paymentMode: "CASH", partialCollectionMode: "CASH", partialCollectionOther: "", notes: "", date: todayStr(), otherPaymentApp: "" });
+    const initialProd = availableProducts.length === 1 ? availableProducts[0].id : "";
+    const autoPay = initialProd ? calcAutoPayment(initialProd, availableProducts, "1", "", "CASH") : {};
+    setForm({
+      productId: initialProd,
+      deliveredQty: "1",
+      returnedQty: "0",
+      pendingQty: "0",
+      emptyPending: "0",
+      bookingQty: "1",
+      extraCharges: "",
+      cashCollected: autoPay.cashCollected || "",
+      creditAmount: autoPay.creditAmount || "",
+      paymentMode: "CASH",
+      partialCollectionMode: "CASH",
+      partialCollectionOther: "",
+      notes: "",
+      date: todayStr(),
+      otherPaymentApp: "",
+    });
     setFormError("");
     resetLocation();
     setProofPhotos({ paymentReceiptUrl: null, customerCardUrl: null, additionalImageUrl: null });
     setPhotoUploading({ payment_receipt: false, customer_card: false, additional: false });
     setWizardOpen(true);
     // Location is intentionally NOT auto-captured.
-    // The user must explicitly tap the location button every time.
+    // The user must explicitly tap the location button if desired.
   }
 
   function goStep2() {
@@ -1665,6 +2172,7 @@ export function MyDeliveriesClient({
     fd.append("pendingQty", form.pendingQty);
     fd.append("cashCollected", form.cashCollected || "0");
     fd.append("creditAmount", form.creditAmount || "0");
+    if (form.extraCharges) fd.append("extraCharges", form.extraCharges);
     fd.append("paymentMode", form.paymentMode === "Others" ? (form.otherPaymentApp || "Others").trim() : form.paymentMode);
     fd.append("partialCollectionMode", form.partialCollectionMode === "Others" ? (form.partialCollectionOther || "Others").trim() : (form.partialCollectionMode || "CASH"));
     fd.append("notes", form.notes || "");
@@ -1990,13 +2498,16 @@ export function MyDeliveriesClient({
               </div>
               <Step2DeliveryDetails
                 customer={selectedCustomer}
-                products={products}
+                products={availableProducts}
                 form={form}
                 onChange={(f) => setForm((prev) => ({ ...prev, ...f }))}
                 error={formError}
                 proofPhotos={proofPhotos}
                 photoUploading={photoUploading}
                 onUploadPhoto={uploadProofPhoto}
+                location={location}
+                hasVehicleLoadedProducts={hasVehicleLoadedProducts}
+                loadedCountMap={loadedProductMap}
               />
               <div className="flex gap-3 mt-6">
                 <button type="button" onClick={() => { setStep(1); setFormError(""); }}
@@ -2024,7 +2535,13 @@ export function MyDeliveriesClient({
                   label="Delivery Location"
                 />
               </div>
-              <Step3Review customer={selectedCustomer} form={form} product={selectedProduct} proofPhotos={proofPhotos} />
+              <Step3Review
+                customer={selectedCustomer}
+                form={form}
+                product={selectedProduct}
+                proofPhotos={proofPhotos}
+                location={location}
+              />
               {formError && (
                 <div className="mt-3 flex items-center gap-2 px-3 py-2 rounded-lg"
                   style={{ background: "#FEF2F2", border: "1px solid #FCA5A5" }}>

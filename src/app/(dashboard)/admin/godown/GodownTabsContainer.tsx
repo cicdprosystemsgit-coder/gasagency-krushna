@@ -8,6 +8,7 @@ import { InternalVehiclesClient } from "./InternalVehiclesClient";
 import { DeliveryRequestsClient, GodownDeliveryRequest } from "../../godown-keeper/delivery-requests/DeliveryRequestsClient";
 
 import { DateNavigationHeader } from "@/components/ui/DateNavigationHeader";
+import { CylinderLoader } from "@/components/ui/CylinderLoader";
 
 // Dynamically import map component with SSR disabled
 const GodownTrackingMap = dynamic(
@@ -15,11 +16,8 @@ const GodownTrackingMap = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="w-full h-[600px] bg-slate-100 flex items-center justify-center rounded-xl border border-slate-200">
-        <div className="text-center">
-          <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
-          <p className="text-[13px] font-medium text-slate-500">Loading Map Layer...</p>
-        </div>
+      <div className="w-full h-[600px] bg-slate-50 dark:bg-slate-900 flex items-center justify-center rounded-xl border border-slate-200 dark:border-slate-800">
+        <CylinderLoader size="md" color="red" message="Loading Map Layer" subtitle="Synchronizing godown cylinders and vehicles..." />
       </div>
     ),
   }

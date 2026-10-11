@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { GodownKeeperClient } from "./GodownKeeperClient";
+import { CylinderLoader } from "@/components/ui/CylinderLoader";
 
 import { getAgencyTodayRange } from "@/lib/utils";
 
@@ -132,8 +133,8 @@ export default async function GodownKeeperGodownPage({ searchParams }: PageProps
 
   return (
     <Suspense fallback={
-      <div className="flex items-center justify-center py-20">
-        <div className="w-5 h-5 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: "#2563EB", borderTopColor: "transparent" }} />
+      <div className="flex items-center justify-center py-24">
+        <CylinderLoader size="lg" message="Loading Godown Stock" subtitle="Calculating cylinder inventory and vehicle dispatches..." />
       </div>
     }>
       <GodownKeeperClient

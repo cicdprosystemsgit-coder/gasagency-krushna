@@ -6,6 +6,7 @@ import { Sidebar } from "@/components/layout/Sidebar";
 import { Navbar } from "@/components/layout/Navbar";
 import { SessionGuard } from "@/components/layout/SessionGuard";
 import { MobileBottomNav } from "@/components/layout/MobileBottomNav";
+import { CylinderLoader } from "@/components/ui/CylinderLoader";
 
 interface SessionData {
   name: string;
@@ -58,14 +59,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   if (!session) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: "var(--color-bg)" }}>
-        <div className="flex items-center gap-2.5 text-[13px]" style={{ color: "var(--color-text-muted)" }}>
-          <div
-            className="w-4 h-4 rounded-full border-2 border-t-transparent animate-spin"
-            style={{ borderColor: "var(--color-primary)", borderTopColor: "transparent" }}
-          />
-          Loading…
-        </div>
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950">
+        <CylinderLoader
+          size="lg"
+          color="red"
+          message="Starting Your Session"
+          subtitle="Connecting to Gas Agency Portal..."
+        />
       </div>
     );
   }

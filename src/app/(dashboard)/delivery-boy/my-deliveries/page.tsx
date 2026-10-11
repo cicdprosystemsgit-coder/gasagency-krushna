@@ -36,12 +36,13 @@ export default async function MyDeliveriesPage() {
       orderBy: { date: "desc" },
     }),
     prisma.customer.findMany({
-      where: { isActive: true, agencyId: session.agencyId! },
+      where: { isActive: true, isDeleted: false, agencyId: session.agencyId! },
       select: {
         id: true, name: true, phone: true, address: true,
         type: true, customerCode: true, contactPerson: true, businessType: true,
       },
       orderBy: { name: "asc" },
+      take: 1000,
     }),
     prisma.product.findMany({
       where: { isActive: true, agencyId: session.agencyId! },
@@ -89,6 +90,7 @@ export default async function MyDeliveriesPage() {
     returnTime: todayTrip.returnTime ? todayTrip.returnTime.toISOString() : null,
     tripStatus: todayTrip.tripStatus,
     cylindersLoaded: todayTrip.cylindersLoaded,
+    items: (todayTrip.items as Array<{ productId: string; productName?: string; loaded: number }>) || null,
   } : null;
 
   const serializedCountRequest = todayDeliveryCount ? {
@@ -96,6 +98,7 @@ export default async function MyDeliveriesPage() {
     status: todayDeliveryCount.status,
     totalRequested: todayDeliveryCount.totalRequested,
     totalLoaded: todayDeliveryCount.totalLoaded,
+    fulfilledItems: (todayDeliveryCount.fulfilledItems as Array<{ productId: string; productName?: string; loadedQty: number }>) || null,
   } : null;
 
   return (
@@ -110,6 +113,7 @@ export default async function MyDeliveriesPage() {
         customers={customers}
         products={products}
         userId={session.userId}
+        userName={session.name || "Delivery Agent"}
         assignedVehicle={assignedVehicle}
         todayTrip={serializedTrip}
         todayCountRequest={serializedCountRequest}

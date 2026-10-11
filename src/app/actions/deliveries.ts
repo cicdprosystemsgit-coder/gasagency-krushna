@@ -76,6 +76,12 @@ export async function createDeliveryRecord(formData: FormData) {
     ? new Date()
     : null;
 
+  const extraCharges = Number(formData.get("extraCharges")) || 0;
+  const rawNotes = (formData.get("notes") as string) || "";
+  const finalNotes = extraCharges > 0
+    ? (rawNotes ? `${rawNotes.trim()} | Extra/Delivery Charges: ₹${extraCharges.toFixed(2)}` : `Extra/Delivery Charges: ₹${extraCharges.toFixed(2)}`)
+    : (rawNotes.trim() || null);
+
   // ── Transactionally create delivery + optional credit ledger entry ────────
   const [delivery] = await prisma.$transaction(async (tx) => {
     const d = await tx.deliveryRecord.create({
@@ -88,7 +94,7 @@ export async function createDeliveryRecord(formData: FormData) {
         cashCollected: effectiveCash,
         paymentMode,
         creditAmount: effectiveCredit,
-        notes: (formData.get("notes") as string) || null,
+        notes: finalNotes,
         date: new Date(formData.get("date") as string),
         deliveredById: session.userId,
         agencyId: session.agencyId!,
