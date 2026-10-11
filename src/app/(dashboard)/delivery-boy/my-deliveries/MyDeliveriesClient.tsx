@@ -9,12 +9,13 @@ import {
   CheckCircle2, XCircle, ChevronRight, ChevronLeft, User,
   Building2, Phone, MapPin, FileText, Cylinder, IndianRupee,
   Barcode, RotateCcw, Clock, CalendarDays, CreditCard,
-  AlertCircle, Check, Camera, UploadCloud, Loader2,
+  AlertCircle, Check, Camera, UploadCloud, Loader2, Eye, X,
 } from "lucide-react";
 import { createDeliveryRecord } from "@/app/actions/deliveries";
 import { CalendarPicker } from "@/components/ui/CalendarPicker";
 import { useLocation } from "@/hooks/useLocation";
 import { LocationStatusCard } from "@/components/ui/GpsStatusBox";
+import { compressImage } from "@/lib/imageCompression";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1116,6 +1117,52 @@ function Step2DeliveryDetails({
 
 // ─── Photo Upload Slot ────────────────────────────────────────────────────────
 
+// ─── Photo Preview Modal ─────────────────────────────────────────────────────
+
+function ImagePreviewModal({
+  url,
+  title,
+  onClose,
+}: {
+  url: string | null;
+  title?: string;
+  onClose: () => void;
+}) {
+  if (!url) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        className="relative max-w-2xl w-full max-h-[85vh] bg-zinc-900 rounded-2xl overflow-hidden border border-zinc-700 flex flex-col shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800 bg-zinc-900">
+          <span className="text-white text-xs font-semibold truncate">{title || "Photo Preview"}</span>
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-7 h-7 rounded-full flex items-center justify-center bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <div className="flex-1 overflow-auto p-2 flex items-center justify-center bg-black min-h-[250px]">
+          <img
+            src={url}
+            alt={title || "Preview"}
+            className="max-h-[70vh] w-auto max-w-full object-contain rounded-lg"
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Photo Upload Slot ────────────────────────────────────────────────────────
+
 function PhotoSlot({
   label,
   required,
@@ -1130,86 +1177,148 @@ function PhotoSlot({
   onCapture: (file: File) => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const [localPreview, setLocalPreview] = useState<string | null>(null);
+  const [showFullPreview, setShowFullPreview] = useState(false);
+  const [imgLoadFailed, setImgLoadFailed] = useState(false);
+
+  // Clear local preview when value is cleared on reset
+  useEffect(() => {
+    if (!value && !uploading) {
+      setLocalPreview(null);
+      setImgLoadFailed(false);
+    }
+  }, [value, uploading]);
+
+  // If remote URL fails to load, fall back to local preview
+  const displayUrl = imgLoadFailed ? (localPreview || value) : (value || localPreview);
 
   return (
-    <div
-      className="rounded-xl border-2 transition-all p-3 space-y-2"
-      style={{
-        borderColor: value ? "#16A34A" : required ? "#FCA5A5" : "#D4D4D8",
-        background: value ? "#F0FDF4" : "#FAFAFA",
-      }}
-    >
-      <div className="flex items-center justify-between">
-        <span className="text-[12px] font-bold" style={{ color: "#18181B" }}>
-          {label} {required && <span style={{ color: "#DC2626" }}>*</span>}
-        </span>
-        {value ? (
-          <span
-            className="text-[10px] font-bold px-2 py-0.5 rounded-full"
-            style={{ background: "#DCFCE7", color: "#16A34A" }}
-          >
-            ✅ Uploaded
-          </span>
-        ) : required ? (
-          <span className="text-[10px] font-semibold" style={{ color: "#DC2626" }}>Required</span>
-        ) : (
-          <span className="text-[10px]" style={{ color: "#A1A1AA" }}>Optional</span>
-        )}
-      </div>
-
-      {/* Preview thumbnail */}
-      {value && (
-        <div className="rounded-lg overflow-hidden" style={{ aspectRatio: "16/9", background: "#18181B" }}>
-          <img src={value} alt={label} className="w-full h-full object-cover" />
-        </div>
-      )}
-
-      {/* Camera button */}
-      <button
-        type="button"
-        disabled={uploading}
-        onClick={() => inputRef.current?.click()}
-        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg transition-all"
+    <>
+      <div
+        className="rounded-xl border-2 transition-all p-3 space-y-2.5"
         style={{
-          background: uploading ? "#F4F4F5" : value ? "#DCFCE7" : "#EFF6FF",
-          color: uploading ? "#A1A1AA" : value ? "#16A34A" : "#2563EB",
-          border: `1px solid ${uploading ? "#D4D4D8" : value ? "#86EFAC" : "#93C5FD"}`,
-          fontSize: "12px",
-          fontWeight: 600,
-          cursor: uploading ? "not-allowed" : "pointer",
+          borderColor: value ? "#16A34A" : required && !displayUrl ? "#FCA5A5" : "#D4D4D8",
+          background: value ? "#F0FDF4" : "#FAFAFA",
         }}
       >
-        {uploading ? (
-          <><Loader2 className="w-4 h-4 animate-spin" /> Uploading...</>
-        ) : value ? (
-          <><Camera className="w-4 h-4" /> Retake Photo</>
-        ) : (
-          <><Camera className="w-4 h-4" /> {required ? "Take Photo" : "Add Photo (Optional)"}</>
-        )}
-      </button>
+        <div className="flex items-center justify-between">
+          <span className="text-[12px] font-bold" style={{ color: "#18181B" }}>
+            {label} {required && <span style={{ color: "#DC2626" }}>*</span>}
+          </span>
+          {uploading ? (
+            <span
+              className="text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1"
+              style={{ background: "#DBEAFE", color: "#1D4ED8" }}
+            >
+              <Loader2 className="w-3 h-3 animate-spin" /> Uploading...
+            </span>
+          ) : value ? (
+            <span
+              className="text-[10px] font-bold px-2 py-0.5 rounded-full"
+              style={{ background: "#DCFCE7", color: "#16A34A" }}
+            >
+              ✅ Uploaded
+            </span>
+          ) : required ? (
+            <span className="text-[10px] font-semibold" style={{ color: "#DC2626" }}>Required</span>
+          ) : (
+            <span className="text-[10px]" style={{ color: "#A1A1AA" }}>Optional</span>
+          )}
+        </div>
 
-      {/* Hidden file input — opens rear camera on mobile */}
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        className="hidden"
-        onChange={(e) => {
-          const file = e.target.files?.[0];
-          if (file) {
-            onCapture(file);
-            e.target.value = ""; // reset so same file can be re-selected
-          }
-        }}
-      />
-    </div>
+        {/* Preview thumbnail with instant display */}
+        {displayUrl && (
+          <div
+            className="relative rounded-lg overflow-hidden border border-zinc-200 group"
+            style={{ aspectRatio: "16/9", background: "#09090B" }}
+          >
+            <img
+              src={displayUrl}
+              alt={label}
+              className="w-full h-full object-contain cursor-pointer"
+              onClick={() => setShowFullPreview(true)}
+              onError={() => {
+                if (value && localPreview && !imgLoadFailed) {
+                  setImgLoadFailed(true);
+                }
+              }}
+            />
+            {uploading && (
+              <div className="absolute inset-0 bg-black/60 backdrop-blur-xs flex flex-col items-center justify-center text-white gap-1.5">
+                <Loader2 className="w-5 h-5 animate-spin text-blue-400" />
+                <span className="text-[11px] font-medium">Uploading proof...</span>
+              </div>
+            )}
+            {!uploading && (
+              <button
+                type="button"
+                onClick={() => setShowFullPreview(true)}
+                title="Tap to enlarge"
+                className="absolute bottom-1.5 right-1.5 bg-black/75 hover:bg-black text-white text-[10px] font-medium px-2 py-1 rounded-md flex items-center gap-1 shadow-xs transition-opacity"
+              >
+                <Eye className="w-3 h-3" /> View
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Camera button */}
+        <button
+          type="button"
+          disabled={uploading}
+          onClick={() => inputRef.current?.click()}
+          className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg transition-all"
+          style={{
+            background: uploading ? "#F4F4F5" : value || displayUrl ? "#DCFCE7" : "#EFF6FF",
+            color: uploading ? "#A1A1AA" : value || displayUrl ? "#16A34A" : "#2563EB",
+            border: `1px solid ${uploading ? "#D4D4D8" : value || displayUrl ? "#86EFAC" : "#93C5FD"}`,
+            fontSize: "12px",
+            fontWeight: 600,
+            cursor: uploading ? "not-allowed" : "pointer",
+          }}
+        >
+          {uploading ? (
+            <><Loader2 className="w-4 h-4 animate-spin" /> Processing...</>
+          ) : value || displayUrl ? (
+            <><Camera className="w-4 h-4" /> Retake Photo</>
+          ) : (
+            <><Camera className="w-4 h-4" /> {required ? "Take Photo" : "Add Photo (Optional)"}</>
+          )}
+        </button>
+
+        {/* Hidden file input — opens rear camera on mobile */}
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) {
+              // Immediately generate local object URL for instant preview
+              const objectUrl = URL.createObjectURL(file);
+              setLocalPreview(objectUrl);
+              setImgLoadFailed(false);
+              onCapture(file);
+              e.target.value = ""; // reset so same file can be re-selected
+            }
+          }}
+        />
+      </div>
+
+      {showFullPreview && displayUrl && (
+        <ImagePreviewModal
+          url={displayUrl}
+          title={label}
+          onClose={() => setShowFullPreview(false)}
+        />
+      )}
+    </>
   );
 }
 
 // ─── Step 3: Review & Confirm ─────────────────────────────────────────────────
-
-
 
 function Step3Review({
   customer,
@@ -1222,6 +1331,7 @@ function Step3Review({
   product: ProductRecord | undefined;
   proofPhotos: { paymentReceiptUrl: string | null; customerCardUrl: string | null; additionalImageUrl: string | null };
 }) {
+  const [selectedReviewPhoto, setSelectedReviewPhoto] = useState<{ url: string; label: string } | null>(null);
   const isDomestic = customer.type === "DOMESTIC";
   const collectionLabel = form.partialCollectionMode === "Others"
     ? (form.partialCollectionOther || "Others")
@@ -1300,28 +1410,45 @@ function Step3Review({
 
       {/* Proof Photo Thumbnails preview */}
       <div className="mt-4 p-3 rounded-xl bg-gray-50 border border-gray-200">
-        <p className="text-[11px] font-bold uppercase tracking-wider text-gray-500 mb-2">📸 Verified Proof Photos Attached</p>
+        <p className="text-[11px] font-bold uppercase tracking-wider text-gray-500 mb-2">📸 Verified Proof Photos Attached (Tap to inspect)</p>
         <div className="grid grid-cols-3 gap-2">
           {proofPhotos.paymentReceiptUrl && (
-            <div className="rounded-lg overflow-hidden border border-gray-300 relative aspect-video bg-black">
-              <img src={proofPhotos.paymentReceiptUrl} alt="Receipt" className="w-full h-full object-cover" />
+            <div
+              className="rounded-lg overflow-hidden border border-gray-300 relative aspect-video bg-black cursor-pointer hover:opacity-90 transition-opacity"
+              onClick={() => setSelectedReviewPhoto({ url: proofPhotos.paymentReceiptUrl!, label: "Payment Receipt" })}
+            >
+              <img src={proofPhotos.paymentReceiptUrl} alt="Receipt" className="w-full h-full object-contain" />
               <span className="absolute bottom-0 inset-x-0 bg-black/70 text-white text-[9px] font-medium text-center py-0.5">Receipt</span>
             </div>
           )}
           {proofPhotos.customerCardUrl && (
-            <div className="rounded-lg overflow-hidden border border-gray-300 relative aspect-video bg-black">
-              <img src={proofPhotos.customerCardUrl} alt="Card" className="w-full h-full object-cover" />
+            <div
+              className="rounded-lg overflow-hidden border border-gray-300 relative aspect-video bg-black cursor-pointer hover:opacity-90 transition-opacity"
+              onClick={() => setSelectedReviewPhoto({ url: proofPhotos.customerCardUrl!, label: "Customer Card Entry" })}
+            >
+              <img src={proofPhotos.customerCardUrl} alt="Card" className="w-full h-full object-contain" />
               <span className="absolute bottom-0 inset-x-0 bg-black/70 text-white text-[9px] font-medium text-center py-0.5">Customer Card</span>
             </div>
           )}
           {proofPhotos.additionalImageUrl && (
-            <div className="rounded-lg overflow-hidden border border-gray-300 relative aspect-video bg-black">
-              <img src={proofPhotos.additionalImageUrl} alt="Extra" className="w-full h-full object-cover" />
+            <div
+              className="rounded-lg overflow-hidden border border-gray-300 relative aspect-video bg-black cursor-pointer hover:opacity-90 transition-opacity"
+              onClick={() => setSelectedReviewPhoto({ url: proofPhotos.additionalImageUrl!, label: "Extra Photo" })}
+            >
+              <img src={proofPhotos.additionalImageUrl} alt="Extra" className="w-full h-full object-contain" />
               <span className="absolute bottom-0 inset-x-0 bg-black/70 text-white text-[9px] font-medium text-center py-0.5">Extra Photo</span>
             </div>
           )}
         </div>
       </div>
+
+      {selectedReviewPhoto && (
+        <ImagePreviewModal
+          url={selectedReviewPhoto.url}
+          title={selectedReviewPhoto.label}
+          onClose={() => setSelectedReviewPhoto(null)}
+        />
+      )}
     </div>
   );
 }
@@ -1388,14 +1515,31 @@ export function MyDeliveriesClient({
     type: "payment_receipt" | "customer_card" | "additional"
   ) {
     setPhotoUploading((prev) => ({ ...prev, [type]: true }));
+    setFormError("");
     try {
+      // Compress image client-side to prevent 413 (Content Too Large) from high-res phone cameras
+      const processedFile = await compressImage(file);
+
       const fd = new FormData();
-      fd.append("file", file);
+      fd.append("file", processedFile);
       fd.append("deliveryId", "pending");
       fd.append("type", type);
       const res = await fetch("/api/upload-delivery-proof", { method: "POST", body: fd });
-      const data = await res.json();
-      if (!res.ok || !data.url) throw new Error(data.error ?? "Upload failed");
+      
+      let data: any = null;
+      try {
+        data = await res.json();
+      } catch {
+        // Non-JSON response (e.g., reverse-proxy HTML error)
+      }
+
+      if (!res.ok || !data?.url) {
+        if (res.status === 413) {
+          throw new Error("Photo is too large (maximum size is 15 MB). Please try again or take a new photo.");
+        }
+        throw new Error(data?.error ?? `Upload failed (${res.status}: ${res.statusText || "Server error"})`);
+      }
+
       const key = type === "payment_receipt"
         ? "paymentReceiptUrl"
         : type === "customer_card"

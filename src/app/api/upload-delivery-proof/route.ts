@@ -17,7 +17,7 @@ import { burnWatermark } from "@/lib/watermark";
 import { uploadDeliveryProof } from "@/lib/cloudinary";
 import { prisma } from "@/lib/prisma";
 
-const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
+const MAX_FILE_SIZE_BYTES = 15 * 1024 * 1024; // 15 MB
 
 export async function POST(req: NextRequest) {
   // 1 ── Auth check
@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
   // 3 ── Validate file size
   if (file.size > MAX_FILE_SIZE_BYTES) {
     return NextResponse.json(
-      { error: `File too large. Maximum allowed size is 5 MB. Got ${(file.size / 1024 / 1024).toFixed(1)} MB.` },
+      { error: `File too large. Maximum allowed size is 15 MB. Got ${(file.size / 1024 / 1024).toFixed(1)} MB.` },
       { status: 413 }
     );
   }

@@ -1,5 +1,5 @@
 // Service Worker for Gas Agency PWA
-const CACHE_NAME = "gas-agency-v1";
+const CACHE_NAME = "gas-agency-v2";
 const STATIC_ASSETS = [
   "/",
   "/manifest.json",
@@ -29,13 +29,14 @@ self.addEventListener("activate", (event) => {
   self.clients.claim();
 });
 
-// Fetch — network-first for API routes, skip local dev and external scripts
+// Fetch — network-first for pages, skip local dev, non-GET, APIs, and external domains
 self.addEventListener("fetch", (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
-  // Skip localhost / dev mode, non-GET, API routes, and external domains (e.g. google translate)
+  // Only handle same-origin requests; skip external domains (Cloudinary, Google Maps/Translate, etc.)
   if (
+    url.origin !== self.location.origin ||
     url.hostname === "localhost" ||
     url.hostname === "127.0.0.1" ||
     request.method !== "GET" ||

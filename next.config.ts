@@ -19,8 +19,8 @@ const securityHeaders = [
       "worker-src 'self' blob:",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://translate.googleapis.com https://www.gstatic.com",
       "font-src 'self' https://fonts.gstatic.com https://translate.googleapis.com https://www.gstatic.com",
-      "img-src 'self' data: blob: https://translate.googleapis.com https://www.gstatic.com https://maps.googleapis.com https://maps.gstatic.com *.googleapis.com",
-      "connect-src 'self' https://translate.googleapis.com https://translate-pa.googleapis.com https://www.gstatic.com https://maps.googleapis.com https://maps.gstatic.com *.googleapis.com",
+      "img-src 'self' data: blob: https://translate.googleapis.com https://www.gstatic.com https://maps.googleapis.com https://maps.gstatic.com *.googleapis.com https://res.cloudinary.com *.cloudinary.com",
+      "connect-src 'self' https://translate.googleapis.com https://translate-pa.googleapis.com https://www.gstatic.com https://maps.googleapis.com https://maps.gstatic.com *.googleapis.com https://res.cloudinary.com *.cloudinary.com",
       "frame-src https://translate.googleapis.com",
       "frame-ancestors 'none'",
     ].join("; "),
@@ -29,6 +29,14 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   transpilePackages: ["lucide-react"],
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "res.cloudinary.com",
+      },
+    ],
+  },
   experimental: {
     webpackBuildWorker: false,
     serverActions: {
