@@ -31,7 +31,7 @@ export default function UnauthorizedPage() {
       infoIconColor="#dc2626"
       infoTitle="Security Policy Enforcement"
       infoBody="Our platform strictly enforces role-based access control. All access attempts are logged for security auditing."
-      footerNote="© 2026 GasAgency Enterprise Platform · Unauthorized Access"
+      footerNote="GasAgency Enterprise Platform · Unauthorized Access"
     />
   );
 }

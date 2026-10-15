@@ -7,6 +7,7 @@ import { Navbar } from "@/components/layout/Navbar";
 import { SessionGuard } from "@/components/layout/SessionGuard";
 import { MobileBottomNav } from "@/components/layout/MobileBottomNav";
 import { CylinderLoader } from "@/components/ui/CylinderLoader";
+import { Footer } from "@/components/layout/Footer";
 
 interface SessionData {
   name: string;
@@ -113,12 +114,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       />
 
       <main
-        className="transition-all duration-200 ml-0 md:ml-[220px]"
+        className={`transition-all duration-200 ${collapsed ? "ml-0 md:ml-[52px]" : "ml-0 md:ml-[220px]"} min-h-screen flex flex-col justify-between`}
         style={{
           paddingTop: 52,
         }}
       >
-        <div className="p-3.5 sm:p-5 lg:p-6 pb-20 md:pb-6 animate-fade-up">{children}</div>
+        <div className="p-3.5 sm:p-5 lg:p-6 pb-10 md:pb-6 animate-fade-up flex-1">{children}</div>
+        <Footer className="pb-20 md:pb-4" />
       </main>
 
       {/* Touch-Friendly Mobile Bottom Navigation Bar */}

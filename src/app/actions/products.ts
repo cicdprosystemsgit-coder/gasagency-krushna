@@ -299,8 +299,8 @@ export async function unlinkProductRecord(
 
   try {
     if (type === "delivery") {
-      const rec = await prisma.deliveryRecord.findUnique({ where: { id }, include: { product: true } });
-      if (!rec) return { success: false, error: "Record not found" };
+      const rec = await prisma.deliveryRecord.findFirst({ where: { id, agencyId: session.agencyId }, include: { product: true } });
+      if (!rec) return { success: false, error: "Record not found or unauthorized" };
       const baseName = rec.product?.name ? rec.product.name.replace(/\s*\(Deleted\)$/i, "").trim() : "Product";
       const archived = await getOrCreateArchivedProduct(session.agencyId, baseName, rec.product);
       await prisma.deliveryRecord.update({
@@ -308,8 +308,8 @@ export async function unlinkProductRecord(
         data: { productId: archived.id, productName: archived.name },
       });
     } else if (type === "godown") {
-      const rec = await prisma.godownInventory.findUnique({ where: { id }, include: { product: true } });
-      if (!rec) return { success: false, error: "Record not found" };
+      const rec = await prisma.godownInventory.findFirst({ where: { id, agencyId: session.agencyId }, include: { product: true } });
+      if (!rec) return { success: false, error: "Record not found or unauthorized" };
       const baseName = rec.product?.name ? rec.product.name.replace(/\s*\(Deleted\)$/i, "").trim() : "Product";
       const archived = await getOrCreateArchivedProduct(session.agencyId, baseName, rec.product);
       await prisma.godownInventory.update({
@@ -317,8 +317,8 @@ export async function unlinkProductRecord(
         data: { productId: archived.id, productName: archived.name },
       });
     } else if (type === "commercial") {
-      const rec = await prisma.commercialSale.findUnique({ where: { id }, include: { product: true } });
-      if (!rec) return { success: false, error: "Record not found" };
+      const rec = await prisma.commercialSale.findFirst({ where: { id, agencyId: session.agencyId }, include: { product: true } });
+      if (!rec) return { success: false, error: "Record not found or unauthorized" };
       const baseName = rec.product?.name ? rec.product.name.replace(/\s*\(Deleted\)$/i, "").trim() : "Product";
       const archived = await getOrCreateArchivedProduct(session.agencyId, baseName, rec.product);
       await prisma.commercialSale.update({
@@ -326,8 +326,8 @@ export async function unlinkProductRecord(
         data: { productId: archived.id, productName: archived.name },
       });
     } else if (type === "stock") {
-      const rec = await prisma.stockRecord.findUnique({ where: { id }, include: { product: true } });
-      if (!rec) return { success: false, error: "Record not found" };
+      const rec = await prisma.stockRecord.findFirst({ where: { id, agencyId: session.agencyId }, include: { product: true } });
+      if (!rec) return { success: false, error: "Record not found or unauthorized" };
       const baseName = rec.product?.name ? rec.product.name.replace(/\s*\(Deleted\)$/i, "").trim() : "Product";
       const archived = await getOrCreateArchivedProduct(session.agencyId, baseName, rec.product);
       await prisma.stockRecord.update({
@@ -335,8 +335,8 @@ export async function unlinkProductRecord(
         data: { productId: archived.id, productName: archived.name },
       });
     } else if (type === "office") {
-      const rec = await prisma.officeTransaction.findUnique({ where: { id }, include: { product: true } });
-      if (!rec) return { success: false, error: "Record not found" };
+      const rec = await prisma.officeTransaction.findFirst({ where: { id, agencyId: session.agencyId }, include: { product: true } });
+      if (!rec) return { success: false, error: "Record not found or unauthorized" };
       const baseName = rec.product?.name ? rec.product.name.replace(/\s*\(Deleted\)$/i, "").trim() : "Product";
       const archived = await getOrCreateArchivedProduct(session.agencyId, baseName, rec.product);
       await prisma.officeTransaction.update({
@@ -344,8 +344,8 @@ export async function unlinkProductRecord(
         data: { inventoryId: archived.id, productName: archived.name },
       });
     } else if (type === "payment") {
-      const rec = await prisma.companyPayment.findUnique({ where: { id }, include: { product: true } });
-      if (!rec) return { success: false, error: "Record not found" };
+      const rec = await prisma.companyPayment.findFirst({ where: { id, agencyId: session.agencyId }, include: { product: true } });
+      if (!rec) return { success: false, error: "Record not found or unauthorized" };
       const baseName = rec.product?.name ? rec.product.name.replace(/\s*\(Deleted\)$/i, "").trim() : "Product";
       const archived = await getOrCreateArchivedProduct(session.agencyId, baseName, rec.product);
       await prisma.companyPayment.update({
@@ -513,6 +513,119 @@ export async function updateProductsSortOrder(
     return { success: false, error: err?.message || "Failed to update sequence order" };
   }
 }
+
+export async function setInitialStartingStock(formData: FormData): Promise<{
+  success: boolean;
+  error?: string;
+  count?: number;
+}> {
+  const session = await getSession();
+  if (!session || !["ADMIN", "MANAGER"].includes(session.role) || !session.agencyId) {
+    return { success: false, error: "Unauthorized" };
+  }
+
+  const agencyId = session.agencyId;
+  const itemsJson = formData.get("items") as string;
+  const targetDateStr = formData.get("date") as string;
+  const notes = ((formData.get("notes") as string) || "Initial starting stock setup").trim();
+
+  let items: Array<{
+    productId: string;
+    officeQty?: number;
+    godownQty?: number;
+  }> = [];
+
+  try {
+    items = JSON.parse(itemsJson || "[]");
+  } catch {
+    return { success: false, error: "Invalid starting stock payload" };
+  }
+
+  if (!Array.isArray(items) || items.length === 0) {
+    return { success: false, error: "No products selected for starting stock setup" };
+  }
+
+  const date = targetDateStr ? new Date(targetDateStr) : new Date();
+  const dayStart = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+
+  // Find products to verify ownership
+  const productIds = items.map((i) => i.productId).filter(Boolean);
+  const existingProducts = await prisma.product.findMany({
+    where: { id: { in: productIds }, agencyId, isActive: true },
+    select: { id: true, name: true },
+  });
+  const validMap = new Map(existingProducts.map((p) => [p.id, p.name]));
+
+  let affectedCount = 0;
+
+  for (const item of items) {
+    const prodName = validMap.get(item.productId);
+    if (!prodName) continue;
+
+    const godownQty = Math.max(0, Math.round(Number(item.godownQty) || 0));
+    const officeQty = Math.max(0, Math.round(Number(item.officeQty) || 0));
+
+    if (godownQty === 0 && officeQty === 0) continue;
+
+    // 1. If godown quantity > 0: Record godown movement of type RECEIVED
+    if (godownQty > 0) {
+      await prisma.godownInventory.create({
+        data: {
+          date,
+          moveType: "RECEIVED",
+          productId: item.productId,
+          productName: prodName,
+          qty: godownQty,
+          batchNo: "STARTING_STOCK",
+          notes: notes,
+          recordedById: session.userId,
+          agencyId,
+        },
+      });
+    }
+
+    // 2. If office quantity > 0: Update or create StockRecord
+    if (officeQty > 0) {
+      const existingStock = await prisma.stockRecord.findFirst({
+        where: { agencyId, productId: item.productId, date: { gte: dayStart } },
+      });
+
+      if (existingStock) {
+        await prisma.stockRecord.update({
+          where: { id: existingStock.id },
+          data: {
+            openingStock: { increment: officeQty },
+            closingStock: { increment: officeQty },
+          },
+        });
+      } else {
+        await prisma.stockRecord.create({
+          data: {
+            date: dayStart,
+            productId: item.productId,
+            productName: prodName,
+            agencyId,
+            openingStock: officeQty,
+            loadingIn: 0,
+            salesQty: 0,
+            returned: 0,
+            closingStock: officeQty,
+          },
+        });
+      }
+    }
+
+    affectedCount++;
+  }
+
+  revalidatePath("/admin/inventory");
+  revalidatePath("/manager/inventory");
+  revalidatePath("/godown-keeper/inventory");
+  revalidatePath("/godown-keeper/godown");
+
+  return { success: true, count: affectedCount };
+}
+
 
 
 

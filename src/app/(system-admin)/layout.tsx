@@ -5,6 +5,7 @@ import { useRouter, usePathname } from "next/navigation";
 import { SystemAdminSidebar } from "@/components/layout/SystemAdminSidebar";
 
 import { CylinderLoader } from "@/components/ui/CylinderLoader";
+import { Footer } from "@/components/layout/Footer";
 
 interface Session {
   userId: string;
@@ -59,8 +60,11 @@ export default function SystemAdminLayout({ children }: { children: React.ReactN
   return (
     <div style={{ display: "flex", minHeight: "100vh", background: "#F8FAFC" }}>
       <SystemAdminSidebar name={session!.name} newDemoCount={newDemoCount} />
-      <main style={{ flex: 1, overflowY: "auto", padding: "28px 32px" }}>
-        {children}
+      <main style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", minHeight: "100vh" }}>
+        <div style={{ flex: 1, padding: "28px 32px" }}>
+          {children}
+        </div>
+        <Footer />
       </main>
     </div>
   );

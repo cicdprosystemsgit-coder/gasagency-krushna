@@ -93,9 +93,20 @@ export default function GlobalError({
                 </div>
               </div>
 
-              <p style={{ textAlign: "center", marginTop: 24, fontSize: 11, color: "#94a3b8" }}>
-                © 2026 GasAgency Enterprise Platform · Critical Application Error
-              </p>
+              <div style={{ textAlign: "center", marginTop: 24, fontSize: 11, color: "#94a3b8" }}>
+                <p style={{ margin: "0 0 4px 0" }}>Critical Application Error</p>
+                <p style={{ margin: 0 }}>
+                  © {new Date().getFullYear()} All Copyright and Rights Reserved by{" "}
+                  <a
+                    href="https://www.cicdtech.in/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ color: "#2563eb", textDecoration: "underline", fontWeight: 600 }}
+                  >
+                    CICD Tech
+                  </a>
+                </p>
+              </div>
             </div>
           </div>
         </div>

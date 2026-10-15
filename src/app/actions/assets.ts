@@ -437,7 +437,7 @@ export async function getCompanyPaymentSummary(fromStr: string, toStr: string) {
   // Resolve product names
   const productIds = byProduct.map((b) => b.productId).filter(Boolean) as string[];
   const products = productIds.length
-    ? await prisma.product.findMany({ where: { id: { in: productIds } }, select: { id: true, name: true } })
+    ? await prisma.product.findMany({ where: { id: { in: productIds }, agencyId }, select: { id: true, name: true } })
     : [];
   const productMap = new Map(products.map((p) => [p.id, p.name]));
 

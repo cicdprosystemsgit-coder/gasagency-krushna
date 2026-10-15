@@ -99,11 +99,11 @@ export async function updateCustomer(id: string, formData: FormData) {
     if (!name) return { error: "Name is required" };
     if (!phone) return { error: "Phone number is required" };
 
-    const existing = await prisma.customer.findUnique({
-      where: { id },
+    const existing = await prisma.customer.findFirst({
+      where: { id, agencyId: session.agencyId },
       select: { type: true },
     });
-    if (!existing) return { error: "Customer not found." };
+    if (!existing) return { error: "Customer not found or unauthorized." };
 
     if (existing.type === "COMMERCIAL") {
       if (!businessType) return { error: "Business Type is required for commercial customers." };
@@ -515,44 +515,44 @@ export async function unlinkCustomerRecord(
 
   try {
     if (type === "delivery") {
-      const rec = await prisma.deliveryRecord.findUnique({ where: { id }, include: { customer: true } });
-      if (!rec) return { success: false, error: "Record not found" };
+      const rec = await prisma.deliveryRecord.findFirst({ where: { id, agencyId: session.agencyId }, include: { customer: true } });
+      if (!rec) return { success: false, error: "Record not found or unauthorized" };
       const archived = await getOrCreateArchivedCustomer(session.agencyId, rec.customer?.name || "Customer", rec.customer);
       await prisma.deliveryRecord.update({ where: { id }, data: { customerId: archived.id } });
     } else if (type === "sale") {
-      const rec = await prisma.commercialSale.findUnique({ where: { id }, include: { customer: true } });
-      if (!rec) return { success: false, error: "Record not found" };
+      const rec = await prisma.commercialSale.findFirst({ where: { id, agencyId: session.agencyId }, include: { customer: true } });
+      if (!rec) return { success: false, error: "Record not found or unauthorized" };
       const archived = await getOrCreateArchivedCustomer(session.agencyId, rec.customer?.name || "Customer", rec.customer);
       await prisma.commercialSale.update({ where: { id }, data: { customerId: archived.id } });
     } else if (type === "credit") {
-      const rec = await prisma.creditLedgerEntry.findUnique({ where: { id }, include: { customer: true } });
-      if (!rec) return { success: false, error: "Record not found" };
+      const rec = await prisma.creditLedgerEntry.findFirst({ where: { id, agencyId: session.agencyId }, include: { customer: true } });
+      if (!rec) return { success: false, error: "Record not found or unauthorized" };
       const archived = await getOrCreateArchivedCustomer(session.agencyId, rec.customer?.name || "Customer", rec.customer);
       await prisma.creditLedgerEntry.update({ where: { id }, data: { customerId: archived.id } });
     } else if (type === "office") {
-      const rec = await prisma.officeTransaction.findUnique({ where: { id }, include: { customer: true } });
-      if (!rec) return { success: false, error: "Record not found" };
+      const rec = await prisma.officeTransaction.findFirst({ where: { id, agencyId: session.agencyId }, include: { customer: true } });
+      if (!rec) return { success: false, error: "Record not found or unauthorized" };
       const archived = await getOrCreateArchivedCustomer(session.agencyId, rec.customer?.name || "Customer", rec.customer);
       await prisma.officeTransaction.update({ where: { id }, data: { customerId: archived.id } });
     } else if (type === "receipt") {
-      const rec = await prisma.paymentReceipt.findUnique({ where: { id }, include: { customer: true } });
-      if (!rec) return { success: false, error: "Record not found" };
+      const rec = await prisma.paymentReceipt.findFirst({ where: { id, agencyId: session.agencyId }, include: { customer: true } });
+      if (!rec) return { success: false, error: "Record not found or unauthorized" };
       const archived = await getOrCreateArchivedCustomer(session.agencyId, rec.customer?.name || "Customer", rec.customer);
       await prisma.paymentReceipt.update({ where: { id }, data: { customerId: archived.id } });
     } else if (type === "complaint") {
-      const rec = await prisma.customerComplaint.findUnique({ where: { id }, include: { customer: true } });
-      if (!rec) return { success: false, error: "Record not found" };
+      const rec = await prisma.customerComplaint.findFirst({ where: { id, agencyId: session.agencyId }, include: { customer: true } });
+      if (!rec) return { success: false, error: "Record not found or unauthorized" };
       const archived = await getOrCreateArchivedCustomer(session.agencyId, rec.customer?.name || "Customer", rec.customer);
       await prisma.customerComplaint.update({ where: { id }, data: { customerId: archived.id } });
     } else if (type === "regulator") {
-      const rec = await prisma.regulatorRecord.findUnique({ where: { id }, include: { customer: true } });
-      if (!rec) return { success: false, error: "Record not found" };
+      const rec = await prisma.regulatorRecord.findFirst({ where: { id, agencyId: session.agencyId }, include: { customer: true } });
+      if (!rec) return { success: false, error: "Record not found or unauthorized" };
       const archived = await getOrCreateArchivedCustomer(session.agencyId, rec.customer?.name || "Customer", rec.customer);
       await prisma.regulatorRecord.update({ where: { id }, data: { customerId: archived.id } });
     } else if (type === "invoice") {
-      const rec = await prisma.gstInvoice.findUnique({ where: { id } });
-      if (!rec) return { success: false, error: "Record not found" };
-      const customer = await prisma.customer.findUnique({ where: { id: rec.customerId } });
+      const rec = await prisma.gstInvoice.findFirst({ where: { id, agencyId: session.agencyId } });
+      if (!rec) return { success: false, error: "Record not found or unauthorized" };
+      const customer = await prisma.customer.findFirst({ where: { id: rec.customerId, agencyId: session.agencyId } });
       const archived = await getOrCreateArchivedCustomer(session.agencyId, customer?.name || "Customer", customer);
       await prisma.gstInvoice.update({ where: { id }, data: { customerId: archived.id } });
     }

@@ -53,6 +53,18 @@ export default async function FeatureDisabledPage() {
           <ArrowLeft style={{ width: 16, height: 16 }} />
           Back to Dashboard
         </Link>
+
+        <div style={{ marginTop: 28, paddingTop: 16, borderTop: "1px solid #E2E8F0", fontSize: 11, color: "#94A3B8" }}>
+          © {new Date().getFullYear()} All Copyright and Rights Reserved by{" "}
+          <a
+            href="https://www.cicdtech.in/"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ color: "#4F46E5", textDecoration: "underline", fontWeight: 600 }}
+          >
+            CICD Tech
+          </a>
+        </div>
       </div>
     </div>
   );

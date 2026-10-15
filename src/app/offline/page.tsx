@@ -36,7 +36,7 @@ export default function OfflinePage() {
       infoIconColor="#475569"
       infoTitle="Offline Mode"
       infoBody="Some pages you visited before going offline might still load using cached data. New submissions will require connection."
-      footerNote="© 2026 GasAgency Enterprise Platform · Offline Capability"
+      footerNote="GasAgency Enterprise Platform · Offline Capability"
     />
   );
 }

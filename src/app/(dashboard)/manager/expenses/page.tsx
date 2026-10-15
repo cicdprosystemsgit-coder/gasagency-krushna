@@ -1,4 +1,4 @@
-﻿import { getSessionWithFeatures, requireFeature } from "@/lib/feature-gate";
+import { getSessionWithFeatures, requireFeature } from "@/lib/feature-gate";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -16,8 +16,8 @@ export default async function ManagerExpensesPage() {
   }
 
   // Fetch user profile info
-  const user = await prisma.user.findUnique({
-    where: { id: session.userId },
+  const user = await prisma.user.findFirst({
+    where: { id: session.userId, agencyId: session.agencyId },
     select: { name: true, email: true, role: true },
   });
 

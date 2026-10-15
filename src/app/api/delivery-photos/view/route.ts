@@ -15,11 +15,25 @@ export async function GET(req: NextRequest) {
     }
 
     const session = await getSession();
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const s3Key = extractS3Key(rawUrl);
 
-    // Authentication check: allow logged-in user OR verified agency photo key
-    if (!session && !s3Key.startsWith("agencies/")) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    // Enforce tenant isolation: non-SYSTEM_ADMIN can only view photos of their own agency
+    if (session.role !== "SYSTEM_ADMIN") {
+      if (!session.agencyId) {
+        return NextResponse.json({ error: "Forbidden: No agency assigned" }, { status: 403 });
+      }
+
+      const expectedAgencyPrefix = `agencies/${session.agencyId}/`;
+      if (s3Key.startsWith("agencies/") && !s3Key.startsWith(expectedAgencyPrefix)) {
+        return NextResponse.json(
+          { error: "Forbidden: You cannot view photos belonging to another agency" },
+          { status: 403 }
+        );
+      }
     }
 
     const bucket = searchParams.get("bucket") || extractS3Bucket(rawUrl) || DEFAULT_BUCKET;

@@ -8,7 +8,7 @@ import {
   Plus, Pencil, Trash2, Package, Boxes, TrendingUp, TrendingDown,
   Coins, BarChart2, DollarSign, ArrowUpRight, RotateCcw, AlertTriangle,
   CheckCircle2, Info, Search, Unlink, Link2, ExternalLink, Loader2,
-  GripVertical, ArrowUpDown
+  GripVertical, ArrowUpDown, PlayCircle, Warehouse, Building2, Check
 } from "lucide-react";
 import {
   createProduct,
@@ -20,6 +20,7 @@ import {
   unlinkProductRecord,
   unlinkAllProductRecords,
   updateProductsSortOrder,
+  setInitialStartingStock,
 } from "@/app/actions/products";
 import type { Product } from "@/generated/prisma";
 import {
@@ -107,12 +108,14 @@ function InventoryDashboard({
   onEdit,
   onDelete,
   onReorder,
+  onOpenStartingStock,
 }: {
   data: InventoryClientProps["dashboardData"];
   isAdmin: boolean;
   onEdit: (productId: string) => void;
   onDelete: (id: string, name: string) => void;
   onReorder?: (orderedIds: string[]) => void;
+  onOpenStartingStock?: () => void;
 }) {
   const [items, setItems] = useState(data.stockValuationList);
   const [draggedIdx, setDraggedIdx] = useState<number | null>(null);
@@ -263,6 +266,17 @@ function InventoryDashboard({
             </p>
           </div>
           <div className="flex items-center gap-2 self-stretch sm:self-auto justify-between sm:justify-end">
+            {isAdmin && onOpenStartingStock && (
+              <button
+                type="button"
+                onClick={onOpenStartingStock}
+                title="Initialize opening/starting stock already physically present in office and godown"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm transition-all cursor-pointer"
+              >
+                <PlayCircle className="w-3.5 h-3.5" />
+                Starting Stock
+              </button>
+            )}
             {isAdmin && (
               <button
                 type="button"
@@ -438,6 +452,60 @@ export function InventoryClient({ initialProducts, initialDeletedProducts = EMPT
   const [error, setError] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
   const [form, setForm] = useState({ name: "", unitCost: "", saleRate: "", margin: "", isCylinder: "false", hsnCode: "" });
+
+  // Starting stock modal state
+  const [startingStockOpen, setStartingStockOpen] = useState(false);
+  const [startingStockDate, setStartingStockDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [startingStockNotes, setStartingStockNotes] = useState("Initial physical inventory setup");
+  const [startingStockValues, setStartingStockValues] = useState<Record<string, { godownQty: string; officeQty: string }>>({});
+  const [startingStockError, setStartingStockError] = useState("");
+
+  function openStartingStock() {
+    const initialMap: Record<string, { godownQty: string; officeQty: string }> = {};
+    products.forEach((p) => {
+      initialMap[p.id] = { godownQty: "", officeQty: "" };
+    });
+    setStartingStockValues(initialMap);
+    setStartingStockDate(new Date().toISOString().slice(0, 10));
+    setStartingStockNotes("Initial physical inventory setup");
+    setStartingStockError("");
+    setStartingStockOpen(true);
+  }
+
+  function handleStartingStockSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setStartingStockError("");
+
+    const itemsToSubmit: Array<{ productId: string; godownQty: number; officeQty: number }> = [];
+    Object.entries(startingStockValues).forEach(([productId, val]) => {
+      const gQty = parseInt(val.godownQty || "0", 10);
+      const oQty = parseInt(val.officeQty || "0", 10);
+      if (gQty > 0 || oQty > 0) {
+        itemsToSubmit.push({ productId, godownQty: Math.max(0, gQty), officeQty: Math.max(0, oQty) });
+      }
+    });
+
+    if (itemsToSubmit.length === 0) {
+      setStartingStockError("Please enter a starting stock quantity (Godown or Office) for at least one product.");
+      return;
+    }
+
+    const fd = new FormData();
+    fd.append("items", JSON.stringify(itemsToSubmit));
+    fd.append("date", startingStockDate);
+    fd.append("notes", startingStockNotes);
+
+    startTransition(async () => {
+      const res = await setInitialStartingStock(fd);
+      if (res.error) {
+        setStartingStockError(res.error);
+        return;
+      }
+      setStartingStockOpen(false);
+      setSuccessMsg(`Successfully initialized starting stock for ${res.count ?? itemsToSubmit.length} product(s)!`);
+      router.refresh();
+    });
+  }
 
   // Drag and drop states for catalog
   const [catalogDraggedId, setCatalogDraggedId] = useState<string | null>(null);
@@ -970,6 +1038,7 @@ export function InventoryClient({ initialProducts, initialDeletedProducts = EMPT
           onEdit={handleEditFromDashboard}
           onDelete={handleDeleteSingle}
           onReorder={handleReorder}
+          onOpenStartingStock={openStartingStock}
         />
       ) : activeTab === "deleted" ? (
         <div className="space-y-6">
@@ -1359,6 +1428,17 @@ export function InventoryClient({ initialProducts, initialDeletedProducts = EMPT
               {isAdmin && (
                 <button
                   type="button"
+                  onClick={openStartingStock}
+                  title="Initialize opening/starting stock already physically present in office and godown"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm transition-all cursor-pointer"
+                >
+                  <PlayCircle className="w-3.5 h-3.5" />
+                  Starting Stock
+                </button>
+              )}
+              {isAdmin && (
+                <button
+                  type="button"
                   onClick={handleCatalogAutoSort}
                   title="Sort automatically: 0-9 numerical sequence, then A-Z"
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-bold text-zinc-700 bg-white hover:bg-zinc-100 border border-zinc-300 rounded-lg shadow-2xs transition-all cursor-pointer"
@@ -1734,6 +1814,188 @@ export function InventoryClient({ initialProducts, initialDeletedProducts = EMPT
             >
               {isPending ? "Restoring..." : "Restore to Inventory"}
             </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Starting Stock Setup Modal */}
+      <Modal
+        open={startingStockOpen}
+        onClose={() => setStartingStockOpen(false)}
+        title="Initialize Starting Stock"
+        subtitle="Set the opening quantity of products physically present in your Office and Godown to start using the app."
+        size="lg"
+      >
+        <form onSubmit={handleStartingStockSubmit} className="space-y-4">
+          {startingStockError && (
+            <div className="text-[13px] px-3.5 py-2.5 rounded-lg bg-red-50 border border-red-200 text-red-700 font-medium">
+              {startingStockError}
+            </div>
+          )}
+
+          <div className="p-3.5 bg-blue-50/70 border border-blue-200/80 rounded-xl text-[12px] text-blue-900 leading-relaxed flex items-start gap-2.5">
+            <Info className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="font-semibold text-blue-950">How Starting Stock Works:</p>
+              <ul className="list-disc list-inside mt-1 space-y-0.5 text-blue-800">
+                <li><span className="font-medium text-blue-950">Godown Stock:</span> Physical stock stored at your main godown (stored as initial inward stock).</li>
+                <li><span className="font-medium text-blue-950">Office Stock:</span> Stock ready at your agency counter/office for direct OTC customer sales.</li>
+                <li>Leave inputs blank or 0 for products that are currently out of stock.</li>
+              </ul>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[12px] font-semibold text-zinc-700 mb-1">
+                Stock Opening Date *
+              </label>
+              <input
+                type="date"
+                value={startingStockDate}
+                onChange={(e) => setStartingStockDate(e.target.value)}
+                className="input text-[13px]"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-[12px] font-semibold text-zinc-700 mb-1">
+                Reference / Notes
+              </label>
+              <input
+                type="text"
+                value={startingStockNotes}
+                onChange={(e) => setStartingStockNotes(e.target.value)}
+                placeholder="e.g. Initial app onboarding physical count"
+                className="input text-[13px]"
+              />
+            </div>
+          </div>
+
+          {/* Product stock entries table */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-[12px] font-bold text-zinc-800 uppercase tracking-wider">
+                Product Stock Quantities ({products.length})
+              </label>
+              <span className="text-[11px] text-zinc-500">
+                Enter initial units for Godown &amp; Office
+              </span>
+            </div>
+
+            {products.length === 0 ? (
+              <div className="py-8 text-center text-zinc-400 border border-dashed border-zinc-200 rounded-xl bg-zinc-50">
+                <Package className="w-6 h-6 mx-auto mb-1 opacity-50" />
+                <p className="text-[13px] font-medium text-zinc-600">No active products found in catalog.</p>
+                <p className="text-[11px] text-zinc-400 mt-0.5">Please add products first before setting starting stock.</p>
+              </div>
+            ) : (
+              <div className="max-h-[340px] overflow-y-auto border border-zinc-200 rounded-xl divide-y divide-zinc-100 bg-white shadow-2xs">
+                <div className="sticky top-0 bg-zinc-100/90 backdrop-blur-xs z-10 px-3 py-2 grid grid-cols-12 text-[11px] font-bold text-zinc-600 uppercase tracking-wider">
+                  <div className="col-span-6 sm:col-span-6">Product</div>
+                  <div className="col-span-3 sm:col-span-3 text-center flex items-center justify-center gap-1">
+                    <Warehouse className="w-3 h-3 text-orange-600" /> Godown Qty
+                  </div>
+                  <div className="col-span-3 sm:col-span-3 text-center flex items-center justify-center gap-1">
+                    <Building2 className="w-3 h-3 text-emerald-600" /> Office Qty
+                  </div>
+                </div>
+
+                {products.map((p) => {
+                  const val = startingStockValues[p.id] || { godownQty: "", officeQty: "" };
+                  return (
+                    <div
+                      key={`starting-stock-${p.id}`}
+                      className="px-3 py-2.5 grid grid-cols-12 items-center gap-2 hover:bg-zinc-50/70 transition-colors"
+                    >
+                      <div className="col-span-6 sm:col-span-6">
+                        <p className="text-[13px] font-semibold text-zinc-850 leading-tight">
+                          {p.name}
+                        </p>
+                        <span className="text-[10px] text-zinc-400 font-medium">
+                          {p.isCylinder ? "🔥 Cylinder" : "📦 Accessory"} · Rate: {formatCurrency(p.saleRate)}
+                        </span>
+                      </div>
+                      <div className="col-span-3 sm:col-span-3">
+                        <input
+                          type="number"
+                          min="0"
+                          step="1"
+                          placeholder="0"
+                          value={val.godownQty}
+                          onChange={(e) => {
+                            const newQty = e.target.value;
+                            setStartingStockValues((prev) => ({
+                              ...prev,
+                              [p.id]: { ...(prev[p.id] || { officeQty: "" }), godownQty: newQty },
+                            }));
+                          }}
+                          className="w-full text-center px-2 py-1.5 text-[13px] font-bold border border-orange-200 focus:border-orange-500 rounded-lg bg-orange-50/40 text-orange-950 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                        />
+                      </div>
+                      <div className="col-span-3 sm:col-span-3">
+                        <input
+                          type="number"
+                          min="0"
+                          step="1"
+                          placeholder="0"
+                          value={val.officeQty}
+                          onChange={(e) => {
+                            const newQty = e.target.value;
+                            setStartingStockValues((prev) => ({
+                              ...prev,
+                              [p.id]: { ...(prev[p.id] || { godownQty: "" }), officeQty: newQty },
+                            }));
+                          }}
+                          className="w-full text-center px-2 py-1.5 text-[13px] font-bold border border-emerald-200 focus:border-emerald-500 rounded-lg bg-emerald-50/40 text-emerald-950 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          <div className="flex items-center justify-between pt-3 border-t border-zinc-100">
+            <button
+              type="button"
+              onClick={() => {
+                // Quick reset all
+                const resetMap: Record<string, { godownQty: string; officeQty: string }> = {};
+                products.forEach((p) => { resetMap[p.id] = { godownQty: "", officeQty: "" }; });
+                setStartingStockValues(resetMap);
+              }}
+              className="text-[12px] text-zinc-500 hover:text-zinc-800 font-semibold"
+            >
+              Clear Values
+            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setStartingStockOpen(false)}
+                className="btn btn-secondary"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isPending || products.length === 0}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-[13px] font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm transition cursor-pointer disabled:opacity-50"
+              >
+                {isPending ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    Saving Starting Stock...
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-3.5 h-3.5" />
+                    Confirm &amp; Load Starting Stock
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </form>
       </Modal>

@@ -1,6 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
+import { getSession } from "@/lib/auth";
 import { recalculateAccountBalance } from "./personal-accounts";
 
 // Helper to get agency account for an agency (supports preferred specific account)
@@ -19,10 +20,13 @@ async function getAgencyAccount(agencyId: string, preferredAccountId?: string) {
 
 export async function syncExpenseToPersonalAccount(expenseId: string, preferredAccountId?: string) {
   try {
-    const expense = await prisma.expense.findUnique({
-      where: { id: expenseId },
+    const session = await getSession();
+    if (!session || !session.agencyId) return { error: "Unauthorized" };
+
+    const expense = await prisma.expense.findFirst({
+      where: { id: expenseId, agencyId: session.agencyId },
     });
-    if (!expense) return { error: "Expense not found" };
+    if (!expense) return { error: "Expense not found or unauthorized" };
 
     const agencyAccount = await getAgencyAccount(expense.agencyId, preferredAccountId);
     if (!agencyAccount) return { success: true, message: "No active agency account registered for auto-sync" };
@@ -67,8 +71,11 @@ export async function syncExpenseToPersonalAccount(expenseId: string, preferredA
 
 export async function removeExpenseSync(expenseId: string) {
   try {
+    const session = await getSession();
+    if (!session || !session.agencyId) return { error: "Unauthorized" };
+
     const existing = await prisma.personalTransaction.findFirst({
-      where: { linkedModule: "EXPENSE", linkedRecordId: expenseId },
+      where: { agencyId: session.agencyId, linkedModule: "EXPENSE", linkedRecordId: expenseId },
     });
     if (existing) {
       await prisma.personalTransaction.delete({
@@ -84,17 +91,20 @@ export async function removeExpenseSync(expenseId: string) {
 
 export async function syncSalaryToPersonalAccount(drawingId: string, preferredAccountId?: string) {
   try {
-    const drawing = await prisma.salaryDrawing.findUnique({
-      where: { id: drawingId },
+    const session = await getSession();
+    if (!session || !session.agencyId) return { error: "Unauthorized" };
+
+    const drawing = await prisma.salaryDrawing.findFirst({
+      where: { id: drawingId, agencyId: session.agencyId },
       include: { employee: { select: { name: true } } },
     });
-    if (!drawing) return { error: "Salary drawing not found" };
+    if (!drawing) return { error: "Salary drawing not found or unauthorized" };
 
     const agencyAccount = await getAgencyAccount(drawing.agencyId, preferredAccountId);
     if (!agencyAccount) return { success: true, message: "No active agency account registered for auto-sync" };
 
     const existing = await prisma.personalTransaction.findFirst({
-      where: { linkedModule: "SALARY", linkedRecordId: drawing.id },
+      where: { agencyId: session.agencyId, linkedModule: "SALARY", linkedRecordId: drawing.id },
     });
 
     const description = `Salary/Drawing: ${drawing.type} paid to ${drawing.employee.name} (${drawing.month}/${drawing.year})`;
@@ -140,8 +150,11 @@ export async function syncSalaryToPersonalAccount(drawingId: string, preferredAc
 
 export async function removeSalarySync(drawingId: string) {
   try {
+    const session = await getSession();
+    if (!session || !session.agencyId) return { error: "Unauthorized" };
+
     const existing = await prisma.personalTransaction.findFirst({
-      where: { linkedModule: "SALARY", linkedRecordId: drawingId },
+      where: { agencyId: session.agencyId, linkedModule: "SALARY", linkedRecordId: drawingId },
     });
     if (existing) {
       await prisma.personalTransaction.delete({
@@ -157,16 +170,19 @@ export async function removeSalarySync(drawingId: string) {
 
 export async function syncCompanyPaymentToPersonalAccount(paymentId: string, preferredAccountId?: string) {
   try {
-    const payment = await prisma.companyPayment.findUnique({
-      where: { id: paymentId },
+    const session = await getSession();
+    if (!session || !session.agencyId) return { error: "Unauthorized" };
+
+    const payment = await prisma.companyPayment.findFirst({
+      where: { id: paymentId, agencyId: session.agencyId },
     });
-    if (!payment) return { error: "Company payment not found" };
+    if (!payment) return { error: "Company payment not found or unauthorized" };
 
     const agencyAccount = await getAgencyAccount(payment.agencyId, preferredAccountId);
     if (!agencyAccount) return { success: true, message: "No active agency account registered for auto-sync" };
 
     const existing = await prisma.personalTransaction.findFirst({
-      where: { linkedModule: "COMPANY_PAYMENT", linkedRecordId: payment.id },
+      where: { agencyId: session.agencyId, linkedModule: "COMPANY_PAYMENT", linkedRecordId: payment.id },
     });
 
     const description = `Company Payment to ${payment.oilCompany || "Oil Company"}${payment.invoiceNo ? ` (Invoice: ${payment.invoiceNo})` : ""}`;
@@ -210,8 +226,11 @@ export async function syncCompanyPaymentToPersonalAccount(paymentId: string, pre
 
 export async function removeCompanyPaymentSync(paymentId: string) {
   try {
+    const session = await getSession();
+    if (!session || !session.agencyId) return { error: "Unauthorized" };
+
     const existing = await prisma.personalTransaction.findFirst({
-      where: { linkedModule: "COMPANY_PAYMENT", linkedRecordId: paymentId },
+      where: { agencyId: session.agencyId, linkedModule: "COMPANY_PAYMENT", linkedRecordId: paymentId },
     });
     if (existing) {
       await prisma.personalTransaction.delete({

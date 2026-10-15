@@ -44,8 +44,8 @@ export default async function DeliveryCountPage() {
   });
 
   // Fetch assigned vehicle info if any
-  const assignedVehicle = await prisma.deliveryVehicle.findUnique({
-    where: { assignedToId: session.userId },
+  const assignedVehicle = await prisma.deliveryVehicle.findFirst({
+    where: { assignedToId: session.userId, agencyId },
     select: { id: true, vehicleNo: true, vehicleName: true, vehicleType: true },
   });
 

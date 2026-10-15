@@ -28,7 +28,7 @@ export default async function MyDeliveriesPage() {
 
   const [deliveries, customers, products, assignedVehicle] = await Promise.all([
     prisma.deliveryRecord.findMany({
-      where: { deliveredById: session.userId, date: { gte: last7Start } },
+      where: { agencyId: session.agencyId!, deliveredById: session.userId, date: { gte: last7Start } },
       include: {
         customer: { select: { name: true, phone: true, address: true, type: true, customerCode: true } },
         product: { select: { name: true, saleRate: true } },
@@ -49,8 +49,8 @@ export default async function MyDeliveriesPage() {
       select: { id: true, name: true, saleRate: true },
       orderBy: { name: "asc" },
     }),
-    prisma.deliveryVehicle.findUnique({
-      where: { assignedToId: session.userId },
+    prisma.deliveryVehicle.findFirst({
+      where: { assignedToId: session.userId, agencyId: session.agencyId! },
       select: { id: true, vehicleNo: true, vehicleName: true, vehicleType: true },
     }),
   ]);
@@ -59,6 +59,7 @@ export default async function MyDeliveriesPage() {
   if (assignedVehicle) {
     todayTrip = await prisma.vehicleTripLog.findFirst({
       where: {
+        agencyId: session.agencyId!,
         vehicleId: assignedVehicle.id,
         isDeleted: false,
         date: { gte: todayStart, lte: todayEnd },

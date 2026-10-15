@@ -11,6 +11,12 @@ export async function createGstInvoice(formData: FormData) {
   const customerId = formData.get("customerId") as string;
   if (!customerId) return { error: "Customer required" };
 
+  const customer = await prisma.customer.findFirst({
+    where: { id: customerId, agencyId: session.agencyId },
+    select: { id: true },
+  });
+  if (!customer) return { error: "Customer not found or unauthorized" };
+
   const items = JSON.parse(formData.get("items") as string) as Array<{
     productId: string;
     productName: string;
@@ -24,6 +30,15 @@ export async function createGstInvoice(formData: FormData) {
   for (const item of items) {
     if (!item.productId) continue;
 
+    // Verify product belongs to this agency
+    const product = await prisma.product.findFirst({
+      where: { id: item.productId, agencyId: session.agencyId },
+      select: { name: true },
+    });
+    if (!product) {
+      return { error: `Product "${item.productName}" not found in your agency catalog.` };
+    }
+
     // Get latest office stock from StockRecord (closing stock of the most recent record)
     const latestStockRecord = await prisma.stockRecord.findFirst({
       where: { agencyId: session.agencyId, productId: item.productId },
@@ -32,12 +47,8 @@ export async function createGstInvoice(formData: FormData) {
     const officeStock = latestStockRecord?.closingStock ?? 0;
 
     if (item.qty > officeStock) {
-      const product = await prisma.product.findUnique({
-        where: { id: item.productId },
-        select: { name: true },
-      });
       return {
-        error: `Insufficient office stock for "${product?.name ?? item.productName}". Requested: ${item.qty}, Available in office: ${officeStock}.`,
+        error: `Insufficient office stock for "${product.name}". Requested: ${item.qty}, Available in office: ${officeStock}.`,
       };
     }
   }
@@ -60,17 +71,22 @@ export async function createGstInvoice(formData: FormData) {
 }
 
 // ── Stock map helper used by the page ────────────────────────────────────────
-export async function getProductStockMap(agencyId: string): Promise<
+export async function getProductStockMap(agencyId?: string): Promise<
   Record<string, { officeStock: number; godownStock: number }>
 > {
+  const session = await getSession();
+  if (!session || !session.agencyId) return {};
+
+  const targetAgencyId = session.role === "SYSTEM_ADMIN" && agencyId ? agencyId : session.agencyId;
+
   const [stockRecords, godownMovements] = await Promise.all([
     prisma.stockRecord.findMany({
-      where: { agencyId },
+      where: { agencyId: targetAgencyId },
       orderBy: { date: "desc" },
     }),
     prisma.godownInventory.groupBy({
       by: ["productId", "moveType"],
-      where: { agencyId },
+      where: { agencyId: targetAgencyId },
       _sum: { qty: true },
     }),
   ]);

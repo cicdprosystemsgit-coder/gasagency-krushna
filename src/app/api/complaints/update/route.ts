@@ -14,8 +14,15 @@ export async function POST(req: NextRequest) {
   const validStatuses = ["OPEN", "IN_PROGRESS", "RESOLVED", "CLOSED"];
   if (!validStatuses.includes(status)) return NextResponse.json({ error: "Invalid status" }, { status: 400 });
 
-  const complaint = await prisma.customerComplaint.update({
+  const existing = await prisma.customerComplaint.findFirst({
     where: { id, agencyId: session.agencyId },
+  });
+  if (!existing) {
+    return NextResponse.json({ error: "Complaint not found or unauthorized" }, { status: 404 });
+  }
+
+  const complaint = await prisma.customerComplaint.update({
+    where: { id },
     data: {
       status,
       resolvedAt: status === "RESOLVED" ? new Date() : null,

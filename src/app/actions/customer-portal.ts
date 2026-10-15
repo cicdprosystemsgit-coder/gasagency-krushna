@@ -6,11 +6,15 @@
 import { prisma } from "@/lib/prisma";
 
 // ── Look up customer by code ──────────────────────────────────────────────────
-export async function getCustomerPortalData(code: string) {
+export async function getCustomerPortalData(code: string, agencyId?: string) {
   if (!code?.trim()) return { error: "Invalid customer code" };
 
   const customer = await prisma.customer.findFirst({
-    where: { customerCode: code.trim().toUpperCase(), isActive: true },
+    where: {
+      customerCode: code.trim().toUpperCase(),
+      isActive: true,
+      ...(agencyId ? { agencyId } : {}),
+    },
     include: {
       agency: { select: { name: true, phone: true, address: true, city: true } },
     },
@@ -18,17 +22,17 @@ export async function getCustomerPortalData(code: string) {
 
   if (!customer) return { error: "Customer not found. Please check your code." };
 
-  // Last 10 deliveries
+  // Last 10 deliveries for this customer within their agency
   const deliveries = await prisma.deliveryRecord.findMany({
-    where: { customerId: customer.id },
+    where: { customerId: customer.id, agencyId: customer.agencyId },
     orderBy: { date: "desc" },
     take: 10,
     include: { product: { select: { name: true } } },
   });
 
-  // Outstanding credit balance
+  // Outstanding credit balance within their agency
   const creditEntries = await prisma.creditLedgerEntry.findMany({
-    where: { customerId: customer.id },
+    where: { customerId: customer.id, agencyId: customer.agencyId },
     orderBy: { date: "desc" },
     take: 20,
     select: { date: true, type: true, amount: true, description: true },
@@ -40,17 +44,17 @@ export async function getCustomerPortalData(code: string) {
     return sum;
   }, 0);
 
-  // Recent complaints
+  // Recent complaints within their agency
   const complaints = await prisma.customerComplaint.findMany({
-    where: { customerId: customer.id },
+    where: { customerId: customer.id, agencyId: customer.agencyId },
     orderBy: { createdAt: "desc" },
     take: 5,
     select: { id: true, category: true, status: true, description: true, createdAt: true, resolvedAt: true },
   });
 
-  // Recent payment receipts
+  // Recent payment receipts within their agency
   const receipts = await prisma.paymentReceipt.findMany({
-    where: { customerId: customer.id },
+    where: { customerId: customer.id, agencyId: customer.agencyId },
     orderBy: { date: "desc" },
     take: 10,
     select: { receiptNo: true, amount: true, paymentMode: true, date: true },
@@ -93,6 +97,7 @@ export async function raiseComplaintFromPortal(data: {
   customerCode: string;
   category: string;
   description: string;
+  agencyId?: string;
 }) {
   if (!data.customerCode?.trim()) return { error: "Invalid customer code" };
   if (!data.description?.trim() || data.description.trim().length < 10) {
@@ -100,7 +105,11 @@ export async function raiseComplaintFromPortal(data: {
   }
 
   const customer = await prisma.customer.findFirst({
-    where: { customerCode: data.customerCode.trim().toUpperCase(), isActive: true },
+    where: {
+      customerCode: data.customerCode.trim().toUpperCase(),
+      isActive: true,
+      ...(data.agencyId ? { agencyId: data.agencyId } : {}),
+    },
     select: { id: true, agencyId: true },
   });
 

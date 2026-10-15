@@ -21,6 +21,19 @@ export async function createDeliveryRecord(formData: FormData) {
   if (!customerId || !productId) return { error: "Customer and product required" };
   if (isNaN(deliveredQty) || deliveredQty < 0) return { error: "Delivered quantity cannot be negative" };
 
+  const [customer, product] = await Promise.all([
+    prisma.customer.findFirst({
+      where: { id: customerId, agencyId: session.agencyId },
+      select: { id: true },
+    }),
+    prisma.product.findFirst({
+      where: { id: productId, agencyId: session.agencyId },
+      select: { id: true, saleRate: true },
+    }),
+  ]);
+  if (!customer) return { error: "Customer not found or does not belong to your agency" };
+  if (!product) return { error: "Product not found or does not belong to your agency" };
+
   // ── Resolve effective cash / credit amounts per payment mode ──────────────
   let effectiveCash = 0;
   let effectiveCredit = 0;
@@ -35,11 +48,7 @@ export async function createDeliveryRecord(formData: FormData) {
       effectiveCredit = creditAmountRaw;
     } else {
       // Fall back to product saleRate × qty
-      const product = await prisma.product.findUnique({
-        where: { id: productId },
-        select: { saleRate: true },
-      });
-      effectiveCredit = product && product.saleRate > 0 ? product.saleRate * deliveredQty : 0;
+      effectiveCredit = product.saleRate > 0 ? product.saleRate * deliveredQty : 0;
     }
   } else if (paymentMode === "PARTIAL") {
     // Split payment: some cash collected + some on credit
@@ -47,11 +56,7 @@ export async function createDeliveryRecord(formData: FormData) {
     effectiveCredit = creditAmountRaw;
     // If credit part not provided, try to derive from product rate minus cash
     if (effectiveCredit <= 0) {
-      const product = await prisma.product.findUnique({
-        where: { id: productId },
-        select: { saleRate: true },
-      });
-      const totalValue = product && product.saleRate > 0 ? product.saleRate * deliveredQty : 0;
+      const totalValue = product.saleRate > 0 ? product.saleRate * deliveredQty : 0;
       effectiveCredit = Math.max(0, totalValue - effectiveCash);
     }
   } else {

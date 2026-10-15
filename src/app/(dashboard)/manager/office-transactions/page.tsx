@@ -13,6 +13,7 @@ export default async function ManagerOfficeTransactionsPage() {
 
   const [transactions, products, stockMap, customers] = await Promise.all([
     prisma.officeTransaction.findMany({
+      where: { agencyId: session.agencyId! },
       orderBy: { date: "desc" },
       take: 100,
       include: {
@@ -21,7 +22,7 @@ export default async function ManagerOfficeTransactionsPage() {
         customer: { select: { name: true, phone: true } },
       },
     }),
-    prisma.product.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
+    prisma.product.findMany({ where: { agencyId: session.agencyId!, isActive: true }, orderBy: { name: "asc" } }),
     getProductStockMap(session.agencyId!),
     prisma.customer.findMany({
       where: { agencyId: session.agencyId!, isActive: true },

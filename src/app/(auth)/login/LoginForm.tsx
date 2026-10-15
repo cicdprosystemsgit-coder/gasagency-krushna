@@ -253,6 +253,20 @@ export function LoginForm({
           <p className="text-center mt-5 text-[12px] text-zinc-400">
             <Link href="/" className="hover:text-zinc-700 transition-colors">{t("backToHome")}</Link>
           </p>
+
+          <div className="mt-8 pt-4 border-t border-zinc-200/80 dark:border-zinc-800/80 text-center text-[12px] text-zinc-400 dark:text-zinc-500">
+            <p>
+              © {new Date().getFullYear()} All Copyright and Rights Reserved by{" "}
+              <a
+                href="https://www.cicdtech.in/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-medium text-blue-600 dark:text-blue-400 hover:underline transition-colors"
+              >
+                CICD Tech
+              </a>
+            </p>
+          </div>
         </div>
       </div>
     </div>

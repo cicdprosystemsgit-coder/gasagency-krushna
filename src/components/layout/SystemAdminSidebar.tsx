@@ -181,6 +181,17 @@ export function SystemAdminSidebar({ name, newDemoCount = 0 }: { name: string; n
                 Sign out
               </button>
             </form>
+            <div style={{ padding: "6px 8px 2px", fontSize: 10, color: "#475569", borderTop: "1px solid #1E293B", marginTop: 4, textAlign: "center" }}>
+              <span>© {new Date().getFullYear()} </span>
+              <a
+                href="https://www.cicdtech.in/"
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ color: "#94A3B8", textDecoration: "none", fontWeight: 500 }}
+              >
+                CICD Tech
+              </a>
+            </div>
           </div>
         )}
       </div>

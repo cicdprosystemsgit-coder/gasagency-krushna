@@ -525,6 +525,19 @@ export function Sidebar({
               : <><PanelLeftClose className="w-4 h-4 flex-shrink-0 nav-icon" /><span className="text-[12px]">{t("nav.collapse")}</span></>
             }
           </button>
+          {(!collapsed || mobileOpen) && (
+            <div className="pt-2 text-[10px] text-zinc-400 dark:text-zinc-500 text-center truncate">
+              <span>© {new Date().getFullYear()} </span>
+              <a
+                href="https://www.cicdtech.in/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:underline font-medium text-zinc-600 dark:text-zinc-400"
+              >
+                CICD Tech
+              </a>
+            </div>
+          )}
         </div>
       </aside>
     </>

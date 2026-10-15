@@ -30,7 +30,7 @@ export default function MaintenancePage() {
       infoIconColor="#c2410c"
       infoTitle="Administrative Notice"
       infoBody="Please contact the agency owner or system administration support to resolve this issue and reactivate the account."
-      footerNote="© 2026 GasAgency Enterprise Platform · Maintenance and Billing"
+      footerNote="GasAgency Enterprise Platform · Maintenance and Billing"
     />
   );
 }

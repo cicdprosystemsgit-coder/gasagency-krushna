@@ -1,4 +1,4 @@
-﻿import { getSessionWithFeatures, requireFeature } from "@/lib/feature-gate";
+import { getSessionWithFeatures, requireFeature } from "@/lib/feature-gate";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -32,7 +32,7 @@ export default async function DeliveryCreditLedgerPage() {
       }
     }),
     prisma.creditLedgerEntry.findMany({
-      where: { addedById: session.userId, customer: { type: "COMMERCIAL" } },
+      where: { agencyId: session.agencyId!, addedById: session.userId, customer: { type: "COMMERCIAL" } },
       orderBy: [
         { date: "desc" },
         { createdAt: "desc" }

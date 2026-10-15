@@ -184,11 +184,20 @@ export function ErrorPageShell({
             </div>
           </div>
 
-          {footerNote && (
-            <p className="text-center mt-6 text-[11px]" style={{ color: "#94a3b8" }}>
-              {footerNote}
+          <div className="text-center mt-6 text-[11px] text-zinc-400 dark:text-zinc-500">
+            {footerNote && <p className="mb-1">{footerNote}</p>}
+            <p>
+              © {new Date().getFullYear()} All Copyright and Rights Reserved by{" "}
+              <a
+                href="https://www.cicdtech.in/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-medium text-blue-600 dark:text-blue-400 hover:underline transition-colors"
+              >
+                CICD Tech
+              </a>
             </p>
-          )}
+          </div>
         </div>
       </div>
     </div>

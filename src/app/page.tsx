@@ -483,7 +483,17 @@ export default function LandingPage() {
           </div>
 
           <div className="pt-6 border-t border-zinc-900 flex flex-col sm:flex-row items-center justify-between gap-3">
-            <p className="text-[12px] text-zinc-600">© 2026 GasAgency. Built for Indian gas distributors.</p>
+            <p className="text-[12px] text-zinc-500">
+              © {new Date().getFullYear()} All Copyright and Rights Reserved by{" "}
+              <a
+                href="https://www.cicdtech.in/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-medium text-blue-400 hover:text-blue-300 underline underline-offset-2 transition-colors"
+              >
+                CICD Tech
+              </a>
+            </p>
             <div className="flex items-center gap-5 text-[12px] text-zinc-600">
               <a href="#" className="hover:text-zinc-400 transition-colors">Privacy</a>
               <a href="#" className="hover:text-zinc-400 transition-colors">Terms</a>

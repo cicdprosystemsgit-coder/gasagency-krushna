@@ -38,8 +38,8 @@ export default async function DeliveryBoyDashboard() {
         })
       : Promise.resolve([]),
     hasDeliveries
-      ? prisma.deliveryVehicle.findUnique({
-          where: { assignedToId: session.userId },
+      ? prisma.deliveryVehicle.findFirst({
+          where: { assignedToId: session.userId, agencyId },
           select: { id: true, vehicleNo: true, vehicleName: true, vehicleType: true, status: true },
         })
       : Promise.resolve(null),

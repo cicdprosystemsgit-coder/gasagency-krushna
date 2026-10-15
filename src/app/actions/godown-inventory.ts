@@ -151,9 +151,15 @@ export async function dispatchToOffice(
 }
 
 // ── Fetch all godown inventory movements for a given agency (for admin/manager/staff) ──
-export async function getGodownInventoryMovements(agencyId: string) {
+export async function getGodownInventoryMovements(agencyId?: string) {
+  const session = await getSession();
+  if (!session || !session.agencyId) return [];
+
+  // Enforce session agencyId unless caller is SYSTEM_ADMIN
+  const targetAgencyId = session.role === "SYSTEM_ADMIN" && agencyId ? agencyId : session.agencyId;
+
   return prisma.godownInventory.findMany({
-    where: { agencyId },
+    where: { agencyId: targetAgencyId },
     orderBy: { date: "desc" },
     take: 200,
     include: {
@@ -164,10 +170,16 @@ export async function getGodownInventoryMovements(agencyId: string) {
 }
 
 // ── Compute current godown stock levels per product ──────────────────────────
-export async function getGodownStockLevels(agencyId: string) {
+export async function getGodownStockLevels(agencyId?: string) {
+  const session = await getSession();
+  if (!session || !session.agencyId) return {};
+
+  // Enforce session agencyId unless caller is SYSTEM_ADMIN
+  const targetAgencyId = session.role === "SYSTEM_ADMIN" && agencyId ? agencyId : session.agencyId;
+
   const movements = await prisma.godownInventory.groupBy({
     by: ["productId", "moveType"],
-    where: { agencyId },
+    where: { agencyId: targetAgencyId },
     _sum: { qty: true },
   });
 

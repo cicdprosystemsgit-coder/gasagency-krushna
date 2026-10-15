@@ -35,7 +35,7 @@ export default async function DeliveryLedgerPage() {
   if (!isAllowed) redirect("/delivery-boy");
 
   const deliveries = await prisma.deliveryRecord.findMany({
-    where: { deliveredById: session.userId },
+    where: { agencyId: session.agencyId!, deliveredById: session.userId },
     include: {
       customer: { select: { name: true, phone: true, type: true } },
       product: { select: { name: true } },

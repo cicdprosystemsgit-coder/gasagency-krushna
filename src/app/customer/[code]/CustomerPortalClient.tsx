@@ -179,13 +179,29 @@ export function CustomerPortalClient({ data, customerCode }: { data: PortalData;
         </div>
 
         {/* Agency contact */}
-        <div className="card p-4 mb-8">
+        <div className="card p-4 mb-6">
           <div className="flex items-center gap-2 mb-2">
             <Building2 className="w-4 h-4" style={{ color: "#A1A1AA" }} />
             <p className="text-[13px] font-semibold" style={{ color: "#18181B" }}>{customer.agency.name}</p>
           </div>
           <p className="text-[12px] flex items-center gap-1.5 mb-1" style={{ color: "#52525B" }}><Phone className="w-3 h-3" /> {customer.agency.phone}</p>
           <p className="text-[12px] flex items-center gap-1.5" style={{ color: "#52525B" }}><MapPin className="w-3 h-3" /> {customer.agency.address}, {customer.agency.city}</p>
+        </div>
+
+        {/* Footer */}
+        <div className="text-center pb-8 pt-2 text-[12px]" style={{ color: "#71717A" }}>
+          <p>
+            © {new Date().getFullYear()} All Copyright and Rights Reserved by{" "}
+            <a
+              href="https://www.cicdtech.in/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-semibold hover:underline"
+              style={{ color: "#2563EB" }}
+            >
+              CICD Tech
+            </a>
+          </p>
         </div>
       </div>
     </div>

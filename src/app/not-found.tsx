@@ -89,9 +89,20 @@ export default function NotFound() {
             </div>
           </div>
 
-          <p className="text-center mt-6 text-[11px]" style={{ color: "#94a3b8" }}>
-            © 2026 GasAgency Enterprise Platform · Error 404
-          </p>
+          <div className="text-center mt-6 text-[11px]" style={{ color: "#94a3b8" }}>
+            <p className="mb-1">Error 404 · Page Not Found</p>
+            <p>
+              © {new Date().getFullYear()} All Copyright and Rights Reserved by{" "}
+              <a
+                href="https://www.cicdtech.in/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-medium text-blue-600 hover:underline transition-colors"
+              >
+                CICD Tech
+              </a>
+            </p>
+          </div>
         </div>
       </div>
     </div>
