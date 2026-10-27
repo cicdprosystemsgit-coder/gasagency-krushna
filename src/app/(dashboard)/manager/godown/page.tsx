@@ -57,7 +57,6 @@ export default async function ManagerGodownPage({ searchParams }: PageProps) {
         agencyId: session.agencyId!,
         isDeleted: false,
         status: "APPROVED",
-        entryDate: { gte: dateStart, lte: dateEnd },
       },
     }),
     prisma.deliveryVehicle.findMany({

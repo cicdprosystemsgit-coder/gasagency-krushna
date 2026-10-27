@@ -28,7 +28,9 @@ export function generateTOTPSecret(accountName: string): {
 
 /** Verify a 6-digit TOTP code against the stored base32 secret */
 export function verifyTOTP(secret: string, token: string): boolean {
-  if (!secret || !token || token.length !== 6) return false;
+  if (!secret || !token) return false;
+  const cleanToken = token.replace(/[\s-]/g, "");
+  if (cleanToken.length !== 6) return false;
 
   const totp = new OTPAuth.TOTP({
     issuer: ISSUER,
@@ -38,8 +40,8 @@ export function verifyTOTP(secret: string, token: string): boolean {
     secret: OTPAuth.Secret.fromBase32(secret),
   });
 
-  // Allow ±1 window (30s tolerance for clock drift)
-  const delta = totp.validate({ token, window: 1 });
+  // Allow ±2 windows (±60s tolerance for clock drift between server and client phone)
+  const delta = totp.validate({ token: cleanToken, window: 2 });
   return delta !== null;
 }
 

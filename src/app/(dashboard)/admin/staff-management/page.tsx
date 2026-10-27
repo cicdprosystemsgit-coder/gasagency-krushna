@@ -1,4 +1,4 @@
-﻿import { getSessionWithFeatures, requireFeature } from "@/lib/feature-gate";
+import { getSessionWithFeatures, requireFeature } from "@/lib/feature-gate";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -16,7 +16,7 @@ export default async function StaffManagementPage() {
     select: {
       id: true, name: true, email: true, phone: true, role: true,
       customRole: true, customRoleId: true,
-      isActive: true, createdAt: true,
+      isActive: true, createdAt: true, twoFactorEnabled: true,
       bankAccountNo: true, bankName: true, ifscCode: true,
       aadhaarNo: true, panNo: true, photoBase64: true,
       salaryProfile: {

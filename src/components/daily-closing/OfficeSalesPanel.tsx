@@ -188,9 +188,10 @@ export function OfficeSalesPanel({
                 <input
                   type="number"
                   min="0"
-                  disabled={true}
+                  disabled={readOnly}
                   value={employee.cashCollected}
-                  className="w-full pl-7 pr-3 py-2 border border-slate-200 rounded-xl text-xs focus:outline-none font-bold text-slate-700 disabled:bg-slate-50 disabled:text-slate-500"
+                  onChange={(e) => handleFieldChange("cashCollected", parseFloat(e.target.value) || 0)}
+                  className="w-full pl-7 pr-3 py-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 font-bold text-slate-700 disabled:bg-slate-50 disabled:text-slate-500"
                 />
               </div>
             </div>
@@ -204,9 +205,10 @@ export function OfficeSalesPanel({
                 <input
                   type="number"
                   min="0"
-                  disabled={true}
+                  disabled={readOnly}
                   value={employee.onlineAmount}
-                  className="w-full pl-7 pr-3 py-2 border border-slate-200 rounded-xl text-xs focus:outline-none font-bold text-slate-700 disabled:bg-slate-50 disabled:text-slate-500"
+                  onChange={(e) => handleFieldChange("onlineAmount", parseFloat(e.target.value) || 0)}
+                  className="w-full pl-7 pr-3 py-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 font-bold text-slate-700 disabled:bg-slate-50 disabled:text-slate-500"
                 />
               </div>
             </div>
@@ -220,9 +222,10 @@ export function OfficeSalesPanel({
                 <input
                   type="number"
                   min="0"
-                  disabled={true}
+                  disabled={readOnly}
                   value={employee.udhariAmount}
-                  className="w-full pl-7 pr-3 py-2 border border-slate-200 rounded-xl text-xs focus:outline-none font-bold text-slate-700 disabled:bg-slate-50 disabled:text-slate-500"
+                  onChange={(e) => handleFieldChange("udhariAmount", parseFloat(e.target.value) || 0)}
+                  className="w-full pl-7 pr-3 py-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 font-bold text-slate-700 disabled:bg-slate-50 disabled:text-slate-500"
                 />
               </div>
             </div>

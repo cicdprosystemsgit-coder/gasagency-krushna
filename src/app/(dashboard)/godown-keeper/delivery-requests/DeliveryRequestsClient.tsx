@@ -9,7 +9,11 @@ import {
 } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { toast } from "sonner";
-import { fulfillDeliveryCountRequest } from "@/app/actions/delivery-count-requests";
+import {
+  fulfillDeliveryCountRequest,
+  reviewDeliveryCountRequest,
+  bulkReviewDeliveryCountRequests,
+} from "@/app/actions/delivery-count-requests";
 
 interface ProductItem {
   id: string;
@@ -71,6 +75,8 @@ export function DeliveryRequestsClient({
   // Modals
   const [loadingModalRequest, setLoadingModalRequest] = useState<GodownDeliveryRequest | null>(null);
   const [viewDetailsRequest, setViewDetailsRequest] = useState<GodownDeliveryRequest | null>(null);
+  const [rejectModalRequest, setRejectModalRequest] = useState<GodownDeliveryRequest | null>(null);
+  const [rejectReason, setRejectReason] = useState<string>("");
 
   // Loading Form State
   const [loadItems, setLoadItems] = useState<Array<{ productId: string; productName: string; loadedQty: number }>>([]);
@@ -79,6 +85,51 @@ export function DeliveryRequestsClient({
   const [fuelType, setFuelType] = useState<string>("Petrol");
   const [godownNotes, setGodownNotes] = useState<string>("");
   const [formError, setFormError] = useState<string>("");
+
+  const handleApproveRequest = (id: string, deliveryBoyName?: string) => {
+    startTransition(async () => {
+      const res = await reviewDeliveryCountRequest(id, "APPROVED");
+      if (res.error) {
+        toast.error(res.error);
+      } else {
+        toast.success(`Request accepted & approved for ${deliveryBoyName || "delivery boy"}! Ready to load.`);
+        router.refresh();
+      }
+    });
+  };
+
+  const handleRejectSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!rejectModalRequest) return;
+    if (!rejectReason.trim()) {
+      toast.error("Please enter a reason for rejecting the request");
+      return;
+    }
+    startTransition(async () => {
+      const res = await reviewDeliveryCountRequest(rejectModalRequest.id, "REJECTED", rejectReason.trim());
+      if (res.error) {
+        toast.error(res.error);
+      } else {
+        toast.success("Delivery request rejected");
+        setRejectModalRequest(null);
+        setRejectReason("");
+        router.refresh();
+      }
+    });
+  };
+
+  const handleBulkApprove = () => {
+    if (pendingList.length === 0) return;
+    startTransition(async () => {
+      const res = await bulkReviewDeliveryCountRequests(pendingList.map((r) => r.id), "APPROVED");
+      if (res.error) {
+        toast.error(res.error);
+      } else {
+        toast.success(`Successfully accepted all ${pendingList.length} pending requests!`);
+        router.refresh();
+      }
+    });
+  };
 
   const approvedList = initialRequests.filter((r) => r.status === "APPROVED");
   const fulfilledList = initialRequests.filter((r) => r.status === "FULFILLED");
@@ -169,11 +220,17 @@ export function DeliveryRequestsClient({
             <h2 className="text-xl font-bold">Godown Vehicle Loading Dispatch</h2>
           </div>
           <p className="text-xs text-emerald-100 max-w-xl">
-            When delivery boys submit their daily cylinder request and admin approves it, load their vehicles with the required cylinders, fill fuel, and confirm dispatch here.
+            Review and accept cylinder loading requests from delivery boys, load their vehicles, record fuel, and dispatch them directly from the godown.
           </p>
         </div>
 
         <div className="flex items-center gap-3 self-start sm:self-auto">
+          {pendingList.length > 0 && (
+            <div className="bg-amber-500/20 backdrop-blur-md px-4 py-2.5 rounded-xl border border-amber-300/30 text-center">
+              <div className="text-2xl font-bold text-amber-200">{pendingList.length}</div>
+              <div className="text-[11px] text-amber-100 font-medium">Pending Acceptance</div>
+            </div>
+          )}
           <div className="bg-white/10 backdrop-blur-md px-4 py-2.5 rounded-xl border border-white/20 text-center">
             <div className="text-2xl font-bold">{approvedList.length}</div>
             <div className="text-[11px] text-emerald-100 font-medium">Ready to Load</div>
@@ -183,7 +240,7 @@ export function DeliveryRequestsClient({
 
       {/* Tabs */}
       <div className="flex items-center justify-between border-b border-zinc-200 pb-2 flex-wrap gap-2">
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap items-center">
           <button
             onClick={() => setActiveTab("APPROVED")}
             className={`flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-xl transition ${
@@ -197,6 +254,18 @@ export function DeliveryRequestsClient({
           </button>
 
           <button
+            onClick={() => setActiveTab("PENDING")}
+            className={`flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-xl transition ${
+              activeTab === "PENDING"
+                ? "bg-amber-600 text-white shadow-sm"
+                : "bg-white text-zinc-600 border border-zinc-200 hover:bg-zinc-50"
+            }`}
+          >
+            <Clock className="w-4 h-4" />
+            Pending Requests ({pendingList.length})
+          </button>
+
+          <button
             onClick={() => setActiveTab("FULFILLED")}
             className={`flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-xl transition ${
               activeTab === "FULFILLED"
@@ -207,23 +276,23 @@ export function DeliveryRequestsClient({
             <CheckCircle2 className="w-4 h-4" />
             Loaded History ({fulfilledList.length})
           </button>
-
-          <button
-            onClick={() => setActiveTab("PENDING")}
-            className={`flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-xl transition ${
-              activeTab === "PENDING"
-                ? "bg-amber-600 text-white shadow-sm"
-                : "bg-white text-zinc-600 border border-zinc-200 hover:bg-zinc-50"
-            }`}
-          >
-            <Clock className="w-4 h-4" />
-            Pending Admin Approval ({pendingList.length})
-          </button>
         </div>
 
-        <span className="text-xs text-zinc-500 font-medium">
-          Showing {displayedRequests.length} record{displayedRequests.length !== 1 ? "s" : ""}
-        </span>
+        <div className="flex items-center gap-2">
+          {activeTab === "PENDING" && pendingList.length > 0 && (
+            <button
+              onClick={handleBulkApprove}
+              disabled={isPending}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition shadow-xs disabled:opacity-50"
+            >
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              Accept All ({pendingList.length})
+            </button>
+          )}
+          <span className="text-xs text-zinc-500 font-medium">
+            Showing {displayedRequests.length} record{displayedRequests.length !== 1 ? "s" : ""}
+          </span>
+        </div>
       </div>
 
       {/* Requests List */}
@@ -291,7 +360,7 @@ export function DeliveryRequestsClient({
                     )}
                     {req.status === "PENDING" && (
                       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
-                        <Clock className="w-3 h-3 animate-pulse" /> Awaiting Admin
+                        <Clock className="w-3 h-3 animate-pulse" /> Pending Approval
                       </span>
                     )}
                   </div>
@@ -382,9 +451,37 @@ export function DeliveryRequestsClient({
                   )}
 
                   {req.status === "PENDING" && (
-                    <span className="text-xs text-amber-600 font-medium flex items-center gap-1">
-                      <Clock className="w-4 h-4" /> Needs Admin Approval
-                    </span>
+                    <div className="flex-1 flex items-center gap-1.5">
+                      <button
+                        onClick={() => handleApproveRequest(req.id, req.deliveryBoy.name)}
+                        disabled={isPending}
+                        className="flex-1 inline-flex items-center justify-center gap-1 px-2.5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition shadow-xs disabled:opacity-50"
+                        title="Accept / Approve loading request"
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        Accept
+                      </button>
+                      <button
+                        onClick={() => openLoadModal(req)}
+                        disabled={isPending}
+                        className="flex-1 inline-flex items-center justify-center gap-1 px-2.5 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition shadow-xs disabled:opacity-50"
+                        title="Accept and load vehicle immediately"
+                      >
+                        <Truck className="w-3.5 h-3.5" />
+                        Accept & Load
+                      </button>
+                      <button
+                        onClick={() => {
+                          setRejectModalRequest(req);
+                          setRejectReason("");
+                        }}
+                        disabled={isPending}
+                        className="p-2 text-rose-600 hover:bg-rose-50 border border-rose-200 rounded-xl transition disabled:opacity-50"
+                        title="Reject Request"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>
@@ -680,6 +777,57 @@ export function DeliveryRequestsClient({
               </button>
             </div>
           </div>
+        </Modal>
+      )}
+      {/* MODAL: Reject Request */}
+      {rejectModalRequest && (
+        <Modal
+          isOpen={true}
+          onClose={() => !isPending && setRejectModalRequest(null)}
+          title="Reject Delivery Loading Request"
+        >
+          <form onSubmit={handleRejectSubmit} className="space-y-4 text-sm">
+            <div className="bg-rose-50 p-3.5 rounded-xl border border-rose-200">
+              <p className="font-bold text-rose-950 text-sm">
+                Reject request from {rejectModalRequest.deliveryBoy.name}?
+              </p>
+              <p className="text-xs text-rose-700 mt-0.5">
+                Total requested: {rejectModalRequest.totalRequested} cylinders
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-zinc-700 mb-1">
+                Reason for Rejection <span className="text-rose-500">*</span>
+              </label>
+              <textarea
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+                placeholder="e.g. Stock shortage at godown, vehicle under maintenance, etc."
+                rows={3}
+                required
+                className="w-full text-xs p-2.5 rounded-xl border border-zinc-200 focus:outline-none focus:ring-2 focus:ring-rose-500"
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-zinc-100">
+              <button
+                type="button"
+                onClick={() => setRejectModalRequest(null)}
+                disabled={isPending}
+                className="px-4 py-2 text-xs font-medium text-zinc-700 hover:bg-zinc-100 rounded-xl transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isPending || !rejectReason.trim()}
+                className="px-4 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xl transition shadow-xs disabled:opacity-50"
+              >
+                {isPending ? "Rejecting..." : "Confirm Reject"}
+              </button>
+            </div>
+          </form>
         </Modal>
       )}
     </div>

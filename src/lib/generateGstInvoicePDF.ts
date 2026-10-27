@@ -16,13 +16,15 @@ export interface GstInvoicePDFData {
   customerCode?: string;
   items: Array<{
     productName: string;
+    hsnCode?: string;
+    gstRate?: number;
     qty: number;
     rate: number;
     amount: number;
   }>;
   subtotal: number;
-  cgst: number;                 // 2.5 % of subtotal
-  sgst: number;                 // 2.5 % of subtotal
+  cgst: number;                 // Central GST
+  sgst: number;                 // State GST
   totalTax: number;
   grandTotal: number;
 }
@@ -154,36 +156,40 @@ export async function generateGstInvoicePDF(data: GstInvoicePDFData): Promise<vo
   const tableRows = data.items.map((item, i) => [
     String(i + 1),
     item.productName,
+    item.hsnCode || "—",
     String(item.qty),
     amt(item.rate),
+    `${item.gstRate ?? 5}%`,
     amt(item.amount),
   ]);
 
   autoTable(doc, {
     startY: y,
     margin: { left: ML, right: MR },
-    head: [["#", "Description / Product", "Qty", "Unit Rate", "Amount"]],
+    head: [["#", "Description / Product", "HSN/SAC", "Qty", "Unit Rate", "GST %", "Taxable Value"]],
     body: tableRows,
     headStyles: {
       fillColor: rgb("#1D4ED8") as any,
       textColor: rgb("#FFFFFF") as any,
       fontStyle: "bold",
-      fontSize: 9,
+      fontSize: 8.5,
       halign: "left",
     },
     columnStyles: {
-      0: { halign: "center", cellWidth: 10 },
+      0: { halign: "center", cellWidth: 8 },
       1: { halign: "left",   cellWidth: "auto" },
-      2: { halign: "center", cellWidth: 18 },
-      3: { halign: "right",  cellWidth: 36 },
-      4: { halign: "right",  cellWidth: 36 },
+      2: { halign: "center", cellWidth: 20 },
+      3: { halign: "center", cellWidth: 14 },
+      4: { halign: "right",  cellWidth: 26 },
+      5: { halign: "center", cellWidth: 18 },
+      6: { halign: "right",  cellWidth: 30 },
     },
     bodyStyles: {
-      fontSize: 9,
+      fontSize: 8.5,
       textColor: rgb("#374151") as any,
     },
     alternateRowStyles: { fillColor: rgb("#F8FAFC") as any },
-    styles: { cellPadding: 3.5, lineColor: rgb("#E2E8F0") as any, lineWidth: 0.2 },
+    styles: { cellPadding: 3, lineColor: rgb("#E2E8F0") as any, lineWidth: 0.2 },
     tableLineColor: rgb("#CBD5E1") as any,
     tableLineWidth: 0.3,
   });
@@ -198,8 +204,9 @@ export async function generateGstInvoicePDF(data: GstInvoicePDFData): Promise<vo
   const ROW_H    = 8.5;
   const summaryRows = [
     ["Taxable Value (Subtotal)",  amt(data.subtotal)],
-    [`CGST @ 2.5%`,               amt(data.cgst)],
-    [`SGST @ 2.5%`,               amt(data.sgst)],
+    ["CGST Total",               amt(data.cgst)],
+    ["SGST Total",               amt(data.sgst)],
+    ["Total Tax (GST)",          amt(data.totalTax)],
   ];
   const summaryH = summaryRows.length * ROW_H + ROW_H + 2; // rows + grand total row
 

@@ -7,6 +7,7 @@ import { Truck, Package, DollarSign, ArrowRight, Users, Clock, AlertCircle, Shie
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import { checkPermission } from "@/lib/rbac";
+import { VehicleInventoryWidget } from "@/components/delivery-boy/VehicleInventoryWidget";
 
 export default async function DeliveryBoyDashboard() {
   const session = await getSession();
@@ -47,7 +48,17 @@ export default async function DeliveryBoyDashboard() {
       ? prisma.vehicleTripLog.findFirst({
           where: { agencyId, isDeleted: false, date: { gte: todayStart, lte: todayEnd }, vehicle: { assignedToId: session.userId } },
           orderBy: { createdAt: "desc" },
-          select: { cylindersLoaded: true, cylindersDelivered: true, cylindersReturned: true, tripStatus: true, departureTime: true, returnTime: true },
+          select: {
+            id: true,
+            cylindersLoaded: true,
+            cylindersDelivered: true,
+            cylindersReturned: true,
+            tripStatus: true,
+            departureTime: true,
+            returnTime: true,
+            items: true,
+            notes: true,
+          },
         })
       : Promise.resolve(null),
     hasDeliveries
@@ -112,55 +123,14 @@ export default async function DeliveryBoyDashboard() {
       {/* Main Content Area */}
       {modules.length > 0 ? (
         <>
-          {/* Assigned Vehicle Card */}
+          {/* Live Vehicle Inventory Tracing */}
           {hasDeliveries && (
-            <div className="rounded-xl p-5 mb-5" style={{ background: assignedVehicle ? "#18181B" : "#F4F4F5", border: "1px solid " + (assignedVehicle ? "#27272A" : "#E4E4E7") }}>
-              {assignedVehicle ? (
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ background: "rgba(37,99,235,0.15)" }}>
-                      <Truck className="w-6 h-6" style={{ color: "#60A5FA" }} />
-                    </div>
-                    <div>
-                      <p className="text-[11px] font-medium uppercase tracking-wide mb-0.5" style={{ color: "#71717A" }}>
-                        {t("assignedVehicle")}
-                      </p>
-                      <p className="text-[18px] font-bold font-mono" style={{ color: "#fff" }}>{assignedVehicle.vehicleNo}</p>
-                      <p className="text-[13px]" style={{ color: "#A1A1AA" }}>{assignedVehicle.vehicleName} · {assignedVehicle.vehicleType}</p>
-                    </div>
-                  </div>
-                  {tripInfo && (
-                    <div className="text-right">
-                      <p className="text-[11px] font-medium uppercase tracking-wide mb-1" style={{ color: "#71717A" }}>
-                        {t("todayStatus")}
-                      </p>
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[12px] font-semibold" style={{ background: tripInfo.bg + "22", color: tripInfo.color, border: `1px solid ${tripInfo.color}44` }}>
-                        {tripInfo.label}
-                      </span>
-                      {todayTrip?.cylindersLoaded ? (
-                        <p className="text-[11px] mt-1" style={{ color: "#71717A" }}>
-                          {t("loaded", { qty: todayTrip.cylindersLoaded })}
-                        </p>
-                      ) : null}
-                    </div>
-                  )}
-                  {!tripInfo && (
-                    <div className="text-right">
-                      <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-[12px] font-medium" style={{ background: "rgba(255,255,255,0.06)", color: "#A1A1AA" }}>
-                        <Clock className="w-3.5 h-3.5" /> {t("noTripToday")}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="flex items-center gap-3">
-                  <AlertCircle className="w-5 h-5" style={{ color: "#A1A1AA" }} />
-                  <p className="text-[13px]" style={{ color: "#71717A" }}>
-                    {t("noVehicle")}
-                  </p>
-                </div>
-              )}
-            </div>
+            <VehicleInventoryWidget
+              assignedVehicle={assignedVehicle}
+              todayTrip={todayTrip as any}
+              todayCountRequest={todayCountRequest as any}
+              totalDeliveredToday={totalDelivered}
+            />
           )}
 
           {/* Today's Delivery Count / Vehicle Load Request Card */}

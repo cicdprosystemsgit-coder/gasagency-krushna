@@ -165,11 +165,7 @@ export async function createVehicleTripLog(formData: FormData) {
       },
     });
 
-    revalidatePath("/godown-keeper");
-    revalidatePath("/godown-keeper/godown");
-    revalidatePath("/admin/godown");
-    revalidatePath("/admin/vehicle-management");
-    revalidatePath("/manager/vehicle-management");
+    revalidateTripPaths();
     return {
       tripLog: {
         ...tripLog,
@@ -184,6 +180,21 @@ export async function createVehicleTripLog(formData: FormData) {
     console.error("[createVehicleTripLog]", e);
     return { error: "Failed to record trip. Please try again." };
   }
+}
+
+function revalidateTripPaths() {
+  revalidatePath("/godown-keeper");
+  revalidatePath("/godown-keeper/godown");
+  revalidatePath("/godown-keeper/stock");
+  revalidatePath("/godown-keeper/delivery-requests");
+  revalidatePath("/admin/godown");
+  revalidatePath("/manager/godown");
+  revalidatePath("/admin/vehicle-management");
+  revalidatePath("/manager/vehicle-management");
+  revalidatePath("/delivery-boy");
+  revalidatePath("/delivery-boy/my-deliveries");
+  revalidatePath("/delivery-boy/delivery-count");
+  revalidatePath("/delivery-boy/monthly-report");
 }
 
 export async function updateTripStatus(id: string, formData: FormData) {
@@ -236,11 +247,7 @@ export async function updateTripStatus(id: string, formData: FormData) {
       },
     });
 
-    revalidatePath("/godown-keeper");
-    revalidatePath("/godown-keeper/godown");
-    revalidatePath("/admin/godown");
-    revalidatePath("/admin/vehicle-management");
-    revalidatePath("/manager/vehicle-management");
+    revalidateTripPaths();
     return {
       tripLog: {
         ...updated,
@@ -324,11 +331,7 @@ export async function updateTripLog(id: string, formData: FormData) {
       },
     });
 
-    revalidatePath("/godown-keeper");
-    revalidatePath("/godown-keeper/godown");
-    revalidatePath("/admin/godown");
-    revalidatePath("/admin/vehicle-management");
-    revalidatePath("/manager/vehicle-management");
+    revalidateTripPaths();
 
     return {
       tripLog: {
@@ -369,12 +372,7 @@ export async function softDeleteTripLog(id: string): Promise<{ success: boolean;
       },
     });
 
-    revalidatePath("/godown-keeper");
-    revalidatePath("/godown-keeper/godown");
-    revalidatePath("/admin/godown");
-    revalidatePath("/manager/godown");
-    revalidatePath("/admin/vehicle-management");
-    revalidatePath("/manager/vehicle-management");
+    revalidateTripPaths();
     return { success: true };
   } catch (err: any) {
     console.error("[softDeleteTripLog]", err);
@@ -409,12 +407,7 @@ export async function restoreTripLog(id: string): Promise<{ success: boolean; tr
       },
     });
 
-    revalidatePath("/godown-keeper");
-    revalidatePath("/godown-keeper/godown");
-    revalidatePath("/admin/godown");
-    revalidatePath("/manager/godown");
-    revalidatePath("/admin/vehicle-management");
-    revalidatePath("/manager/vehicle-management");
+    revalidateTripPaths();
     return {
       success: true,
       tripLog: {
@@ -451,12 +444,7 @@ export async function permanentDeleteTripLog(id: string): Promise<{ success: boo
       where: { id },
     });
 
-    revalidatePath("/godown-keeper");
-    revalidatePath("/godown-keeper/godown");
-    revalidatePath("/admin/godown");
-    revalidatePath("/manager/godown");
-    revalidatePath("/admin/vehicle-management");
-    revalidatePath("/manager/vehicle-management");
+    revalidateTripPaths();
     return { success: true };
   } catch (err: any) {
     console.error("[permanentDeleteTripLog]", err);

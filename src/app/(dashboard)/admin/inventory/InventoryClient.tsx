@@ -451,7 +451,7 @@ export function InventoryClient({ initialProducts, initialDeletedProducts = EMPT
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
-  const [form, setForm] = useState({ name: "", unitCost: "", saleRate: "", margin: "", isCylinder: "false", hsnCode: "" });
+  const [form, setForm] = useState({ name: "", unitCost: "", saleRate: "", margin: "", isCylinder: "false", hsnCode: "", gstRate: "5" });
 
   // Starting stock modal state
   const [startingStockOpen, setStartingStockOpen] = useState(false);
@@ -640,7 +640,8 @@ export function InventoryClient({ initialProducts, initialDeletedProducts = EMPT
       saleRate: "",
       margin: "",
       isCylinder: activeTab === "cylinders" ? "true" : "false",
-      hsnCode: ""
+      hsnCode: "",
+      gstRate: "5",
     });
     setError("");
     setModalOpen(true);
@@ -654,7 +655,8 @@ export function InventoryClient({ initialProducts, initialDeletedProducts = EMPT
       saleRate: String(p.saleRate),
       margin: String(p.margin),
       isCylinder: String(p.isCylinder ?? false),
-      hsnCode: p.hsnCode ?? ""
+      hsnCode: p.hsnCode ?? "",
+      gstRate: String((p as any).gstRate ?? 5),
     });
     setError("");
     setModalOpen(true);
@@ -694,6 +696,7 @@ export function InventoryClient({ initialProducts, initialDeletedProducts = EMPT
           margin: sv.saleRate - sv.unitCost,
           isCylinder: false,
           hsnCode: "",
+          gstRate: 5,
           isActive: true,
         });
       }
@@ -1485,7 +1488,12 @@ export function InventoryClient({ initialProducts, initialDeletedProducts = EMPT
                         )}
                         <div>
                           <p className="text-sm font-bold text-zinc-900 leading-snug">{p.name}</p>
-                          <span className="text-[10px] text-zinc-400 font-mono">HSN: {p.hsnCode ?? "—"}</span>
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <span className="text-[10px] text-zinc-400 font-mono">HSN: {p.hsnCode ?? "—"}</span>
+                            <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-blue-50 text-blue-700 border border-blue-200">
+                              GST: {(p as any).gstRate ?? 5}%
+                            </span>
+                          </div>
                         </div>
                       </div>
                       <span className={`badge ${p.isActive ? "badge-approved" : "badge-neutral"}`}>
@@ -1549,6 +1557,7 @@ export function InventoryClient({ initialProducts, initialDeletedProducts = EMPT
                     )}
                     <th>Product name</th>
                     <th>HSN Code</th>
+                    <th className="text-center">GST Rate</th>
                     <th className="text-right">Unit cost</th>
                     <th className="text-right">Sale rate</th>
                     <th className="text-right">Margin</th>
@@ -1559,7 +1568,7 @@ export function InventoryClient({ initialProducts, initialDeletedProducts = EMPT
                 <tbody>
                   {filteredProducts.length === 0 ? (
                     <tr>
-                      <td colSpan={isAdmin ? 9 : 6} className="py-14 text-center">
+                      <td colSpan={isAdmin ? 10 : 7} className="py-14 text-center">
                         <Package className="w-8 h-8 mx-auto mb-2" style={{ color: "#D4D4D8" }} />
                         <p className="text-[13px]" style={{ color: "#A1A1AA" }}>No products here yet</p>
                         {isAdmin && <button onClick={openAdd} className="text-[12px] font-medium mt-1.5" style={{ color: "#2563EB" }}>Add your first item →</button>}
@@ -1604,6 +1613,11 @@ export function InventoryClient({ initialProducts, initialDeletedProducts = EMPT
                         </div>
                       </td>
                       <td className="text-[13px]" style={{ color: "#52525B" }}>{p.hsnCode ?? "—"}</td>
+                      <td className="text-center text-[12px]">
+                        <span className="px-2 py-0.5 rounded-full font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                          {(p as any).gstRate ?? 5}%
+                        </span>
+                      </td>
                       <td className="text-right text-[13px]" style={{ color: "#52525B" }}>{formatCurrency(p.unitCost)}</td>
                       <td className="text-right text-[13px] font-medium" style={{ color: "#18181B" }}>{formatCurrency(p.saleRate)}</td>
                       <td className="text-right text-[13px] font-medium" style={{ color: "#16A34A" }}>{formatCurrency(p.margin)}</td>
@@ -1664,10 +1678,80 @@ export function InventoryClient({ initialProducts, initialDeletedProducts = EMPT
             <label className="block text-[12px] font-medium mb-1.5" style={{ color: "#52525B" }}>Product name *</label>
             <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g., 14.2 KG Cylinder" className="input" />
           </div>
-          <div>
-            <label className="block text-[12px] font-medium mb-1.5" style={{ color: "#52525B" }}>HSN Code</label>
-            <input value={form.hsnCode} onChange={(e) => setForm({ ...form, hsnCode: e.target.value })} placeholder="e.g., 2711" className="input" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[12px] font-medium mb-1.5" style={{ color: "#52525B" }}>HSN / SAC Code</label>
+              <input value={form.hsnCode} onChange={(e) => setForm({ ...form, hsnCode: e.target.value })} placeholder="e.g., 2711" className="input" />
+            </div>
+            <div>
+              <label className="block text-[12px] font-medium mb-1.5" style={{ color: "#52525B" }}>GST Tax Rate (%) *</label>
+              <div className="space-y-1.5">
+                <div className="relative">
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.1"
+                    value={form.gstRate}
+                    onChange={(e) => setForm({ ...form, gstRate: e.target.value })}
+                    placeholder="5"
+                    className="input pr-8 font-bold text-blue-900"
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-zinc-400">%</span>
+                </div>
+                <div className="flex items-center gap-1 flex-wrap">
+                  {[0, 5, 12, 18, 28].map((rate) => (
+                    <button
+                      key={rate}
+                      type="button"
+                      onClick={() => setForm({ ...form, gstRate: String(rate) })}
+                      className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
+                        Number(form.gstRate) === rate
+                          ? "bg-blue-600 text-white shadow-xs"
+                          : "bg-zinc-100 hover:bg-zinc-200 text-zinc-600"
+                      }`}
+                    >
+                      {rate}%
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
           </div>
+
+          {/* Tax Breakdown Preview */}
+          {(() => {
+            const saleRateNum = parseFloat(form.saleRate) || 0;
+            const gstNum = Math.max(0, parseFloat(form.gstRate) || 0);
+            const cgstPct = gstNum / 2;
+            const sgstPct = gstNum / 2;
+            const taxPerUnit = saleRateNum * (gstNum / 100);
+            const grossTotal = saleRateNum + taxPerUnit;
+            return (
+              <div className="bg-blue-50/60 border border-blue-200/80 rounded-xl p-3 text-xs space-y-1.5">
+                <div className="flex items-center justify-between text-blue-950 font-semibold">
+                  <span>GST Tax Breakdown ({gstNum}%):</span>
+                  <span className="font-mono font-bold text-blue-900 text-[11px]">
+                    CGST {cgstPct}% + SGST {sgstPct}%
+                  </span>
+                </div>
+                <div className="grid grid-cols-3 gap-2 text-center pt-1 border-t border-blue-200/60 text-[11px]">
+                  <div>
+                    <span className="text-zinc-500 block text-[10px]">Taxable Unit Rate</span>
+                    <span className="font-bold text-zinc-800">{formatCurrency(saleRateNum)}</span>
+                  </div>
+                  <div>
+                    <span className="text-zinc-500 block text-[10px]">GST Tax ({gstNum}%)</span>
+                    <span className="font-bold text-orange-600">+{formatCurrency(taxPerUnit)}</span>
+                  </div>
+                  <div>
+                    <span className="text-zinc-500 block text-[10px]">Gross Selling Price</span>
+                    <span className="font-bold text-emerald-700">{formatCurrency(grossTotal)}</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
           <div className="grid grid-cols-3 gap-3">
             {[
               { label: "Unit cost (₹)", key: "unitCost" },

@@ -20,9 +20,14 @@ export async function createGstInvoice(formData: FormData) {
   const items = JSON.parse(formData.get("items") as string) as Array<{
     productId: string;
     productName: string;
+    hsnCode?: string;
+    gstRate?: number;
     qty: number;
     rate: number;
     amount: number;
+    cgstAmount?: number;
+    sgstAmount?: number;
+    totalAmount?: number;
   }>;
   if (!items?.length) return { error: "At least one item required" };
 

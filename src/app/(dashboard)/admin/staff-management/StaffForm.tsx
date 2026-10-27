@@ -11,6 +11,7 @@ import { Modal } from "@/components/ui/Modal";
 
 export type FormState = {
   name: string; email: string; phone: string; role: string; password: string;
+  loginPin: string;
   customRole: string;
   customRoleId: string;
   bankAccountNo: string; bankName: string; ifscCode: string;
@@ -23,6 +24,7 @@ export type FormState = {
 
 export const EMPTY_FORM: FormState = {
   name: "", email: "", phone: "", role: "STAFF", password: "",
+  loginPin: "",
   customRole: "",
   customRoleId: "",
   bankAccountNo: "", bankName: "", ifscCode: "",
@@ -233,6 +235,10 @@ export function StaffForm({ form, setForm, error, isPending, onCancel, submitLab
           setLocalError(pwCheck.message);
           return false;
         }
+      }
+      if (form.loginPin.trim() && !/^\d{4,6}$/.test(form.loginPin.trim())) {
+        setLocalError("Security PIN must be 4 to 6 numbers only (e.g. 1234 or 123456)");
+        return false;
       }
     }
     if (currentStep === 2) {
@@ -552,6 +558,28 @@ export function StaffForm({ form, setForm, error, isPending, onCancel, submitLab
                   {showPwd ? <EyeOff className="w-4 h-4"/> : <Eye className="w-4 h-4"/>}
                 </button>
               </div>
+            </div>
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className={lbl} style={{ ...lblColor, marginBottom: 0 }}>
+                  Security Login PIN (Numbers only) {isEdit ? "(leave blank to keep current)" : "(Optional)"}
+                </label>
+                <span className="text-[11px] text-zinc-400 font-medium">4–6 digits</span>
+              </div>
+              <input
+                type="password"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                maxLength={6}
+                value={form.loginPin}
+                onChange={(e) => setForm({ ...form, loginPin: e.target.value.replace(/\D/g, "").slice(0, 6) })}
+                placeholder="e.g. 1234 or 582914"
+                className={`${inp} font-mono tracking-widest`}
+                autoComplete="off"
+              />
+              <p className="text-[11px] text-zinc-500 mt-1">
+                Enables this staff member to sign in with their phone/email and numeric PIN without typing a complex password.
+              </p>
             </div>
           </div>
         </div>

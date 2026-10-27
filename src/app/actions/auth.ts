@@ -32,6 +32,7 @@ export type LoginState = {
   error?: string;
   success?: boolean;
   requires2FA?: boolean;
+  email?: string;
 };
 
 // ── Shared helper: issue tokens + set cookies ─────────────────────────────────
@@ -129,7 +130,104 @@ export async function loginAction(
       maxAge:   5 * 60,
       path:     "/",
     });
-    return { requires2FA: true };
+    cookieStore.set("pending_2fa_email", user.email, {
+      httpOnly: false,
+      secure:   IS_PROD,
+      sameSite: "lax",
+      maxAge:   5 * 60,
+      path:     "/",
+    });
+    return { requires2FA: true, email: user.email };
+  }
+
+  await issueSession({
+    user: { ...user, agencyId: user.agencyId ?? null, agencySlug: user.agency?.slug ?? null },
+    ip,
+    userAgent,
+  });
+  redirect(getRoleDashboard(user.role));
+}
+
+// ── Step 1B: PIN-based Login (Identifier + 4-6 digit numeric PIN) ───────────────
+export async function loginWithPinAction(
+  _prevState: LoginState,
+  formData: FormData
+): Promise<LoginState> {
+  const headersList = await headers();
+  const ip        = headersList.get("x-forwarded-for") ?? headersList.get("x-real-ip") ?? "unknown";
+  const userAgent = headersList.get("user-agent") ?? "unknown";
+  const identifier = ((formData.get("identifier") as string) ?? "").trim();
+  const pin        = ((formData.get("pin") as string) ?? "").trim();
+
+  if (!identifier) {
+    return { error: "Please enter your mobile number or email address." };
+  }
+
+  // Strict check: PIN must be numbers only, 4 to 6 digits
+  if (!pin || !/^\d{4,6}$/.test(pin)) {
+    return { error: "PIN must be between 4 and 6 numbers only." };
+  }
+
+  const cleanId = identifier.toLowerCase();
+  const phone10 = cleanId.replace(/\D/g, "").slice(-10);
+  const isPhone = cleanId.replace(/\D/g, "").length >= 10;
+
+  const limitKey = `pin_login:${ip}:${cleanId}`;
+  if (!checkRateLimit(limitKey, 5, 15 * 60_000)) {
+    return { error: "Too many failed attempts. Please try again in 15 minutes." };
+  }
+
+  const user = await prisma.user.findFirst({
+    where: {
+      OR: isPhone
+        ? [{ phone: phone10 }, { phone: `+91${phone10}` }, { phone: `91${phone10}` }]
+        : [{ email: cleanId }],
+    },
+    select: {
+      id: true, email: true, name: true, role: true,
+      customRole: true, customRoleId: true,
+      agencyId: true, isActive: true, loginPin: true,
+      twoFactorEnabled: true,
+      agency: { select: { slug: true, status: true } },
+    },
+  });
+
+  if (!user || !user.isActive) {
+    return { error: "Invalid mobile number/email or PIN." };
+  }
+
+  if (user.agency && user.agency.status !== "ACTIVE") {
+    redirect("/maintenance");
+  }
+
+  if (!user.loginPin) {
+    return { error: "No PIN has been configured for this account. Please sign in with your password." };
+  }
+
+  const valid = await bcrypt.compare(pin, user.loginPin);
+  if (!valid) {
+    return { error: "Invalid mobile number/email or PIN." };
+  }
+
+  resetRateLimit(limitKey);
+
+  if (user.twoFactorEnabled) {
+    const cookieStore = await cookies();
+    cookieStore.set("pending_2fa", user.id, {
+      httpOnly: true,
+      secure:   IS_PROD,
+      sameSite: "strict",
+      maxAge:   5 * 60,
+      path:     "/",
+    });
+    cookieStore.set("pending_2fa_email", user.email, {
+      httpOnly: false,
+      secure:   IS_PROD,
+      sameSite: "lax",
+      maxAge:   5 * 60,
+      path:     "/",
+    });
+    return { requires2FA: true, email: user.email };
   }
 
   await issueSession({
@@ -151,10 +249,28 @@ export async function verify2FALogin(
   const cookieStore = await cookies();
 
   const userId = cookieStore.get("pending_2fa")?.value;
-  if (!userId) return { error: "Session expired. Please sign in again." };
+  const pendingEmail = cookieStore.get("pending_2fa_email")?.value;
+  if (!userId) {
+    return { error: "Verification session expired. Please sign in with your email and password again." };
+  }
+
+  const limitKey = `2fa:${userId}:${ip}`;
+  if (!checkRateLimit(limitKey, 5, 15 * 60_000)) {
+    return {
+      error: "Too many failed 2FA attempts. For security, please wait 15 minutes before trying again.",
+      email: pendingEmail,
+    };
+  }
 
   const token     = (formData.get("token") as string)?.trim() ?? "";
   const useBackup = formData.get("useBackup") === "true";
+
+  if (!token) {
+    return {
+      error: useBackup ? "Please enter your backup code." : "Please enter the 6-digit code from Google Authenticator.",
+      email: pendingEmail,
+    };
+  }
 
   const user = await prisma.user.findUnique({
     where: { id: userId },
@@ -173,12 +289,18 @@ export async function verify2FALogin(
 
   if (user.agency && user.agency.status !== "ACTIVE") {
     cookieStore.delete("pending_2fa");
+    cookieStore.delete("pending_2fa_email");
     redirect("/maintenance");
   }
 
   if (useBackup) {
     const matchedHash = await checkBackupCode(token, user.twoFactorBackupCodes);
-    if (!matchedHash) return { error: "Invalid backup code." };
+    if (!matchedHash) {
+      return {
+        error: "Invalid backup code. Ensure it is entered accurately (e.g. XXXX-XXXX). Each backup code can only be used once.",
+        email: user.email,
+      };
+    }
     // Consume it
     await prisma.user.update({
       where: { id: userId },
@@ -186,17 +308,31 @@ export async function verify2FALogin(
     });
   } else {
     if (!user.twoFactorSecret || !verifyTOTP(user.twoFactorSecret, token)) {
-      return { error: "Invalid code. Check your authenticator app." };
+      return {
+        error: "Invalid 6-digit code. Please verify that your device clock is set to automatic and enter the current code from your authenticator app.",
+        email: user.email,
+      };
     }
   }
 
+  resetRateLimit(limitKey);
   cookieStore.delete("pending_2fa");
+  cookieStore.delete("pending_2fa_email");
+
   await issueSession({
     user: { ...user, agencyId: user.agencyId ?? null, agencySlug: user.agency?.slug ?? null },
     ip,
     userAgent,
   });
   redirect(getRoleDashboard(user.role));
+}
+
+// ── Cancel 2FA and return to Login ───────────────────────────────────────────
+export async function cancel2FALoginAction() {
+  const cookieStore = await cookies();
+  cookieStore.delete("pending_2fa");
+  cookieStore.delete("pending_2fa_email");
+  return { success: true };
 }
 
 // ── Logout ────────────────────────────────────────────────────────────────────

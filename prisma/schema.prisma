@@ -232,6 +232,12 @@ model Agency {
 
   // Delivery Count Requests
   deliveryCountRequests   DeliveryCountRequest[]
+
+  // Daily Stock Register
+  dailyStockRegisters     DailyStockRegister[]
+
+  // Security Credential Change Requests
+  securityRequests        SecurityChangeRequest[]
 }
 
 model User {
@@ -255,7 +261,8 @@ model User {
   ifscCode       String?  // IFSC code
   aadhaarNo      String?  // 12-digit Aadhaar number (AES-256-GCM encrypted)
   panNo          String?  // 10-char PAN card number (AES-256-GCM encrypted)
-  photoBase64    String?  @db.Text  // Base64-encoded profile photo (thumbnail)
+  photoBase64    String?  @db.Text  // Base64-encoded profile photo (thumbnail fallback)
+  avatarUrl      String?  // Cloudinary profile photo URL
 
   // Security & session tracking
   passwordChangedAt   DateTime?  // Invalidates tokens issued before this time
@@ -263,6 +270,7 @@ model User {
   lastLoginIp         String?    // IP address of last login
 
   // ── Phase 1: User security upgrades ────────────────────────
+  loginPin             String?                 // Hashed 4-6 digit numeric login PIN (bcrypt)
   failedLoginAttempts  Int       @default(0)   // Resets to 0 on successful login
   lockedUntil          DateTime?               // Account locked until this timestamp
   twoFactorSecret      String?                 // TOTP base32 secret (Phase 3 2FA)
@@ -337,6 +345,10 @@ model User {
   requestedDeliveryCounts  DeliveryCountRequest[] @relation("DCR_RequestedBy")
   reviewedDeliveryCounts   DeliveryCountRequest[] @relation("DCR_ReviewedBy")
   fulfilledDeliveryCounts  DeliveryCountRequest[] @relation("DCR_FulfilledBy")
+
+  // Security Credential Change Requests
+  securityRequests         SecurityChangeRequest[] @relation("UserSecurityRequests")
+  reviewedSecurityRequests SecurityChangeRequest[] @relation("AdminReviewedSecurityRequests")
 }
 
 model Product {
@@ -358,6 +370,10 @@ model Product {
   // ── Phase 1: GST Quick Win ──────────────────────────────────
   hsnCode    String?  // HSN code for GST (e.g. "2711" for LPG cylinders)
   gstRate    Float    @default(5) // GST % applicable (default 5% for LPG)
+
+  // ── Stock limits set by agency owner ─────────────────────────
+  minStock   Int?     @default(0) // Minimum stock limit / reorder threshold set by agency owner
+  maxStock   Int?     @default(0) // Maximum stock limit / capacity cap set by agency owner
 
   stockRecords       StockRecord[]
   deliveryRecords    DeliveryRecord[]
@@ -471,6 +487,25 @@ model StockRecord {
   closingStock Int      @default(0)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+}
+
+model DailyStockRegister {
+  id              String   @id @default(cuid())
+  date            DateTime
+  agencyId        String
+  agency          Agency   @relation(fields: [agencyId], references: [id])
+  cashNotes       Json?    // Array/Object of cash notes denominations: { n2000, n500, n200, n100, n50, n20, n10, coins, total }
+  physicalStock   Json?    // Manual count of full & empty cylinders entered for physical audit
+  stockLimits     Json?    // Limits set by agency owner: { [categoryKey]: { minStock: number, maxStock: number } }
+  godownExpenses  Json?    // Optional daily godown expenses (Hamali load, tempo, etc.)
+  notes           String?
+  status          String   @default("OPEN") // OPEN | CLOSED | VERIFIED
+  submittedById   String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([agencyId, date])
+  @@index([agencyId, date])
 }
 
 model DailySummary {
@@ -718,6 +753,7 @@ model DailyClosing {
   kmBasedExtra        Float                  @default(0)
   grandExpected       Float                  @default(0)
   cashOnHand          Float                  @default(0)  // actual physical cash counted by manager
+  cashDenominations   Json?                  @default("[]") // Note and coin counts
   shortageAmount      Float                  @default(0)
   excessAmount        Float                  @default(0)
   cashVerified        Boolean                @default(false)
@@ -757,6 +793,7 @@ model DailyClosingEmployee {
   kmBasedExtra    Float        @default(0)   // additional due to distance pricing
   expectedTotal   Float        @default(0)   // system-calculated
   actualCashGiven Float        @default(0)   // physically given to manager
+  cashDenominations Json?      @default("[]") // [{ denomination, count, total, type, label }]
   shortageAmount  Float        @default(0)
   excessAmount    Float        @default(0)
   notes           String?
@@ -766,8 +803,17 @@ model DailyClosingEmployee {
   isOfficeSale          Boolean  @default(false)
   editedByManagerId     String?
   editedAt              DateTime?
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+
+  // Multi-step Closing Flow (Delivery Boy -> Manager -> Admin)
+  submissionStatus      String    @default("PENDING") // PENDING, SUBMITTED_TO_MANAGER, VERIFIED_BY_MANAGER, APPROVED
+  submittedAt           DateTime?
+  managerVerifiedAt     DateTime?
+  adminConfirmedAt      DateTime?
+  shortageAddedToUdhari Boolean   @default(false)
+  salaryAdvanceId       String?
+
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 }
 
 model DemoRequest {
@@ -1809,3 +1855,42 @@ model DeliveryCountRequest {
   @@index([agencyId, date])
   @@index([requestedById])
 }
+
+// ── Security Credential Change Request Workflow ─────────────
+
+enum SecurityRequestType {
+  CHANGE_PASSWORD
+  CHANGE_PIN
+}
+
+enum SecurityRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  COMPLETED
+  EXPIRED
+}
+
+model SecurityChangeRequest {
+  id                String                @id @default(cuid())
+  userId            String
+  user              User                  @relation("UserSecurityRequests", fields: [userId], references: [id], onDelete: Cascade)
+  agencyId          String?
+  agency            Agency?               @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  type              SecurityRequestType   // CHANGE_PASSWORD or CHANGE_PIN
+  status            SecurityRequestStatus @default(PENDING)
+  userNote          String?               // Optional note/reason from user
+  adminResponseNote String?               // Reason from admin if rejected / note if approved
+  reviewedById      String?               // Admin User ID
+  reviewedBy        User?                 @relation("AdminReviewedSecurityRequests", fields: [reviewedById], references: [id])
+  reviewedAt        DateTime?
+  approvalToken     String?               @unique // One-time secure token valid for 24h upon approval
+  expiresAt         DateTime?
+  completedAt       DateTime?
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+
+  @@index([userId, status])
+  @@index([agencyId, status])
+}
+

@@ -23,7 +23,10 @@ import {
   permanentDeleteTripLog,
 } from "@/app/actions/delivery-vehicles";
 import { addCylinderType } from "@/app/actions/godown";
-import { fulfillDeliveryCountRequest } from "@/app/actions/delivery-count-requests";
+import {
+  fulfillDeliveryCountRequest,
+  reviewDeliveryCountRequest,
+} from "@/app/actions/delivery-count-requests";
 import { useGodownGps } from "@/hooks/useGodownGps";
 import { LocationStatusCard } from "@/components/ui/GpsStatusBox";
 import type { GodownDeliveryRequest } from "../../godown-keeper/delivery-requests/DeliveryRequestsClient";
@@ -233,6 +236,18 @@ export function InternalVehiclesClient({
       } else {
         toast.success(`Vehicle successfully loaded & dispatched for ${loadingModalRequest.deliveryBoy.name}!`);
         setLoadingModalRequest(null);
+        router.refresh();
+      }
+    });
+  };
+
+  const handleAcceptDriverRequest = (reqId: string, driverName?: string) => {
+    startTransition(async () => {
+      const res = await reviewDeliveryCountRequest(reqId, "APPROVED");
+      if (res.error) {
+        toast.error(res.error);
+      } else {
+        toast.success(`Loading request accepted for ${driverName || "vehicle"}! Ready to load.`);
         router.refresh();
       }
     });
@@ -951,11 +966,31 @@ export function InternalVehiclesClient({
 
                   if (driverReq.status === "PENDING") {
                     return (
-                      <div className="mt-3 p-2 rounded-lg bg-amber-50 border border-amber-200 text-xs flex items-center justify-between">
-                        <span className="font-semibold text-amber-800 flex items-center gap-1">
-                          <Clock className="w-3.5 h-3.5 animate-pulse" /> Awaiting Admin
-                        </span>
-                        <span className="font-bold text-amber-900">{driverReq.totalRequested} cyl</span>
+                      <div className="mt-3 p-2.5 rounded-lg bg-amber-50 border border-amber-200 text-xs space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="font-semibold text-amber-800 flex items-center gap-1">
+                            <Clock className="w-3.5 h-3.5 animate-pulse" /> Pending Request
+                          </span>
+                          <span className="font-bold text-amber-900 bg-white px-2 py-0.5 rounded border border-amber-200">
+                            {driverReq.totalRequested} cyl
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={() => handleAcceptDriverRequest(driverReq.id, v.assignedTo?.name)}
+                            disabled={isPending}
+                            className="flex-1 btn text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white py-1 px-2 rounded-md flex items-center justify-center gap-1 shadow-xs transition disabled:opacity-50"
+                          >
+                            <CheckCircle2 className="w-3 h-3" /> Accept
+                          </button>
+                          <button
+                            onClick={() => openLoadModal(driverReq)}
+                            disabled={isPending}
+                            className="flex-1 btn text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white py-1 px-2 rounded-md flex items-center justify-center gap-1 shadow-xs transition disabled:opacity-50"
+                          >
+                            <Truck className="w-3 h-3" /> Load
+                          </button>
+                        </div>
                       </div>
                     );
                   }

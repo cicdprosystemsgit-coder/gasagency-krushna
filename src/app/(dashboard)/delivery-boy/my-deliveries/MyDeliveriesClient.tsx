@@ -1499,7 +1499,7 @@ function Step2DeliveryDetails({
         <div className="rounded-xl p-4 space-y-3" style={{ background: "#F8F8F8", border: "1px solid #E4E4E7" }}>
           <div className="flex items-center justify-between">
             <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "#71717A" }}>
-              ⑦ Delivery Proof Photos
+              ⑦ Delivery Proof Photos (Optional)
             </p>
             <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1">
               <MapPin className="w-3 h-3 text-emerald-600" />
@@ -1534,14 +1534,12 @@ function Step2DeliveryDetails({
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <PhotoSlot
               label="1. Payment Receipt"
-              required
               value={proofPhotos.paymentReceiptUrl}
               uploading={photoUploading.payment_receipt}
               onCapture={(file) => onUploadPhoto(file, "payment_receipt")}
             />
             <PhotoSlot
               label="2. Customer Card Entry"
-              required
               value={proofPhotos.customerCardUrl}
               uploading={photoUploading.customer_card}
               onCapture={(file) => onUploadPhoto(file, "customer_card")}
@@ -1835,36 +1833,40 @@ function Step3Review({
 
       {/* Proof Photo Thumbnails preview */}
       <div className="mt-4 p-3 rounded-xl bg-gray-50 border border-gray-200">
-        <p className="text-[11px] font-bold uppercase tracking-wider text-gray-500 mb-2">📸 Verified Proof Photos Attached (Tap to inspect)</p>
-        <div className="grid grid-cols-3 gap-2">
-          {proofPhotos.paymentReceiptUrl && (
-            <div
-              className="rounded-lg overflow-hidden border border-gray-300 relative aspect-video bg-black cursor-pointer hover:opacity-90 transition-opacity"
-              onClick={() => setSelectedReviewPhoto({ url: proofPhotos.paymentReceiptUrl!, label: "Payment Receipt" })}
-            >
-              <img src={getPhotoDisplayUrl(proofPhotos.paymentReceiptUrl)} alt="Receipt" className="w-full h-full object-contain" />
-              <span className="absolute bottom-0 inset-x-0 bg-black/70 text-white text-[9px] font-medium text-center py-0.5">Receipt</span>
-            </div>
-          )}
-          {proofPhotos.customerCardUrl && (
-            <div
-              className="rounded-lg overflow-hidden border border-gray-300 relative aspect-video bg-black cursor-pointer hover:opacity-90 transition-opacity"
-              onClick={() => setSelectedReviewPhoto({ url: proofPhotos.customerCardUrl!, label: "Customer Card Entry" })}
-            >
-              <img src={getPhotoDisplayUrl(proofPhotos.customerCardUrl)} alt="Card" className="w-full h-full object-contain" />
-              <span className="absolute bottom-0 inset-x-0 bg-black/70 text-white text-[9px] font-medium text-center py-0.5">Customer Card</span>
-            </div>
-          )}
-          {proofPhotos.additionalImageUrl && (
-            <div
-              className="rounded-lg overflow-hidden border border-gray-300 relative aspect-video bg-black cursor-pointer hover:opacity-90 transition-opacity"
-              onClick={() => setSelectedReviewPhoto({ url: proofPhotos.additionalImageUrl!, label: "Extra Photo" })}
-            >
-              <img src={getPhotoDisplayUrl(proofPhotos.additionalImageUrl)} alt="Extra" className="w-full h-full object-contain" />
-              <span className="absolute bottom-0 inset-x-0 bg-black/70 text-white text-[9px] font-medium text-center py-0.5">Extra Photo</span>
-            </div>
-          )}
-        </div>
+        <p className="text-[11px] font-bold uppercase tracking-wider text-gray-500 mb-2">📸 Delivery Proof Photos (Optional)</p>
+        {(proofPhotos.paymentReceiptUrl || proofPhotos.customerCardUrl || proofPhotos.additionalImageUrl) ? (
+          <div className="grid grid-cols-3 gap-2">
+            {proofPhotos.paymentReceiptUrl && (
+              <div
+                className="rounded-lg overflow-hidden border border-gray-300 relative aspect-video bg-black cursor-pointer hover:opacity-90 transition-opacity"
+                onClick={() => setSelectedReviewPhoto({ url: proofPhotos.paymentReceiptUrl!, label: "Payment Receipt" })}
+              >
+                <img src={getPhotoDisplayUrl(proofPhotos.paymentReceiptUrl)} alt="Receipt" className="w-full h-full object-contain" />
+                <span className="absolute bottom-0 inset-x-0 bg-black/70 text-white text-[9px] font-medium text-center py-0.5">Receipt</span>
+              </div>
+            )}
+            {proofPhotos.customerCardUrl && (
+              <div
+                className="rounded-lg overflow-hidden border border-gray-300 relative aspect-video bg-black cursor-pointer hover:opacity-90 transition-opacity"
+                onClick={() => setSelectedReviewPhoto({ url: proofPhotos.customerCardUrl!, label: "Customer Card Entry" })}
+              >
+                <img src={getPhotoDisplayUrl(proofPhotos.customerCardUrl)} alt="Card" className="w-full h-full object-contain" />
+                <span className="absolute bottom-0 inset-x-0 bg-black/70 text-white text-[9px] font-medium text-center py-0.5">Customer Card</span>
+              </div>
+            )}
+            {proofPhotos.additionalImageUrl && (
+              <div
+                className="rounded-lg overflow-hidden border border-gray-300 relative aspect-video bg-black cursor-pointer hover:opacity-90 transition-opacity"
+                onClick={() => setSelectedReviewPhoto({ url: proofPhotos.additionalImageUrl!, label: "Extra Photo" })}
+              >
+                <img src={getPhotoDisplayUrl(proofPhotos.additionalImageUrl)} alt="Extra" className="w-full h-full object-contain" />
+                <span className="absolute bottom-0 inset-x-0 bg-black/70 text-white text-[9px] font-medium text-center py-0.5">Extra Photo</span>
+              </div>
+            )}
+          </div>
+        ) : (
+          <p className="text-[11px] text-gray-400 italic">No photos attached (optional)</p>
+        )}
       </div>
 
       {selectedReviewPhoto && (
@@ -2124,16 +2126,7 @@ export function MyDeliveriesClient({
         return;
       }
     }
-    // Photo validation — both mandatory photos required
-    if (!proofPhotos.paymentReceiptUrl) {
-      setFormError("📸 Payment Receipt photo is required. Please take a photo of the payment receipt.");
-      return;
-    }
-    if (!proofPhotos.customerCardUrl) {
-      setFormError("📋 Customer Card Entry photo is required. Please photograph the gas book entry.");
-      return;
-    }
-    // Location is optional — proceed regardless of GPS status
+    // Photo validation — all photos are optional
     setFormError("");
     setStep(3);
   }

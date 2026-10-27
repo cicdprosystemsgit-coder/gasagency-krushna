@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ChevronDown, ChevronUp, User, DollarSign, AlertCircle, FileText, CheckCircle } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
+import { CashDenominationCounter, CashDenominationItem } from "./CashDenominationCounter";
 
 export interface CylinderBreakdownItem {
   productId: string;
@@ -27,7 +28,13 @@ export interface EmployeeClosingData {
   kmBasedExtra: number;
   expectedTotal: number;
   actualCashGiven: number;
+  cashDenominations?: CashDenominationItem[] | null;
   notes: string;
+  submissionStatus?: string;
+  submittedAt?: string | null;
+  managerVerifiedAt?: string | null;
+  adminConfirmedAt?: string | null;
+  shortageAddedToUdhari?: boolean;
 }
 
 interface DailyClosingEmployeePanelProps {
@@ -72,6 +79,37 @@ export function DailyClosingEmployeePanel({
     });
   };
 
+  // Recalculates expected totals and totalDelivered when quantity sold is edited
+  const handleSoldQtyChange = (productId: string, baseRate: number, val: string) => {
+    const numQty = parseInt(val) || 0;
+    const updatedBreakdown = employee.cylinderBreakdown.map((item) => {
+      if (item.productId === productId && item.baseRate === baseRate) {
+        const effectiveRate = item.kmRate && item.kmRate > 0 ? item.kmRate : item.baseRate;
+        const kmExtra = Math.max(0, effectiveRate - item.baseRate) * numQty;
+        const totalAmt = effectiveRate * numQty;
+        return {
+          ...item,
+          soldQty: numQty,
+          kmExtra,
+          totalAmt,
+        };
+      }
+      return item;
+    });
+
+    const kmBasedExtra = updatedBreakdown.reduce((sum, item) => sum + item.kmExtra, 0);
+    const expectedTotal = updatedBreakdown.reduce((sum, item) => sum + item.totalAmt, 0);
+    const totalDelivered = updatedBreakdown.reduce((sum, item) => sum + item.soldQty, 0);
+
+    onChange({
+      ...employee,
+      cylinderBreakdown: updatedBreakdown,
+      totalDelivered,
+      kmBasedExtra,
+      expectedTotal,
+    });
+  };
+
   const handleFieldChange = (field: keyof EmployeeClosingData, val: any) => {
     onChange({
       ...employee,
@@ -97,7 +135,24 @@ export function DailyClosingEmployeePanel({
             <User className="w-5 h-5" />
           </div>
           <div>
-            <h3 className="font-bold text-slate-800 text-sm">{employee.deliveryBoyName}</h3>
+            <div className="flex items-center gap-2">
+              <h3 className="font-bold text-slate-800 text-sm">{employee.deliveryBoyName}</h3>
+              {employee.submissionStatus === "SUBMITTED_TO_MANAGER" && (
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-700">
+                  Submitted by Delivery Boy
+                </span>
+              )}
+              {employee.submissionStatus === "VERIFIED_BY_MANAGER" && (
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-700">
+                  Verified by Manager
+                </span>
+              )}
+              {employee.submissionStatus === "APPROVED" && (
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700">
+                  Confirmed by Admin
+                </span>
+              )}
+            </div>
             <p className="text-xs text-slate-400 mt-0.5">
               Delivered: {employee.totalDelivered} | Cash: {formatCurrency(employee.cashCollected)} | Udhari: {formatCurrency(employee.udhariAmount)}
             </p>
@@ -169,7 +224,19 @@ export function DailyClosingEmployeePanel({
                           {item.productName}
                           <span className="block text-[10px] text-slate-400 font-medium">Rate: {formatCurrency(item.baseRate)}</span>
                         </td>
-                        <td className="px-4 py-3 text-center font-bold text-slate-800">{item.soldQty}</td>
+                        <td className="px-4 py-3 text-center">
+                          {readOnly ? (
+                            <span className="font-bold text-slate-800">{item.soldQty}</span>
+                          ) : (
+                            <input
+                              type="number"
+                              min="0"
+                              value={item.soldQty}
+                              onChange={(e) => handleSoldQtyChange(item.productId, item.baseRate, e.target.value)}
+                              className="w-16 text-center px-1.5 py-1 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 font-bold text-slate-800 bg-slate-50/30"
+                            />
+                          )}
+                        </td>
                         <td className="px-4 py-3 text-right text-slate-500">{formatCurrency(item.baseRate)}</td>
                         <td className="px-4 py-3 text-right">
                           {readOnly ? (
@@ -286,6 +353,34 @@ export function DailyClosingEmployeePanel({
                 />
               </div>
             </div>
+
+            {isShortage && (
+              <div className="md:col-span-3 p-3 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-2.5">
+                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <div className="text-xs text-amber-900">
+                  <span className="font-bold">Cash Shortage of {formatCurrency(Math.abs(discrepancy))}:</span>
+                  <p className="mt-0.5 text-[11px] text-amber-700">
+                    This cash shortage will be added directly into <strong>{employee.deliveryBoyName}</strong>'s Udhari (Advance) account upon Manager & Admin confirmation.
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Cash Denominations (Notes & Coins Count) */}
+          <div className="border-t border-slate-100 pt-3">
+            <CashDenominationCounter
+              initialDenominations={employee.cashDenominations}
+              readOnly={readOnly}
+              defaultExpanded={false}
+              onChange={(updatedDenoms, totalAmount) => {
+                onChange({
+                  ...employee,
+                  cashDenominations: updatedDenoms,
+                  actualCashGiven: totalAmount,
+                });
+              }}
+            />
           </div>
 
           {/* Delivery Boy details and notes */}

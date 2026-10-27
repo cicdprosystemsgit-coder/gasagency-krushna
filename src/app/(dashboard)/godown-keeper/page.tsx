@@ -13,6 +13,7 @@ import { getTranslations } from "next-intl/server";
 
 import { checkPermission } from "@/lib/rbac";
 import { PunchWidget } from "@/components/ui/PunchWidget";
+import { ActivityFeedPanel } from "@/components/godown-keeper/ActivityFeedPanel";
 
 export default async function GodownKeeperDashboard() {
   const session = await getSession();
@@ -38,7 +39,8 @@ export default async function GodownKeeperDashboard() {
     totalVehicles,
     products,
     approvedDeliveryLoads,
-    godownMovements
+    godownMovements,
+    pendingApprovalsTotal,
   ] = await Promise.all([
     // Arrivals submitted by today
     hasGodown
@@ -51,7 +53,8 @@ export default async function GodownKeeperDashboard() {
       ? prisma.godownRecord.findMany({
           where: { agencyId, isDeleted: false },
           orderBy: { entryDate: "desc" },
-          take: 5
+          take: 20,
+          include: { submittedBy: { select: { name: true } } },
         })
       : Promise.resolve([]),
     // Approved arrivals for stock calculation
@@ -92,9 +95,9 @@ export default async function GodownKeeperDashboard() {
     prisma.product.findMany({
       where: { agencyId, isCylinder: true, isActive: true, isDeleted: false }
     }),
-    // Approved delivery load requests waiting for vehicle loading
+    // Delivery load requests (APPROVED and PENDING) waiting for godown action
     prisma.deliveryCountRequest.findMany({
-      where: { agencyId, status: "APPROVED" },
+      where: { agencyId, status: { in: ["APPROVED", "PENDING"] } },
       include: {
         requestedBy: {
           select: {
@@ -110,13 +113,21 @@ export default async function GodownKeeperDashboard() {
       where: { agencyId },
       orderBy: { date: "desc" },
     }),
+    // Pending approvals count
+    hasGodown
+      ? prisma.godownRecord.count({
+          where: { agencyId, isDeleted: false, status: "PENDING" }
+        })
+      : Promise.resolve(0),
   ]);
 
-  const pendingDeliveryLoads = approvedDeliveryLoads || [];
+  const allDeliveryLoads = approvedDeliveryLoads || [];
+  const pendingDeliveryLoads = allDeliveryLoads.filter((r) => r.status === "APPROVED");
+  const pendingRequestsToAccept = allDeliveryLoads.filter((r) => r.status === "PENDING");
 
   const activeTrips = todayTrips.filter((t) => t.tripStatus === "OUT_FOR_DELIVERY" || t.tripStatus === "LOADED");
   const completedTripsCount = todayTrips.filter((t) => t.tripStatus === "RETURNED").length;
-  const pendingApprovalsCount = recentRecords.filter((r) => r.status === "PENDING").length;
+  const pendingApprovalsCount = pendingApprovalsTotal;
 
   // ── Calculate Live Cylinder Stocks ──
   const sortedProducts = [...products].sort((a, b) => naturalSortCompare(a.name, b.name));
@@ -226,13 +237,14 @@ export default async function GodownKeeperDashboard() {
 
     const filledStock = Math.max(0, (filledReceived + manualReceived + unsoldReturnedFromVehicles) - (loadedOnVehicles + manualDispatched));
     const emptyStock = Math.max(0, emptyReturnedFromVehicles - emptyReturnedToCompany);
+    const totalStock = filledStock + emptyStock;
 
     return {
       id: p.id,
       name: p.name,
       filledStock,
       emptyStock,
-      totalStock: filledStock + emptyStock,
+      totalStock,
     };
   });
 
@@ -273,9 +285,9 @@ export default async function GodownKeeperDashboard() {
               className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-md shadow-emerald-100 hover:shadow-lg transition-all"
             >
               <Truck className="w-4 h-4" /> Vehicle Loading
-              {pendingDeliveryLoads.length > 0 && (
+              {(pendingDeliveryLoads.length > 0 || pendingRequestsToAccept.length > 0) && (
                 <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-white text-emerald-700 font-bold">
-                  {pendingDeliveryLoads.length}
+                  {pendingDeliveryLoads.length + pendingRequestsToAccept.length}
                 </span>
               )}
             </Link>
@@ -290,6 +302,31 @@ export default async function GodownKeeperDashboard() {
           )}
         </div>
       </div>
+
+      {/* Pending Delivery Load Requests Alert Widget */}
+      {pendingRequestsToAccept.length > 0 && (
+        <div className="bg-gradient-to-r from-amber-500 to-orange-600 rounded-2xl p-4 text-white shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-white/15 backdrop-blur-sm flex items-center justify-center text-white shrink-0">
+              <Clock className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="font-bold text-sm">
+                {pendingRequestsToAccept.length} Delivery Load Request{pendingRequestsToAccept.length > 1 ? "s" : ""} Awaiting Your Acceptance
+              </p>
+              <p className="text-xs text-amber-100 mt-0.5">
+                {pendingRequestsToAccept.map((p) => p.requestedBy.name).join(", ")} submitted cylinder requests.
+              </p>
+            </div>
+          </div>
+          <Link
+            href="/godown-keeper/delivery-requests"
+            className="px-4 py-2 bg-white text-amber-900 hover:bg-amber-50 text-xs font-bold rounded-xl transition shadow-xs shrink-0 self-start sm:self-auto"
+          >
+            Review & Accept Now
+          </Link>
+        </div>
+      )}
 
       {/* Vehicle Loading Alert Widget */}
       {pendingDeliveryLoads.length > 0 && (
@@ -390,9 +427,17 @@ export default async function GodownKeeperDashboard() {
                     <p className="text-[12px] text-zinc-400">{t("liveInventoryDesc")}</p>
                   </div>
                 </div>
-                <span className="text-[11px] font-bold px-2 py-1 bg-blue-50 text-blue-600 rounded-full flex items-center gap-1">
-                  <RefreshCw className="w-3 h-3 animate-spin" style={{ animationDuration: "3s" }} /> {t("realtime")}
-                </span>
+                <div className="flex items-center gap-2">
+                  <Link
+                    href="/godown-keeper/stock"
+                    className="text-xs font-bold text-blue-600 hover:text-blue-500 flex items-center gap-1 bg-white border border-blue-100 px-2.5 py-1 rounded-lg hover:border-blue-200 transition-all shadow-xs"
+                  >
+                    Stock Register <ArrowRight className="w-3.5 h-3.5" />
+                  </Link>
+                  <span className="text-[11px] font-bold px-2 py-1 bg-blue-50 text-blue-600 rounded-full flex items-center gap-1">
+                    <RefreshCw className="w-3 h-3 animate-spin" style={{ animationDuration: "3s" }} /> {t("realtime")}
+                  </span>
+                </div>
               </div>
 
               <div className="p-6">
@@ -406,10 +451,20 @@ export default async function GodownKeeperDashboard() {
                     {cylinderStocks.map((stock) => {
                       const filledPercent = stock.totalStock > 0 ? (stock.filledStock / stock.totalStock) * 100 : 0;
                       return (
-                        <div key={stock.id} className="p-4 rounded-xl border border-zinc-100 bg-zinc-50/50 space-y-3.5 hover:border-zinc-200 transition-colors">
+                        <Link
+                          key={stock.id}
+                          href="/godown-keeper/stock"
+                          className="p-4 rounded-xl border border-zinc-200/80 bg-zinc-50/50 space-y-3.5 hover:border-blue-300 hover:shadow-md hover:bg-white transition-all group block"
+                        >
                           <div className="flex justify-between items-start">
-                            <span className="text-[13px] font-bold text-zinc-800 truncate">{stock.name}</span>
-                            <span className="text-[11px] font-bold text-zinc-400 bg-white border border-zinc-100 px-2 py-0.5 rounded-md">
+                            <div>
+                              <span className="text-[13px] font-bold text-zinc-800 group-hover:text-blue-600 transition-colors flex items-center gap-1">
+                                {stock.name}
+                                <ArrowRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                              </span>
+                              <span className="text-[10px] text-zinc-400 font-medium">Click to view daily stock register</span>
+                            </div>
+                            <span className="text-[11px] font-bold text-zinc-500 bg-white border border-zinc-200 px-2 py-0.5 rounded-md shadow-xs">
                               {t("total")}: {stock.totalStock}
                             </span>
                           </div>
@@ -428,7 +483,7 @@ export default async function GodownKeeperDashboard() {
                               </span>
                             </div>
                           </div>
-                        </div>
+                        </Link>
                       );
                     })}
                   </div>
@@ -505,44 +560,13 @@ export default async function GodownKeeperDashboard() {
             </div>
           </div>
 
-          {/* Right Col: Recent Company Supply Logs */}
+          {/* Right Col: Real-time Activity Feed Stream */}
           <div className="space-y-6">
-            <div className="bg-white border border-zinc-200 rounded-2xl overflow-hidden shadow-sm">
-              <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-100 bg-zinc-50/50">
-                <div className="flex items-center gap-2.5">
-                  <div className="p-1.5 rounded-lg bg-emerald-50 text-emerald-600">
-                    <Truck className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h3 className="text-[14px] font-bold text-zinc-800">{t("recentArrivals")}</h3>
-                    <p className="text-[12px] text-zinc-400">{t("recentArrivalsDesc")}</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="p-6 space-y-4">
-                {recentRecords.length === 0 ? (
-                  <p className="text-center py-6 text-xs text-zinc-400 italic">{t("noSupplyLogs")}</p>
-                ) : (
-                  recentRecords.map((r) => (
-                    <div key={r.id} className="flex flex-col gap-2 p-3 rounded-xl border border-zinc-100 hover:border-zinc-200 transition-colors">
-                      <div className="flex justify-between items-center">
-                        <span className="font-mono font-bold text-xs text-zinc-800">{r.vehicleNo}</span>
-                        <StatusBadge status={r.status} />
-                      </div>
-                      <div className="flex justify-between items-center text-[11px] text-zinc-400 font-semibold">
-                        <span>{t("inwardFilled")}: <strong className="text-blue-600">{r.filledCylindersReceived}</strong></span>
-                        <span>{t("outwardEmpty")}: <strong className="text-amber-600">{r.emptyCylindersReturned}</strong></span>
-                      </div>
-                      <div className="text-[10px] text-zinc-400 border-t border-zinc-50 pt-1.5 flex justify-between">
-                        <span>{t("loggedByMe")}</span>
-                        <span>{formatDateTime(r.entryDate)}</span>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
+            <ActivityFeedPanel
+              recentRecords={recentRecords as any}
+              todayTrips={todayTrips as any}
+              deliveryRequests={approvedDeliveryLoads as any}
+            />
 
             {/* Quick Operation Checklist */}
             <div className="bg-gradient-to-br from-zinc-800 to-zinc-900 border border-zinc-900 rounded-2xl p-6 text-white space-y-4 shadow-xl">

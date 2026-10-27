@@ -70,6 +70,8 @@ export async function createGodownEntry(formData: FormData) {
       include: { submittedBy: { select: { name: true } } },
     });
 
+    revalidateGodownPaths();
+
     return {
       record: {
         ...record,
@@ -84,6 +86,17 @@ export async function createGodownEntry(formData: FormData) {
     console.error("[createGodownEntry]", e);
     return { error: "Failed to save entry. Please try again." };
   }
+}
+
+function revalidateGodownPaths() {
+  revalidatePath("/godown-keeper");
+  revalidatePath("/godown-keeper/godown");
+  revalidatePath("/godown-keeper/stock");
+  revalidatePath("/godown-keeper/inventory");
+  revalidatePath("/admin/godown");
+  revalidatePath("/manager/godown");
+  revalidatePath("/admin/inventory");
+  revalidatePath("/manager/inventory");
 }
 
 /* ── Record Exit ─────────────────────────────────────────────────────────────── */
@@ -172,6 +185,8 @@ export async function recordGodownExit(formData: FormData) {
       }
     }
 
+    revalidateGodownPaths();
+
     return {
       record: {
         ...updated,
@@ -251,6 +266,8 @@ export async function approveGodownRecord(id: string) {
       }
     }
 
+    revalidateGodownPaths();
+
     return { success: true };
   } catch (e) {
     console.error("[approveGodownRecord]", e);
@@ -278,6 +295,8 @@ export async function rejectGodownRecord(id: string) {
       where: { id },
       data: { status: "REJECTED" },
     });
+
+    revalidateGodownPaths();
 
     return { success: true };
   } catch (e) {
@@ -369,6 +388,8 @@ export async function updateGodownEntry(id: string, formData: FormData) {
       }
     }
 
+    revalidateGodownPaths();
+
     return {
       record: {
         ...updated,
@@ -452,13 +473,7 @@ export async function softDeleteGodownRecord(id: string): Promise<{ success: boo
       });
     }
 
-    revalidatePath("/admin/godown");
-    revalidatePath("/manager/godown");
-    revalidatePath("/godown-keeper");
-    revalidatePath("/godown-keeper/godown");
-    revalidatePath("/godown-keeper/inventory");
-    revalidatePath("/admin/inventory");
-    revalidatePath("/manager/inventory");
+    revalidateGodownPaths();
     return { success: true };
   } catch (err: any) {
     console.error("[softDeleteGodownRecord]", err);
@@ -541,13 +556,7 @@ export async function restoreGodownRecord(id: string): Promise<{ success: boolea
       }
     }
 
-    revalidatePath("/admin/godown");
-    revalidatePath("/manager/godown");
-    revalidatePath("/godown-keeper");
-    revalidatePath("/godown-keeper/godown");
-    revalidatePath("/godown-keeper/inventory");
-    revalidatePath("/admin/inventory");
-    revalidatePath("/manager/inventory");
+    revalidateGodownPaths();
     return {
       success: true,
       record: {
@@ -594,13 +603,7 @@ export async function permanentDeleteGodownRecord(id: string): Promise<{ success
       where: { id },
     });
 
-    revalidatePath("/admin/godown");
-    revalidatePath("/manager/godown");
-    revalidatePath("/godown-keeper");
-    revalidatePath("/godown-keeper/godown");
-    revalidatePath("/godown-keeper/inventory");
-    revalidatePath("/admin/inventory");
-    revalidatePath("/manager/inventory");
+    revalidateGodownPaths();
     return { success: true };
   } catch (err: any) {
     console.error("[permanentDeleteGodownRecord]", err);

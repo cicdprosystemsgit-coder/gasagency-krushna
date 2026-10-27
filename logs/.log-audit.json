@@ -6,9 +6,9 @@
     "auditLog": "D:\\CICD Project\\Gasagency\\gasagency\\logs\\.log-audit.json",
     "files": [
         {
-            "date": 1789136902370,
-            "name": "D:\\CICD Project\\Gasagency\\gasagency\\logs\\gasagency_logs_20260911.log",
-            "hash": "621718f82b484fe5b35e7c8671cbda055031e58000485534cfc2a444471b4698"
+            "date": 1792151390942,
+            "name": "D:\\CICD Project\\Gasagency\\gasagency\\logs\\gasagency_logs_20261016.log",
+            "hash": "abc47482fd682d6a02db5afb2098a8dd54d805fdbdaa968d9291ac038af62896"
         }
     ],
     "hashType": "sha256"

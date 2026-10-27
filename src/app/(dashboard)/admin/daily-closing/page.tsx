@@ -1,4 +1,4 @@
-﻿import { getSessionWithFeatures, requireFeature } from "@/lib/feature-gate";
+import { getSessionWithFeatures, requireFeature } from "@/lib/feature-gate";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -42,6 +42,9 @@ export default async function DailyClosingPage() {
       createdAt: ec.createdAt.toISOString(),
       updatedAt: ec.updatedAt.toISOString(),
       editedAt: ec.editedAt?.toISOString() || null,
+      submittedAt: ec.submittedAt?.toISOString() || null,
+      managerVerifiedAt: ec.managerVerifiedAt?.toISOString() || null,
+      adminConfirmedAt: ec.adminConfirmedAt?.toISOString() || null,
       cylinderBreakdown: ec.cylinderBreakdown as any,
     })),
   }));

@@ -27,8 +27,8 @@ export async function submitDeliveryCountRequest(data: {
     return { error: "Unauthorized" };
   }
 
-  if (!["DELIVERY_BOY", "ADMIN", "MANAGER"].includes(session.role)) {
-    return { error: "Only delivery boys or managers can submit delivery count requests" };
+  if (!["DELIVERY_BOY", "ADMIN", "MANAGER", "GODOWN_KEEPER"].includes(session.role)) {
+    return { error: "Only delivery boys, godown keepers, or managers can submit delivery count requests" };
   }
 
   if (!data.items || data.items.length === 0) {
@@ -119,7 +119,7 @@ export async function reviewDeliveryCountRequest(
   reviewNote?: string
 ) {
   const session = await getSession();
-  if (!session || !["ADMIN", "MANAGER"].includes(session.role) || !session.agencyId) {
+  if (!session || !["ADMIN", "MANAGER", "GODOWN_KEEPER"].includes(session.role) || !session.agencyId) {
     return { error: "Unauthorized" };
   }
 
@@ -168,7 +168,7 @@ export async function bulkReviewDeliveryCountRequests(
   reviewNote?: string
 ) {
   const session = await getSession();
-  if (!session || !["ADMIN", "MANAGER"].includes(session.role) || !session.agencyId) {
+  if (!session || !["ADMIN", "MANAGER", "GODOWN_KEEPER"].includes(session.role) || !session.agencyId) {
     return { error: "Unauthorized" };
   }
 
@@ -232,8 +232,11 @@ export async function fulfillDeliveryCountRequest(
     });
 
     if (!existing) return { error: "Request not found" };
-    if (existing.status !== DeliveryRequestStatus.APPROVED) {
-      return { error: `Request must be APPROVED before vehicle loading (Current status: ${existing.status})` };
+    if (
+      existing.status !== DeliveryRequestStatus.APPROVED &&
+      existing.status !== DeliveryRequestStatus.PENDING
+    ) {
+      return { error: `Request must be PENDING or APPROVED before vehicle loading (Current status: ${existing.status})` };
     }
 
     const totalLoaded = (data.fulfilledItems || []).reduce(
@@ -250,12 +253,15 @@ export async function fulfillDeliveryCountRequest(
     }));
 
     const result = await prisma.$transaction(async (tx) => {
-      // 1. Update the delivery count request to FULFILLED
+      // 1. Update the delivery count request to FULFILLED (and mark reviewed if previously PENDING)
       const updated = await tx.deliveryCountRequest.update({
         where: { id },
         data: {
           status: DeliveryRequestStatus.FULFILLED,
           fulfilledById: session.userId,
+          reviewedById: existing.reviewedById || session.userId,
+          reviewedAt: existing.reviewedAt || new Date(),
+          reviewNote: existing.reviewNote || (existing.status === DeliveryRequestStatus.PENDING ? "Accepted & dispatched directly at godown" : null),
           fulfilledItems: (data.fulfilledItems as any) || [],
           totalLoaded,
           fuelLitres: data.fuelLitres != null && !isNaN(Number(data.fuelLitres)) ? Number(data.fuelLitres) : null,
@@ -347,6 +353,8 @@ export async function fulfillDeliveryCountRequest(
     // Revalidate all pages across BOTH old and new flows
     revalidatePath("/godown-keeper/delivery-requests");
     revalidatePath("/godown-keeper/godown");
+    revalidatePath("/godown-keeper/stock");
+    revalidatePath("/godown-keeper/inventory");
     revalidatePath("/godown-keeper");
     revalidatePath("/admin/delivery-requests");
     revalidatePath("/manager/delivery-requests");

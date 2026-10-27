@@ -4,12 +4,13 @@ import { useState, useEffect, useTransition } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { formatDate, formatCurrency } from "@/lib/utils";
-import { Plus, ClipboardCheck, CheckCircle2, ChevronDown, ChevronRight, CheckSquare, Calendar, AlertTriangle, Printer, Edit2 } from "lucide-react";
+import { Plus, ClipboardCheck, CheckCircle2, ChevronDown, ChevronRight, CheckSquare, Calendar, AlertTriangle, AlertCircle, Printer, Edit2 } from "lucide-react";
 import { createDailyClosingWithEmployees, getDeliveryBoysForDate, getOfficeStaffForDate, approveDailyClosing, updateDailyClosingEmployee } from "@/app/actions/daily-closing";
 import { CalendarPicker } from "@/components/ui/CalendarPicker";
 import { DateRangePicker } from "@/components/ui/DateRangePicker";
 import { DailyClosingEmployeePanel, EmployeeClosingData } from "@/components/daily-closing/DailyClosingEmployeePanel";
 import { OfficeSalesPanel, OfficeEmployeeClosingData } from "@/components/daily-closing/OfficeSalesPanel";
+import { CashDenominationCounter, CashDenominationItem } from "@/components/daily-closing/CashDenominationCounter";
 
 interface ClosingEmployee {
   id: string;
@@ -23,10 +24,16 @@ interface ClosingEmployee {
   kmBasedExtra: number;
   expectedTotal: number;
   actualCashGiven: number;
+  cashDenominations?: CashDenominationItem[] | null;
   shortageAmount: number;
   excessAmount: number;
   notes: string | null;
   cylinderBreakdown: any[];
+  submissionStatus?: string;
+  submittedAt?: string | null;
+  managerVerifiedAt?: string | null;
+  adminConfirmedAt?: string | null;
+  shortageAddedToUdhari?: boolean;
 }
 
 interface Closing {
@@ -329,12 +336,23 @@ export function DailyClosingClient({ initialClosings, role }: DailyClosingClient
       kmBasedExtra: ec.kmBasedExtra,
       expectedTotal: ec.expectedTotal,
       actualCashGiven: ec.actualCashGiven,
+      cashDenominations: ec.cashDenominations || [],
       notes: ec.notes || "",
+      submissionStatus: ec.submissionStatus,
+      submittedAt: ec.submittedAt,
+      managerVerifiedAt: ec.managerVerifiedAt,
+      adminConfirmedAt: ec.adminConfirmedAt,
+      shortageAddedToUdhari: ec.shortageAddedToUdhari,
       isOfficeSale: !!(ec as any).isOfficeSale,
       officeTransactionItems: (ec as any).isOfficeSale ? (ec.cylinderBreakdown as any) : [],
     }));
     setEditableEmployees(editable as any[]);
     setEditMode(true);
+  };
+
+  const handleDirectEdit = (closing: Closing) => {
+    setDetailClosing(closing);
+    handleStartEdit(closing);
   };
 
   const handleEditableEmployeeChange = (index: number, updated: EmployeeClosingData) => {
@@ -429,12 +447,24 @@ export function DailyClosingClient({ initialClosings, role }: DailyClosingClient
                       <span className="text-slate-500 font-bold">Balanced</span>
                     )}
                   </div>
-                  <button
-                    onClick={() => setDetailClosing(c)}
-                    className="text-xs text-blue-700 hover:text-blue-800 font-bold bg-blue-50 px-3 py-1.5 rounded-lg transition"
-                  >
-                    View Details
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        setDetailClosing(c);
+                        setEditMode(false);
+                      }}
+                      className="text-xs text-blue-700 hover:text-blue-800 font-bold bg-blue-50 px-3 py-1.5 rounded-lg transition"
+                    >
+                      View
+                    </button>
+                    <button
+                      onClick={() => handleDirectEdit(c)}
+                      className="flex items-center gap-1 text-xs text-amber-700 hover:text-amber-800 font-bold bg-amber-50 hover:bg-amber-100 px-3 py-1.5 rounded-lg transition border border-amber-200 shadow-xs"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                      Edit
+                    </button>
+                  </div>
                 </div>
               </div>
             ))
@@ -485,12 +515,25 @@ export function DailyClosingClient({ initialClosings, role }: DailyClosingClient
                       <StatusBadge status={c.status === "PENDING" && c.managerApprovedAt ? "MANAGER_APPROVED" : c.status} />
                     </td>
                     <td className="px-5 py-3.5 text-center">
-                      <button
-                        onClick={() => setDetailClosing(c)}
-                        className="text-xs text-blue-700 hover:text-blue-800 font-bold bg-blue-50 px-2.5 py-1.5 rounded-lg transition"
-                      >
-                        View Details
-                      </button>
+                      <div className="flex items-center justify-center gap-1.5">
+                        <button
+                          onClick={() => {
+                            setDetailClosing(c);
+                            setEditMode(false);
+                          }}
+                          className="text-xs text-blue-700 hover:text-blue-800 font-bold bg-blue-50 hover:bg-blue-100 px-2.5 py-1.5 rounded-lg transition"
+                        >
+                          View
+                        </button>
+                        <button
+                          onClick={() => handleDirectEdit(c)}
+                          className="flex items-center gap-1 text-xs text-amber-700 hover:text-amber-800 font-bold bg-amber-50 hover:bg-amber-100 px-2.5 py-1.5 rounded-lg transition border border-amber-200 shadow-xs"
+                          title="Edit Daily Closing"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                          Edit
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -731,6 +774,33 @@ export function DailyClosingClient({ initialClosings, role }: DailyClosingClient
                       </div>
                     </div>
 
+                    {/* Cash Denominations Counter (Notes & Coins Count) */}
+                    <div>
+                      <CashDenominationCounter
+                        initialDenominations={emp.cashDenominations}
+                        readOnly={false}
+                        defaultExpanded={true}
+                        onChange={(updatedDenoms, totalAmount) => {
+                          if (isOffice) {
+                            handleOfficeEmployeeChange({
+                              ...emp,
+                              cashDenominations: updatedDenoms,
+                              actualCashGiven: totalAmount,
+                            });
+                          } else {
+                            const empIndex = fetchedEmployees.findIndex(e => e.deliveryBoyId === selectedBoyId);
+                            if (empIndex !== -1) {
+                              handleEmployeeChange(empIndex, {
+                                ...emp,
+                                cashDenominations: updatedDenoms,
+                                actualCashGiven: totalAmount,
+                              });
+                            }
+                          }
+                        }}
+                      />
+                    </div>
+
                     <div>
                       <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
                         Closing Notes for {emp.deliveryBoyName}
@@ -842,14 +912,48 @@ export function DailyClosingClient({ initialClosings, role }: DailyClosingClient
               </div>
             </div>
 
+            {detailClosing.shortageAmount > 0 && (
+              <div className="p-3.5 bg-amber-50 border border-amber-300 rounded-2xl flex items-start gap-3">
+                <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                <div className="text-xs text-amber-900">
+                  <span className="font-bold text-sm block">
+                    Cash Shortage of {formatCurrency(detailClosing.shortageAmount)} detected
+                  </span>
+                  <p className="mt-1 text-amber-800 text-[11px] leading-relaxed">
+                    ⚠️ <strong>Udhari Auto-Transfer:</strong> Upon confirming this closing, any cash shortage will be automatically booked as a <strong>Salary Advance / Udhari</strong> in each respective delivery boy&apos;s account and recorded in the Stock Register.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Admin Edit Mode Banner */}
+            {editMode && (
+              <div className="p-3.5 bg-blue-50 border border-blue-200 rounded-2xl flex items-center justify-between text-xs text-blue-900 shadow-xs">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-1.5 bg-blue-100 rounded-lg text-blue-700">
+                    <Edit2 className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <span className="font-bold block text-sm">Admin Edit Mode</span>
+                    <p className="text-[11px] text-blue-700 mt-0.5">
+                      You can modify sold quantities, km-rates, customer credit/udhari, online payments, and actual cash received. Saving changes will recalculate totals and synchronize any shortage with the delivery boy&apos;s Udhari advance ledger.
+                    </p>
+                  </div>
+                </div>
+                <span className="bg-blue-600 text-white font-bold text-[10px] uppercase px-2.5 py-1 rounded-full shrink-0">
+                  Editing Active
+                </span>
+              </div>
+            )}
+
             {/* Edit / View individual employee closings */}
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Employee Closing Breakdown</h4>
-                {!editMode && detailClosing.status !== "APPROVED" && (
+                {!editMode && (
                   <button
                     onClick={() => handleStartEdit(detailClosing)}
-                    className="flex items-center gap-1 text-xs text-blue-700 hover:text-blue-800 font-bold bg-blue-50 px-3 py-1.5 rounded-lg transition"
+                    className="flex items-center gap-1.5 text-xs text-amber-700 hover:text-amber-800 font-bold bg-amber-50 hover:bg-amber-100 px-3 py-1.5 rounded-lg transition border border-amber-200"
                   >
                     <Edit2 className="w-3.5 h-3.5" /> Edit Closing Records
                   </button>
@@ -916,6 +1020,7 @@ export function DailyClosingClient({ initialClosings, role }: DailyClosingClient
                           kmBasedExtra: emp.kmBasedExtra,
                           expectedTotal: emp.expectedTotal,
                           actualCashGiven: emp.actualCashGiven,
+                          cashDenominations: emp.cashDenominations || [],
                           notes: emp.notes || "",
                         }}
                         onChange={() => { }}
@@ -967,11 +1072,19 @@ export function DailyClosingClient({ initialClosings, role }: DailyClosingClient
                       <button
                         onClick={() => handleApprove(detailClosing.id)}
                         disabled={isPending}
-                        className="flex items-center gap-1.5 text-xs bg-green-600 hover:bg-green-700 text-white font-bold px-5 py-2.5 rounded-xl transition disabled:opacity-50"
+                        className="flex items-center gap-1.5 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-black px-6 py-2.5 rounded-xl shadow-md transition disabled:opacity-50"
                       >
-                        <CheckCircle2 className="w-4 h-4" /> Approve Closing
+                        <CheckCircle2 className="w-4 h-4" /> Confirm &amp; Approve Closing
                       </button>
                     )}
+                    <button
+                      type="button"
+                      onClick={() => handleStartEdit(detailClosing)}
+                      className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-bold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200 transition"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                      Edit Records
+                    </button>
                     <button
                       type="button"
                       onClick={() => setDetailClosing(null)}

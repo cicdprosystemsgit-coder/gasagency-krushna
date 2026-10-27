@@ -9,6 +9,8 @@ import { LoginForm } from "./LoginForm";
  * login and apply agency branding inside the dashboard (via /api/session)
  * after the user has authenticated.
  */
+export const dynamic = "force-dynamic";
+
 export default function LoginPage() {
   return (
     <LoginForm

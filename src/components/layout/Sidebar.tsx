@@ -10,7 +10,7 @@ import {
   BarChart3, PanelLeftClose, PanelLeft, Flame, Boxes, CreditCard,
   Banknote, CalendarDays, Car, TrendingUp, Clock, FolderOpen, MessageSquarePlus,
   ShieldCheck, Building2, KeyRound, FileDown, Palette, BadgeDollarSign, PieChart,
-  Activity, ArrowRightLeft, Layers, Percent, X,
+  Activity, ArrowRightLeft, Layers, Percent, X, User,
 } from "lucide-react";
 
 
@@ -41,22 +41,48 @@ interface NavSection {
 }
 
 const RESOURCE_TO_NAV: Record<string, { section: string; label: string; href: string; icon: React.ReactNode }> = {
-  customers:        { section: "Accounts",    label: "Customer Management", href: "/customer-management", icon: <Users className="w-4 h-4" /> },
+  // Operations
+  stock:            { section: "Operations",  label: "Stock Register",      href: "/stock",               icon: <ClipboardCheck className="w-4 h-4" /> },
   inventory:        { section: "Operations",  label: "Office Stock",        href: "/inventory",           icon: <Boxes className="w-4 h-4" /> },
-  godown:           { section: "Operations",  label: "Godown",              href: "/godown",              icon: <Warehouse className="w-4 h-4" /> },
+  godown:           { section: "Operations",  label: "Godown & Fleet",      href: "/godown",              icon: <Warehouse className="w-4 h-4" /> },
+  deliveryRequests: { section: "Operations",  label: "Vehicle Loading",     href: "/delivery-requests",   icon: <Truck className="w-4 h-4" /> },
   vehicles:         { section: "Operations",  label: "Vehicle Management",  href: "/vehicle-management",  icon: <Car className="w-4 h-4" /> },
-  deliveries:       { section: "Operations",  label: "Delivery Plan",       href: "/delivery-plan",       icon: <Truck className="w-4 h-4" /> },
+  deliveries:       { section: "Operations",  label: "Cylinder Deliveries", href: "/deliveries",          icon: <Truck className="w-4 h-4" /> },
+  deliveryPlan:     { section: "Operations",  label: "Delivery Plan",       href: "/delivery-plan",       icon: <Truck className="w-4 h-4" /> },
+
+  // Accounts
+  customers:        { section: "Accounts",    label: "Customer Management", href: "/customer-management", icon: <Users className="w-4 h-4" /> },
   transactions:     { section: "Accounts",    label: "Office Transactions", href: "/office-transactions", icon: <Receipt className="w-4 h-4" /> },
+  commercialSales:  { section: "Accounts",    label: "Commercial Sales",    href: "/commercial-sales",    icon: <ShoppingCart className="w-4 h-4" /> },
+  creditLedger:     { section: "Accounts",    label: "Credit Ledger",       href: "/credit-ledger",       icon: <CreditCard className="w-4 h-4" /> },
+  regulators:       { section: "Accounts",    label: "Regulator Ledger",    href: "/regulators",          icon: <ShieldCheck className="w-4 h-4" /> },
   gstInvoices:      { section: "Accounts",    label: "GST Invoicing",       href: "/gst-invoicing",       icon: <FileText className="w-4 h-4" /> },
+
+  // Finance
+  accounts:         { section: "Finance",     label: "Finance Dashboard",   href: "/accounts/dashboard",  icon: <LayoutDashboard className="w-4 h-4" /> },
   salaries:         { section: "Finance",     label: "Salaries & Drawings", href: "/salaries",            icon: <Wallet className="w-4 h-4" /> },
   expenses:         { section: "Finance",     label: "Expenses & Vehicles", href: "/expenses",            icon: <BarChart3 className="w-4 h-4" /> },
+  companyPayments:  { section: "Finance",     label: "Company Payments",    href: "/company-payments",    icon: <Building2 className="w-4 h-4" /> },
+  assets:           { section: "Finance",     label: "Assets Management",   href: "/assets",              icon: <PieChart className="w-4 h-4" /> },
+  dailyClosings:    { section: "Finance",     label: "Daily Closing",       href: "/daily-closing",       icon: <ClipboardCheck className="w-4 h-4" /> },
+
+  // People
+  staff:            { section: "People",      label: "Staff Management",    href: "/staff-management",    icon: <Users className="w-4 h-4" /> },
+  attendance:       { section: "People",      label: "Attendance",          href: "/attendance",          icon: <Clock className="w-4 h-4" /> },
   leaves:           { section: "People",      label: "Leave Management",    href: "/leave-management",    icon: <CalendarDays className="w-4 h-4" /> },
+  approvals:        { section: "People",      label: "Approvals",           href: "/approvals",           icon: <BookOpen className="w-4 h-4" /> },
+
+  // Intelligence
+  analytics:        { section: "Intelligence",label: "Analytics",           href: "/analytics",           icon: <TrendingUp className="w-4 h-4" /> },
+  export:           { section: "Intelligence",label: "Data Export",         href: "/export",              icon: <FileDown className="w-4 h-4" /> },
   paymentReceipts:  { section: "Intelligence",label: "Payment Receipts",    href: "/payment-receipts",    icon: <Receipt className="w-4 h-4" /> },
   documents:        { section: "Intelligence",label: "Documents",           href: "/documents",           icon: <FolderOpen className="w-4 h-4" /> },
   complaints:       { section: "Intelligence",label: "Complaints",          href: "/complaints",          icon: <MessageSquarePlus className="w-4 h-4" /> },
-  analytics:        { section: "Intelligence",label: "Analytics",           href: "/analytics",           icon: <TrendingUp className="w-4 h-4" /> },
-  approvals:        { section: "People",      label: "Approvals",           href: "/approvals",           icon: <BookOpen className="w-4 h-4" /> },
+
+  // Enterprise
   branches:         { section: "Enterprise",  label: "Branches",            href: "/branches",            icon: <Building2 className="w-4 h-4" /> },
+  apiKeys:          { section: "Enterprise",  label: "API Gateway",         href: "/api-keys",            icon: <KeyRound className="w-4 h-4" /> },
+  security:         { section: "Enterprise",  label: "Security / 2FA",      href: "/security",            icon: <ShieldCheck className="w-4 h-4" /> },
 };
 
 function getCustomRoleNavSections(
@@ -106,6 +132,7 @@ function getCustomRoleNavSections(
   sections.push({
     label: "My Account",
     items: [
+      { label: "My Profile", href: `${base}/profile`, icon: <User className="w-4 h-4" /> },
       { label: "My Salary", href: `${base}/my-salary`, icon: <Banknote className="w-4 h-4" /> },
     ],
   });
@@ -144,6 +171,7 @@ function getNavSections(
       {
         label: "Operations",
         items: [
+          { label: "Stock Register",    href: `${base}/stock`,              icon: <ClipboardCheck className="w-4 h-4" />, featureKey: "stock"              },
           { label: "Inventory",         href: `${base}/inventory`,          icon: <Boxes className="w-4 h-4" />,       featureKey: "inventory"          },
           { label: "Godown",            href: `${base}/godown`,             icon: <Warehouse className="w-4 h-4" />,   featureKey: "godown"             },
           { label: "Vehicle Loading",   href: `${base}/delivery-requests`, icon: <Truck className="w-4 h-4" />,       featureKey: "godown"             },
@@ -199,9 +227,13 @@ function getNavSections(
           ...(role === "ADMIN" ? [
             { label: "Billing",        href: `${base}/billing`,  icon: <BadgeDollarSign className="w-4 h-4" /> },
             { label: "API Gateway",   href: `${base}/api-keys`, icon: <KeyRound className="w-4 h-4" />,   featureKey: "api_gateway" },
-            { label: "Security / 2FA",href: `${base}/security`, icon: <ShieldCheck className="w-4 h-4" />,featureKey: "security"    },
+            { label: "Access & Security",href: `${base}/security`, icon: <ShieldCheck className="w-4 h-4" />,featureKey: "security"    },
             { label: "Branding Config",href: `${base}/settings`, icon: <Palette className="w-4 h-4" /> },
-          ] : []),
+            { label: "My Profile",     href: `${base}/profile`,  icon: <User className="w-4 h-4" /> },
+          ] : [
+            { label: "2-Step Verification", href: `${base}/security`, icon: <ShieldCheck className="w-4 h-4" /> },
+            { label: "My Profile",          href: `${base}/profile`,  icon: <User className="w-4 h-4" /> },
+          ]),
         ],
       },
     ];
@@ -213,6 +245,7 @@ function getNavSections(
       {
         label: "Operations",
         items: [
+          { label: "Stock Register",    href: `${base}/stock`,             icon: <ClipboardCheck className="w-4 h-4" />, featureKey: "stock"  },
           { label: "Godown & Fleet",    href: `${base}/godown`,            icon: <Warehouse className="w-4 h-4" />, featureKey: "godown"     },
           { label: "Vehicle Loading",   href: `${base}/delivery-requests`, icon: <Truck className="w-4 h-4" />                                },
           { label: "Inventory",         href: `${base}/inventory`,         icon: <Boxes className="w-4 h-4" />,     featureKey: "inventory"  },
@@ -221,6 +254,8 @@ function getNavSections(
       {
         label: "My Account",
         items: [
+          { label: "My Profile",          href: `${base}/profile`,         icon: <User className="w-4 h-4" />        },
+          { label: "2-Step Verification", href: `${base}/security`,       icon: <ShieldCheck className="w-4 h-4" /> },
           { label: "My Expenses",     href: `${base}/expenses`,        icon: <Receipt className="w-4 h-4" />    },
           { label: "My Salary",       href: `${base}/my-salary`,       icon: <Banknote className="w-4 h-4" />    },
           { label: "My Attendance",   href: `${base}/my-attendance`,   icon: <Clock className="w-4 h-4" />       },
@@ -236,6 +271,7 @@ function getNavSections(
       {
         label: "Modules",
         items: [
+          { label: "Stock Register",      href: `${base}/stock`,               icon: <ClipboardCheck className="w-4 h-4" />, featureKey: "stock"              },
           { label: "Customer Management", href: `${base}/customer-management`, icon: <Users className="w-4 h-4" />,        featureKey: "customer_management" },
           { label: "Office Transactions", href: `${base}/office-transactions`, icon: <Receipt className="w-4 h-4" />,      featureKey: "office_transactions" },
           { label: "Commercial Sales",    href: `${base}/commercial-sales`,    icon: <ShoppingCart className="w-4 h-4" />, featureKey: "commercial_sales"    },
@@ -248,6 +284,8 @@ function getNavSections(
       {
         label: "My Account",
         items: [
+          { label: "My Profile",          href: `${base}/profile`,         icon: <User className="w-4 h-4" />        },
+          { label: "2-Step Verification", href: `${base}/security`,       icon: <ShieldCheck className="w-4 h-4" /> },
           { label: "My Expenses",      href: `${base}/expenses`,        icon: <Receipt className="w-4 h-4" />   },
           { label: "My Salary",        href: `${base}/my-salary`,        icon: <Banknote className="w-4 h-4" />  },
           { label: "My Attendance",    href: `${base}/my-attendance`,    icon: <Clock className="w-4 h-4" />     },
@@ -275,6 +313,8 @@ function getNavSections(
       {
         label: "My Account",
         items: [
+          { label: "My Profile",          href: `${base}/profile`,         icon: <User className="w-4 h-4" />        },
+          { label: "2-Step Verification", href: `${base}/security`,       icon: <ShieldCheck className="w-4 h-4" /> },
           { label: "My Expenses",     href: `${base}/expenses`,        icon: <Receipt className="w-4 h-4" />    },
           { label: "My Salary",       href: `${base}/my-salary`,       icon: <Banknote className="w-4 h-4" />    },
           { label: "My Attendance",   href: `${base}/my-attendance`,   icon: <Clock className="w-4 h-4" />       },

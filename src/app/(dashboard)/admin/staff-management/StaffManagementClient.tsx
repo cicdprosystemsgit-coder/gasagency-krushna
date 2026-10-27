@@ -8,11 +8,13 @@ import { Plus, Users, ToggleLeft, ToggleRight, Pencil, Trash2, AlertTriangle, Ey
 import { createStaffUser, updateStaffUser, deleteStaffUser, toggleStaffStatus, createCustomRole, getCustomRoles } from "@/app/actions/staff";
 import { getEmployeeDocuments, uploadDocument, getDocumentForDownload } from "@/app/actions/documents";
 import { StaffForm, EMPTY_FORM, type FormState, type PendingDoc } from "./StaffForm";
+import { adminResetUser2FA } from "@/app/actions/twofa";
 
 interface Staff {
   id: string; name: string; email: string; phone: string | null; role: string;
   customRole: string | null; customRoleId: string | null;
   isActive: boolean; createdAt: Date | string;
+  twoFactorEnabled?: boolean;
   bankAccountNo: string | null; bankName: string | null; ifscCode: string | null;
   aadhaarNo: string | null; panNo: string | null; photoBase64: string | null;
   salaryProfile?: {
@@ -109,6 +111,7 @@ export function StaffManagementClient({ initialStaff }: { initialStaff: Staff[] 
     return {
       name: s.name, email: s.email, phone: s.phone ?? "",
       role: s.role, password: "",
+      loginPin: "",
       customRole: s.customRole ?? "",
       customRoleId: s.customRoleId ?? "",
       bankAccountNo: s.bankAccountNo ?? "", bankName: s.bankName ?? "",
@@ -185,6 +188,19 @@ export function StaffManagementClient({ initialStaff }: { initialStaff: Staff[] 
     startTransition(async () => {
       const res = await toggleStaffStatus(id, !current);
       if (res.success) setStaff((p) => p.map((s) => s.id === id ? { ...s, isActive: !current } : s));
+    });
+  }
+
+  function handleReset2FA(id: string, name: string) {
+    if (!confirm(`Are you sure you want to reset 2-Step Verification for ${name}? Their 2FA will be disabled and they will be able to log in with password only.`)) return;
+    startTransition(async () => {
+      const res = await adminResetUser2FA(id);
+      if (res.error) {
+        alert(res.error);
+      } else {
+        setStaff((p) => p.map((s) => s.id === id ? { ...s, twoFactorEnabled: false } : s));
+        alert(res.message);
+      }
     });
   }
 
@@ -309,6 +325,20 @@ export function StaffManagementClient({ initialStaff }: { initialStaff: Staff[] 
                         <span className="font-bold">Bank:</span> {s.bankName} ({s.bankAccountNo})
                       </div>
                     )}
+                    {s.twoFactorEnabled && (
+                      <div className="col-span-2 flex items-center justify-between text-[11px] bg-emerald-50/60 border border-emerald-200/80 px-2.5 py-1 rounded">
+                        <span className="flex items-center gap-1 font-semibold text-emerald-700">
+                          <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" /> 2-Step Verification Active
+                        </span>
+                        <button
+                          onClick={() => handleReset2FA(s.id, s.name)}
+                          disabled={isPending}
+                          className="text-[10px] text-red-600 font-medium hover:underline cursor-pointer"
+                        >
+                          Reset 2FA
+                        </button>
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex items-center justify-between pt-1">
@@ -364,6 +394,7 @@ export function StaffManagementClient({ initialStaff }: { initialStaff: Staff[] 
                 <th>Employee</th>
                 <th>Contact</th>
                 <th>Role</th>
+                <th className="text-center">2FA Security</th>
                 <th>Bank</th>
                 <th>Joined</th>
                 <th className="text-center">Status</th>
@@ -373,7 +404,7 @@ export function StaffManagementClient({ initialStaff }: { initialStaff: Staff[] 
             </thead>
             <tbody>
               {staff.length === 0 ? (
-                <tr><td colSpan={8} className="py-14 text-center">
+                <tr><td colSpan={9} className="py-14 text-center">
                   <Users className="w-8 h-8 mx-auto mb-2" style={{ color:"#D4D4D8" }} />
                   <p className="text-[13px]" style={{ color:"#A1A1AA" }}>No staff members yet</p>
                 </td></tr>
@@ -398,6 +429,29 @@ export function StaffManagementClient({ initialStaff }: { initialStaff: Staff[] 
                       <span className="badge text-[11px]" style={{ background:rc.bg, color:rc.color, border:"none" }}>
                         {s.customRole || (ROLE_LABEL[s.role] ?? s.role)}
                       </span>
+                    </td>
+                    {/* 2FA Security */}
+                    <td className="text-center">
+                      {s.twoFactorEnabled ? (
+                        <div className="inline-flex items-center gap-1.5">
+                          <span className="badge text-[11px] bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            <ShieldCheck className="w-3 h-3 text-emerald-600 inline mr-1" />
+                            Active
+                          </span>
+                          <button
+                            onClick={() => handleReset2FA(s.id, s.name)}
+                            disabled={isPending}
+                            title="Reset 2-Step Verification for this user"
+                            className="text-[10px] text-red-600 hover:text-red-800 font-medium hover:underline ml-1 cursor-pointer"
+                          >
+                            Reset
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="badge text-[11px] bg-zinc-100 text-zinc-500 border-none">
+                          Off
+                        </span>
+                      )}
                     </td>
                     {/* Bank */}
                     <td className="text-[12px]" style={{ color:"#52525B" }}>

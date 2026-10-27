@@ -27,9 +27,14 @@ interface Invoice {
 interface InvoiceItem {
   productId: string;
   productName: string;
+  hsnCode?: string;
+  gstRate: number;      // Item-level GST % directly connected to product
   qty: number;
-  rate: number;
-  amount: number;
+  rate: number;         // Taxable unit price
+  amount: number;       // Taxable value = qty * rate
+  cgstAmount?: number;  // amount * (gstRate / 200)
+  sgstAmount?: number;  // amount * (gstRate / 200)
+  totalAmount?: number; // amount + cgstAmount + sgstAmount
 }
 
 export interface AgencyInfo {
@@ -50,9 +55,16 @@ interface GstInvoicingClientProps {
   readonly?: boolean;
 }
 
-const GST_RATE = 0.05;
-const CGST_RATE = 0.025;
-const SGST_RATE = 0.025;
+function computeLineTaxes(qty: number, rate: number, gstRate: number) {
+  const safeQty = Math.max(0, qty);
+  const safeRate = Math.max(0, rate);
+  const safeGst = Math.max(0, gstRate);
+  const amount = Number((safeQty * safeRate).toFixed(2));
+  const cgstAmount = Number(((amount * (safeGst / 2)) / 100).toFixed(2));
+  const sgstAmount = Number(((amount * (safeGst / 2)) / 100).toFixed(2));
+  const totalAmount = Number((amount + cgstAmount + sgstAmount).toFixed(2));
+  return { amount, cgstAmount, sgstAmount, totalAmount };
+}
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -74,7 +86,7 @@ export function GstInvoicingClient({
   const [customerSearch, setCustomerSearch] = useState("");
   const [isSearchDropdownOpen, setIsSearchDropdownOpen] = useState(false);
   const [items, setItems] = useState<InvoiceItem[]>([
-    { productId: "", productName: "", qty: 1, rate: 0, amount: 0 },
+    { productId: "", productName: "", hsnCode: "", gstRate: 5, qty: 1, rate: 0, amount: 0, cgstAmount: 0, sgstAmount: 0, totalAmount: 0 },
   ]);
 
   const [localCustomers, setLocalCustomers] = useState(customers);
@@ -83,7 +95,7 @@ export function GstInvoicingClient({
   const [quickCustomerModal, setQuickCustomerModal] = useState(false);
   const [quickProductModal, setQuickProductModal] = useState(false);
   const [quickCustomerForm, setQuickCustomerForm] = useState({ name: "", phone: "", address: "", type: "DOMESTIC", email: "", customerCode: "" });
-  const [quickProductForm, setQuickProductForm] = useState({ name: "", unitCost: "", saleRate: "", margin: "", isCylinder: "false" });
+  const [quickProductForm, setQuickProductForm] = useState({ name: "", unitCost: "", saleRate: "", margin: "", isCylinder: "false", hsnCode: "", gstRate: "5" });
   const [quickError, setQuickError] = useState("");
   const [pendingItemIndex, setPendingItemIndex] = useState<number | null>(null);
 
@@ -150,6 +162,8 @@ export function GstInvoicingClient({
     fd.append("saleRate", quickProductForm.saleRate || "0");
     fd.append("margin", quickProductForm.margin || "0");
     fd.append("isCylinder", quickProductForm.isCylinder);
+    fd.append("hsnCode", quickProductForm.hsnCode);
+    fd.append("gstRate", quickProductForm.gstRate || "5");
 
     startTransition(async () => {
       const res = await createProduct(fd);
@@ -160,53 +174,73 @@ export function GstInvoicingClient({
         if (pendingItemIndex !== null) {
           setItems((prev) => {
             const updated = [...prev];
+            const curQty = updated[pendingItemIndex].qty || 1;
+            const pGst = Number(newProd.gstRate ?? 5);
+            const pRate = Number(newProd.saleRate) || 0;
+            const taxCalcs = computeLineTaxes(curQty, pRate, pGst);
             updated[pendingItemIndex] = {
               ...updated[pendingItemIndex],
               productId: newProd.id,
               productName: newProd.name,
-              rate: newProd.saleRate,
-              amount: updated[pendingItemIndex].qty * newProd.saleRate,
+              hsnCode: newProd.hsnCode || "",
+              gstRate: pGst,
+              rate: pRate,
+              ...taxCalcs,
             };
             return updated;
           });
         }
         setQuickProductModal(false);
-        setQuickProductForm({ name: "", unitCost: "", saleRate: "", margin: "", isCylinder: "false" });
+        setQuickProductForm({ name: "", unitCost: "", saleRate: "", margin: "", isCylinder: "false", hsnCode: "", gstRate: "5" });
         setPendingItemIndex(null);
       }
     });
   }
 
-  function updateItem(index: number, field: keyof InvoiceItem, value: string | number) {
+  function updateItem(index: number, field: keyof InvoiceItem, value: any) {
     setItems((prev) => {
       const updated = [...prev];
-      updated[index] = { ...updated[index], [field]: value };
+      const current = { ...updated[index], [field]: value };
+
       if (field === "productId") {
-        const p = localProducts.find((p) => p.id === value);
+        const p = localProducts.find((prod) => prod.id === value);
         if (p) {
-          updated[index].productName = p.name;
-          updated[index].rate = p.saleRate;
-          updated[index].amount = updated[index].qty * p.saleRate;
+          current.productName = p.name;
+          current.hsnCode = p.hsnCode ?? "2711";
+          current.gstRate = Number((p as any).gstRate ?? 5);
+          current.rate = p.saleRate;
         }
       }
-      if (field === "qty" || field === "rate") {
-        updated[index].amount = Number(updated[index].qty) * Number(updated[index].rate);
-      }
+
+      const qty = Number(current.qty) || 0;
+      const rate = Number(current.rate) || 0;
+      const gstRate = Number(current.gstRate) || 0;
+      const taxCalcs = computeLineTaxes(qty, rate, gstRate);
+
+      updated[index] = {
+        ...current,
+        ...taxCalcs,
+      };
       return updated;
     });
   }
 
   function addItem() {
-    setItems((prev) => [...prev, { productId: "", productName: "", qty: 1, rate: 0, amount: 0 }]);
+    setItems((prev) => [
+      ...prev,
+      { productId: "", productName: "", hsnCode: "", gstRate: 5, qty: 1, rate: 0, amount: 0, cgstAmount: 0, sgstAmount: 0, totalAmount: 0 },
+    ]);
   }
 
   function removeItem(index: number) {
     setItems((prev) => prev.filter((_, i) => i !== index));
   }
 
-  const subtotal  = items.reduce((a, i) => a + i.amount, 0);
-  const gstAmount = subtotal * GST_RATE;
-  const total     = subtotal + gstAmount;
+  const subtotal  = Number(items.reduce((a, i) => a + (i.amount || 0), 0).toFixed(2));
+  const totalCgst = Number(items.reduce((a, i) => a + (i.cgstAmount ?? (i.amount * (i.gstRate || 0) / 200)), 0).toFixed(2));
+  const totalSgst = Number(items.reduce((a, i) => a + (i.sgstAmount ?? (i.amount * (i.gstRate || 0) / 200)), 0).toFixed(2));
+  const gstAmount = Number((totalCgst + totalSgst).toFixed(2));
+  const total     = Number((subtotal + gstAmount).toFixed(2));
 
   // Check if any item exceeds available office stock
   const hasStockError = items.some((item) => {
@@ -240,7 +274,9 @@ export function GstInvoicingClient({
       if (result.invoice) {
         setInvoices((prev) => [result.invoice!, ...prev]);
         setModalOpen(false);
-        setItems([{ productId: "", productName: "", qty: 1, rate: 0, amount: 0 }]);
+        setItems([
+          { productId: "", productName: "", hsnCode: "", gstRate: 5, qty: 1, rate: 0, amount: 0, cgstAmount: 0, sgstAmount: 0, totalAmount: 0 },
+        ]);
         setForm({ customerId: "", date: new Date().toISOString().slice(0, 10) });
       }
     });
@@ -250,9 +286,21 @@ export function GstInvoicingClient({
     setIsDownloading(true);
     try {
       const customer = customers.find((c) => c.id === inv.customerId);
-      const invItems = inv.items as InvoiceItem[];
-      const cgst = inv.subtotal * CGST_RATE;
-      const sgst = inv.subtotal * SGST_RATE;
+      const invItems = (inv.items as InvoiceItem[]) || [];
+
+      // Calculate taxes per line or split 50/50 of gstAmount
+      let cgst = 0;
+      let sgst = 0;
+      invItems.forEach((it) => {
+        const gRate = it.gstRate ?? 5;
+        const itemAmt = it.amount || (it.qty * it.rate);
+        cgst += it.cgstAmount ?? (itemAmt * (gRate / 200));
+        sgst += it.sgstAmount ?? (itemAmt * (gRate / 200));
+      });
+      if (cgst === 0 && inv.gstAmount > 0) {
+        cgst = inv.gstAmount / 2;
+        sgst = inv.gstAmount / 2;
+      }
 
       await generateGstInvoicePDF({
         invoiceNo:       inv.invoiceNo,
@@ -269,14 +317,16 @@ export function GstInvoicingClient({
         customerCode:    customer?.customerCode ?? "",
         items:           invItems.map((it) => ({
           productName: it.productName,
+          hsnCode:     it.hsnCode || "",
+          gstRate:     it.gstRate ?? 5,
           qty:         it.qty,
           rate:        it.rate,
           amount:      it.amount,
         })),
         subtotal:    inv.subtotal,
-        cgst,
-        sgst,
-        totalTax:    cgst + sgst,
+        cgst:        Number(cgst.toFixed(2)),
+        sgst:        Number(sgst.toFixed(2)),
+        totalTax:    Number((cgst + sgst).toFixed(2)),
         grandTotal:  inv.total,
       });
     } finally {
@@ -289,7 +339,7 @@ export function GstInvoicingClient({
   return (
     <>
       <div className="flex items-center justify-between mb-4">
-        <span className="text-sm text-slate-500">{invoices.length} invoices · GST Rate: 5% (CGST 2.5% + SGST 2.5%)</span>
+        <span className="text-sm text-slate-500">{invoices.length} invoices · Product-Linked GST Compliance (0%, 5%, 12%, 18%, 28%)</span>
         {!readonly && (
           <button
             onClick={() => { setError(""); setModalOpen(true); }}
@@ -308,8 +358,8 @@ export function GstInvoicingClient({
                 <th className="px-5 py-3 text-left font-semibold text-slate-600">Invoice No.</th>
                 <th className="px-5 py-3 text-left font-semibold text-slate-600">Date</th>
                 <th className="px-5 py-3 text-left font-semibold text-slate-600">Customer</th>
-                <th className="px-5 py-3 text-right font-semibold text-slate-600">Subtotal</th>
-                <th className="px-5 py-3 text-right font-semibold text-slate-600">GST (5%)</th>
+                <th className="px-5 py-3 text-right font-semibold text-slate-600">Taxable Value</th>
+                <th className="px-5 py-3 text-right font-semibold text-slate-600">GST Tax</th>
                 <th className="px-5 py-3 text-right font-semibold text-slate-600">Total</th>
                 <th className="px-5 py-3 text-center font-semibold text-slate-600">Status</th>
                 <th className="px-5 py-3 text-center font-semibold text-slate-600">Actions</th>
@@ -562,12 +612,15 @@ export function GstInvoicingClient({
               <div className="border border-slate-200 rounded-xl overflow-hidden">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="bg-slate-50">
-                      <th className="px-3 py-2 text-left font-semibold text-slate-600">Product</th>
-                      <th className="px-3 py-2 text-center font-semibold text-slate-600 w-20">Qty</th>
-                      <th className="px-3 py-2 text-right font-semibold text-slate-600 w-28">Rate (₹)</th>
-                      <th className="px-3 py-2 text-right font-semibold text-slate-600 w-28">Amount</th>
-                      <th className="px-3 py-2 w-10"></th>
+                    <tr className="bg-slate-50 text-slate-600 font-semibold text-xs">
+                      <th className="px-3 py-2.5 text-left">Product</th>
+                      <th className="px-2 py-2.5 text-center w-24">HSN/SAC</th>
+                      <th className="px-2 py-2.5 text-center w-16">Qty</th>
+                      <th className="px-2 py-2.5 text-right w-24">Rate (₹)</th>
+                      <th className="px-2 py-2.5 text-right w-24">Taxable</th>
+                      <th className="px-2 py-2.5 text-center w-28">GST %</th>
+                      <th className="px-2 py-2.5 text-right w-28">Total</th>
+                      <th className="px-2 py-2.5 w-8"></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -583,16 +636,17 @@ export function GstInvoicingClient({
                                 <select
                                   value={item.productId}
                                   onChange={(e) => updateItem(i, "productId", e.target.value)}
-                                  className={`flex-1 px-2 py-1.5 border rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 ${
+                                  className={`flex-1 px-2 py-1.5 border rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white ${
                                     isOverStock ? "border-red-400" : "border-slate-200"
                                   }`}
                                 >
-                                  <option value="">Select...</option>
+                                  <option value="">Select product...</option>
                                   {localProducts.map((p) => {
                                     const pStock = stockMap[p.id]?.officeStock ?? null;
+                                    const gRate = (p as any).gstRate ?? 5;
                                     return (
                                       <option key={p.id} value={p.id}>
-                                        {p.name}{pStock !== null ? ` (Office: ${pStock})` : ""}
+                                        {p.name} (GST: {gRate}%{pStock !== null ? ` · Stock: ${pStock}` : ""})
                                       </option>
                                     );
                                   })}
@@ -602,7 +656,7 @@ export function GstInvoicingClient({
                                   onClick={() => {
                                     setQuickError("");
                                     setPendingItemIndex(i);
-                                    setQuickProductForm({ name: "", unitCost: "", saleRate: "", margin: "", isCylinder: "false" });
+                                    setQuickProductForm({ name: "", unitCost: "", saleRate: "", margin: "", isCylinder: "false", hsnCode: "", gstRate: "5" });
                                     setQuickProductModal(true);
                                   }}
                                   className="px-2 bg-slate-50 border border-slate-200 hover:bg-slate-100 rounded-lg flex items-center justify-center transition-colors font-bold text-xs text-slate-500"
@@ -613,7 +667,7 @@ export function GstInvoicingClient({
                               </div>
                               {/* Stock availability badges */}
                               {item.productId && (
-                                <div className="flex items-center gap-2 flex-wrap">
+                                <div className="flex items-center gap-1.5 flex-wrap">
                                   {officeStock !== null && (
                                     <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
                                       officeStock === 0
@@ -622,12 +676,12 @@ export function GstInvoicingClient({
                                         ? "bg-orange-100 text-orange-700"
                                         : "bg-emerald-100 text-emerald-700"
                                     }`}>
-                                      🏪 Office: {officeStock} units
+                                      🏪 Office: {officeStock}
                                     </span>
                                   )}
                                   {godownStock > 0 && (
                                     <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-700">
-                                      🏭 Godown: {godownStock} units
+                                      🏭 Godown: {godownStock}
                                     </span>
                                   )}
                                   {isOverStock && (
@@ -639,26 +693,55 @@ export function GstInvoicingClient({
                               )}
                             </div>
                           </td>
-                          <td className="px-3 py-2">
+                          <td className="px-2 py-2">
+                            <input
+                              type="text"
+                              value={item.hsnCode ?? ""}
+                              onChange={(e) => updateItem(i, "hsnCode", e.target.value)}
+                              placeholder="2711"
+                              className="w-full px-1.5 py-1.5 border border-slate-200 rounded-lg text-xs font-mono text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            />
+                          </td>
+                          <td className="px-2 py-2">
                             <input
                               type="number" min="1" value={item.qty}
                               onChange={(e) => updateItem(i, "qty", Number(e.target.value))}
-                              className={`w-full px-2 py-1.5 border rounded-lg text-xs text-center focus:outline-none focus:ring-1 ${
+                              className={`w-full px-1.5 py-1.5 border rounded-lg text-xs text-center focus:outline-none focus:ring-1 ${
                                 isOverStock
                                   ? "border-red-400 bg-red-50 focus:ring-red-400 text-red-700 font-bold"
                                   : "border-slate-200 focus:ring-blue-500"
                               }`}
                             />
                           </td>
-                          <td className="px-3 py-2">
+                          <td className="px-2 py-2">
                             <input
-                              type="number" min="0" value={item.rate}
+                              type="number" min="0" step="0.01" value={item.rate}
                               onChange={(e) => updateItem(i, "rate", Number(e.target.value))}
-                              className="w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs text-right focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              className="w-full px-1.5 py-1.5 border border-slate-200 rounded-lg text-xs text-right focus:outline-none focus:ring-1 focus:ring-blue-500 font-semibold"
                             />
                           </td>
-                          <td className="px-3 py-2 text-right font-semibold text-slate-800 text-xs">{formatCurrency(item.amount)}</td>
-                          <td className="px-3 py-2 text-center">
+                          <td className="px-2 py-2 text-right font-medium text-slate-800 text-xs">
+                            {formatCurrency(item.amount)}
+                          </td>
+                          <td className="px-2 py-2">
+                            <div className="flex items-center justify-center gap-1">
+                              <select
+                                value={item.gstRate}
+                                onChange={(e) => updateItem(i, "gstRate", Number(e.target.value))}
+                                className="px-1.5 py-1 border border-blue-200 bg-blue-50/50 rounded-lg text-xs font-bold text-blue-900 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              >
+                                {[0, 5, 12, 18, 28].map((rate) => (
+                                  <option key={rate} value={rate}>
+                                    {rate}%
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          </td>
+                          <td className="px-2 py-2 text-right font-bold text-blue-900 text-xs">
+                            {formatCurrency(item.totalAmount ?? (item.amount * (1 + item.gstRate / 100)))}
+                          </td>
+                          <td className="px-2 py-2 text-center">
                             {items.length > 1 && (
                               <button type="button" onClick={() => removeItem(i)} className="text-red-400 hover:text-red-600">
                                 <Trash2 className="w-3.5 h-3.5" />
@@ -674,23 +757,55 @@ export function GstInvoicingClient({
             </div>
 
             {/* Totals preview */}
-            <div className="bg-slate-50 rounded-xl p-4 space-y-1.5 text-sm">
+            <div className="bg-slate-50 rounded-xl p-4 space-y-2 text-sm border border-slate-100">
               <div className="flex justify-between">
-                <span className="text-slate-500">Taxable Value</span>
+                <span className="text-slate-500">Taxable Value (Subtotal)</span>
                 <span className="font-semibold text-slate-800">{formatCurrency(subtotal)}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-500">CGST @ 2.5%</span>
-                <span className="font-semibold text-orange-600">{formatCurrency(subtotal * CGST_RATE)}</span>
+                <span className="text-slate-500">CGST (Central Tax)</span>
+                <span className="font-semibold text-orange-600">+{formatCurrency(totalCgst)}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-500">SGST @ 2.5%</span>
-                <span className="font-semibold text-orange-600">{formatCurrency(subtotal * SGST_RATE)}</span>
+                <span className="text-slate-500">SGST (State Tax)</span>
+                <span className="font-semibold text-orange-600">+{formatCurrency(totalSgst)}</span>
               </div>
-              <div className="flex justify-between border-t border-slate-200 pt-1.5 mt-1">
-                <span className="font-bold text-slate-800">Grand Total</span>
-                <span className="font-bold text-blue-700 text-base">{formatCurrency(total)}</span>
+              <div className="flex justify-between border-t border-slate-200/80 pt-1.5">
+                <span className="text-slate-600 font-bold">Total GST Tax</span>
+                <span className="font-bold text-orange-700">+{formatCurrency(gstAmount)}</span>
               </div>
+              <div className="flex justify-between border-t-2 border-slate-300 pt-2 mt-1">
+                <span className="font-extrabold text-slate-900">Grand Total (Incl. Taxes)</span>
+                <span className="font-extrabold text-blue-700 text-base">{formatCurrency(total)}</span>
+              </div>
+
+              {/* Dynamic Slab-wise breakdown */}
+              {(() => {
+                const slabs = new Map<number, { taxable: number; gst: number }>();
+                items.forEach((it) => {
+                  if (!it.productId || !it.amount) return;
+                  const rate = it.gstRate ?? 5;
+                  const cur = slabs.get(rate) || { taxable: 0, gst: 0 };
+                  const itemGst = (it.cgstAmount ?? 0) + (it.sgstAmount ?? 0) || (it.amount * rate / 100);
+                  slabs.set(rate, {
+                    taxable: cur.taxable + it.amount,
+                    gst: cur.gst + itemGst,
+                  });
+                });
+                if (slabs.size <= 1) return null;
+                return (
+                  <div className="pt-2 border-t border-slate-200 text-xs">
+                    <p className="font-bold text-slate-600 text-[11px] mb-1">Tax Slab Summary:</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {Array.from(slabs.entries()).map(([rate, val]) => (
+                        <span key={rate} className="px-2 py-0.5 rounded-md bg-white border border-slate-200 font-mono text-[11px] text-slate-700 shadow-2xs">
+                          <strong>{rate}% GST:</strong> Taxable {formatCurrency(val.taxable)} · Tax {formatCurrency(val.gst)}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
 
             {hasStockError && (
@@ -717,9 +832,19 @@ export function GstInvoicingClient({
       <Modal open={!!viewInvoice} onClose={() => setViewInvoice(null)} title="Invoice Preview" size="lg">
         {viewInvoice && (() => {
           const customer = customers.find((c) => c.id === viewInvoice.customerId);
-          const invItems = viewInvoice.items as InvoiceItem[];
-          const cgst = viewInvoice.subtotal * CGST_RATE;
-          const sgst = viewInvoice.subtotal * SGST_RATE;
+          const invItems = (viewInvoice.items as InvoiceItem[]) || [];
+          let cgst = 0;
+          let sgst = 0;
+          invItems.forEach((it) => {
+            const gRate = it.gstRate ?? 5;
+            const itemAmt = it.amount || (it.qty * it.rate);
+            cgst += it.cgstAmount ?? (itemAmt * (gRate / 200));
+            sgst += it.sgstAmount ?? (itemAmt * (gRate / 200));
+          });
+          if (cgst === 0 && viewInvoice.gstAmount > 0) {
+            cgst = viewInvoice.gstAmount / 2;
+            sgst = viewInvoice.gstAmount / 2;
+          }
 
           return (
             <div>
@@ -782,9 +907,11 @@ export function GstInvoicingClient({
                       <tr className="border-b-2 border-slate-200">
                         <th className="py-2 text-left font-semibold text-slate-500 text-[10px] uppercase tracking-wide">#</th>
                         <th className="py-2 text-left font-semibold text-slate-500 text-[10px] uppercase tracking-wide">Description</th>
+                        <th className="py-2 text-center font-semibold text-slate-500 text-[10px] uppercase tracking-wide">HSN/SAC</th>
                         <th className="py-2 text-center font-semibold text-slate-500 text-[10px] uppercase tracking-wide">Qty</th>
-                        <th className="py-2 text-right font-semibold text-slate-500 text-[10px] uppercase tracking-wide">Rate</th>
-                        <th className="py-2 text-right font-semibold text-slate-500 text-[10px] uppercase tracking-wide">Amount</th>
+                        <th className="py-2 text-right font-semibold text-slate-500 text-[10px] uppercase tracking-wide">Unit Rate</th>
+                        <th className="py-2 text-center font-semibold text-slate-500 text-[10px] uppercase tracking-wide">GST %</th>
+                        <th className="py-2 text-right font-semibold text-slate-500 text-[10px] uppercase tracking-wide">Taxable Amt</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -792,8 +919,14 @@ export function GstInvoicingClient({
                         <tr key={i} className="border-b border-slate-100 last:border-0">
                           <td className="py-2.5 text-slate-400">{i + 1}</td>
                           <td className="py-2.5 font-medium text-slate-800">{item.productName}</td>
+                          <td className="py-2.5 text-center font-mono text-slate-500 text-[11px]">{item.hsnCode || "—"}</td>
                           <td className="py-2.5 text-center text-slate-600">{item.qty}</td>
                           <td className="py-2.5 text-right text-slate-600">{formatCurrency(item.rate)}</td>
+                          <td className="py-2.5 text-center">
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                              {item.gstRate ?? 5}%
+                            </span>
+                          </td>
                           <td className="py-2.5 text-right font-semibold text-slate-800">{formatCurrency(item.amount)}</td>
                         </tr>
                       ))}
@@ -803,18 +936,22 @@ export function GstInvoicingClient({
 
                 {/* Tax summary */}
                 <div className="px-6 pb-4">
-                  <div className="ml-auto w-64 space-y-1.5 text-[12px]">
+                  <div className="ml-auto w-72 space-y-1.5 text-[12px]">
                     <div className="flex justify-between py-1 border-b border-slate-100">
                       <span className="text-slate-500">Taxable Value</span>
                       <span className="font-medium text-slate-700">{formatCurrency(viewInvoice.subtotal)}</span>
                     </div>
                     <div className="flex justify-between py-1 border-b border-slate-100">
-                      <span className="text-slate-500">CGST @ 2.5%</span>
+                      <span className="text-slate-500">CGST (Central Tax)</span>
                       <span className="font-medium text-orange-600">{formatCurrency(cgst)}</span>
                     </div>
                     <div className="flex justify-between py-1 border-b border-slate-100">
-                      <span className="text-slate-500">SGST @ 2.5%</span>
+                      <span className="text-slate-500">SGST (State Tax)</span>
                       <span className="font-medium text-orange-600">{formatCurrency(sgst)}</span>
+                    </div>
+                    <div className="flex justify-between py-1 border-b border-slate-100">
+                      <span className="text-slate-500 font-semibold">Total Tax (GST)</span>
+                      <span className="font-bold text-orange-700">{formatCurrency(cgst + sgst)}</span>
                     </div>
                     <div className="flex justify-between py-2 bg-blue-700 rounded-lg px-3 mt-2">
                       <span className="font-bold text-white text-[13px]">Grand Total</span>
@@ -968,6 +1105,32 @@ export function GstInvoicingClient({
                 placeholder="0.00"
                 className="w-full px-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-1.5">HSN Code</label>
+              <input
+                type="text"
+                value={quickProductForm.hsnCode}
+                onChange={(e) => setQuickProductForm({ ...quickProductForm, hsnCode: e.target.value })}
+                placeholder="e.g. 2711"
+                className="w-full px-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-1.5">GST Rate (%)</label>
+              <select
+                value={quickProductForm.gstRate}
+                onChange={(e) => setQuickProductForm({ ...quickProductForm, gstRate: e.target.value })}
+                className="w-full px-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-bold"
+              >
+                {[0, 5, 12, 18, 28].map((rate) => (
+                  <option key={rate} value={rate}>
+                    {rate}%
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">

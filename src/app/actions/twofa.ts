@@ -95,10 +95,10 @@ export async function verifyBackupCode(userId: string, raw: string) {
   return { valid: true };
 }
 
-// ── Disable 2FA (requires valid token + password confirmation) ────────────────
+// ── Disable 2FA (requires valid token from the user's authenticator) ────────
 export async function disable2FA(token: string) {
   const session = await getSession();
-  if (!session || !["ADMIN", "SYSTEM_ADMIN"].includes(session.role)) {
+  if (!session || !session.userId) {
     return { error: "Unauthorized" };
   }
 
@@ -108,8 +108,8 @@ export async function disable2FA(token: string) {
   });
 
   if (!user?.twoFactorEnabled) return { error: "2FA is not enabled" };
-  if (!verifyTOTP(user.twoFactorSecret!, token)) {
-    return { error: "Invalid code" };
+  if (!user.twoFactorSecret || !verifyTOTP(user.twoFactorSecret, token.trim())) {
+    return { error: "Invalid 6-digit code. Please enter the current code from your authenticator app." };
   }
 
   await prisma.user.update({
@@ -121,18 +121,73 @@ export async function disable2FA(token: string) {
   return { success: true };
 }
 
-// ── Get 2FA status ────────────────────────────────────────────────────────────
+// ── Get 2FA status for the current session user ───────────────────────────────
+import bcrypt from "bcryptjs";
+
+// ── Get 2FA & PIN status for the current session user ─────────────────────────
 export async function get2FAStatus() {
   const session = await getSession();
-  if (!session) return { enabled: false };
+  if (!session || !session.userId) return { enabled: false, email: "", name: "", hasPin: false, backupCodesRemaining: 0 };
 
   const user = await prisma.user.findUnique({
     where: { id: session.userId },
-    select: { twoFactorEnabled: true, twoFactorBackupCodes: true },
+    select: { email: true, name: true, twoFactorEnabled: true, twoFactorBackupCodes: true, loginPin: true },
   });
 
   return {
     enabled: user?.twoFactorEnabled ?? false,
+    email: user?.email ?? "",
+    name: user?.name ?? "",
+    hasPin: Boolean(user?.loginPin),
     backupCodesRemaining: user?.twoFactorBackupCodes.length ?? 0,
   };
+}
+
+// ── Self-Service: Set or update own Login PIN (4 to 6 numbers only) ───────────
+export async function setUserLoginPin(pin: string) {
+  const session = await getSession();
+  if (!session || !session.userId) return { error: "Unauthorized" };
+
+  const cleanPin = pin.trim();
+  if (!/^\d{4,6}$/.test(cleanPin)) {
+    return { error: "Security PIN must be between 4 and 6 numbers only." };
+  }
+
+  const hashed = await bcrypt.hash(cleanPin, 10);
+  await prisma.user.update({
+    where: { id: session.userId },
+    data: { loginPin: hashed },
+  });
+
+  revalidatePath("/admin/security");
+  return { success: true, message: "Security PIN saved successfully! You can now use it to sign in." };
+}
+
+// ── Admin Override: Reset 2FA for an employee who lost their device ───────────
+export async function adminResetUser2FA(targetUserId: string) {
+  const session = await getSession();
+  if (!session || !["ADMIN", "SYSTEM_ADMIN"].includes(session.role)) {
+    return { error: "Unauthorized: Only Admins can reset user 2FA." };
+  }
+
+  const targetUser = await prisma.user.findFirst({
+    where: {
+      id: targetUserId,
+      ...(session.role !== "SYSTEM_ADMIN" && session.agencyId ? { agencyId: session.agencyId } : {}),
+    },
+    select: { id: true, name: true, email: true },
+  });
+
+  if (!targetUser) {
+    return { error: "User not found or does not belong to your agency." };
+  }
+
+  await prisma.user.update({
+    where: { id: targetUserId },
+    data: { twoFactorEnabled: false, twoFactorSecret: null, twoFactorBackupCodes: [] },
+  });
+
+  revalidatePath("/admin/employees");
+  revalidatePath("/admin/security");
+  return { success: true, message: `Two-Factor Authentication was reset for ${targetUser.name || targetUser.email}.` };
 }

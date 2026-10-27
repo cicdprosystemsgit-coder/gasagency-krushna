@@ -137,4 +137,38 @@ export async function deleteFromCloudinary(publicId: string): Promise<boolean> {
   }
 }
 
+/**
+ * Uploads a user profile photo to Cloudinary with face detection & auto-cropping.
+ * Storage path: gasagency/profile-photos/user_{userId}_{timestamp}
+ */
+export async function uploadProfilePhotoToCloudinary(
+  fileBuffer: Buffer,
+  userId: string
+): Promise<{ url: string; publicId: string }> {
+  return new Promise((resolve, reject) => {
+    const uploadStream = cloudinary.uploader.upload_stream(
+      {
+        folder: "gasagency/profile-photos",
+        resource_type: "image",
+        public_id: `user_${userId}_${Date.now()}`,
+        overwrite: true,
+        transformation: [
+          { width: 400, height: 400, crop: "fill", gravity: "face", quality: "auto:good", format: "jpg" },
+        ],
+      },
+      (error, result) => {
+        if (error || !result) {
+          return reject(error || new Error("Failed to upload profile photo to Cloudinary"));
+        }
+        resolve({
+          url: result.secure_url,
+          publicId: result.public_id,
+        });
+      }
+    );
+
+    uploadStream.end(fileBuffer);
+  });
+}
+
 export { cloudinary };

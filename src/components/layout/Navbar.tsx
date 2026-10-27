@@ -7,6 +7,7 @@ import { NotificationBell } from "@/components/layout/NotificationBell";
 import { GlobalSearch } from "@/components/ui/GlobalSearch";
 import { LanguageSwitcher } from "@/components/ui/LanguageSwitcher";
 import { ThemeToggle } from "@/components/layout/ThemeToggle";
+import { SecuritySettingsModal } from "@/components/auth/SecuritySettingsModal";
 
 interface NavbarProps {
   userName: string;
@@ -73,25 +74,46 @@ export function Navbar({ userName, role, renewalAlerts = 0, sidebarCollapsed, on
         {/* Real Notification Bell */}
         <NotificationBell />
 
+        {/* Security & 2-Step Verification Modal for all roles */}
+        <SecuritySettingsModal userName={userName} role={role} />
+
         {/* Divider */}
         <div className="w-px h-5 mx-1" style={{ background: "var(--color-border)" }} />
 
-        {/* User */}
-        <div className="flex items-center gap-2.5">
-          <div className="hidden sm:block text-right">
-            <p className="text-[13px] font-medium text-zinc-900 dark:text-zinc-100 leading-none">{userName}</p>
-            <p className="text-[11px] mt-0.5 leading-none" style={{ color: "var(--color-text-secondary)" }}>{ROLE_LABELS[role] || role}</p>
-          </div>
-          <form action={logoutAction}>
-            <button
-              type="submit"
-              title="Sign out"
-              className="flex items-center justify-center w-8 h-8 rounded-md transition-colors hover:bg-red-50 dark:hover:bg-red-950/20 text-zinc-400 hover:text-red-600 cursor-pointer"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
-          </form>
-        </div>
+        {/* User Profile Link */}
+        {(() => {
+          const profileHref = `/${role.toLowerCase().replace(/_/g, "-")}/profile`;
+          return (
+            <div className="flex items-center gap-2">
+              <Link
+                href={profileHref}
+                title="View My Profile"
+                className="flex items-center gap-2.5 py-1 px-1.5 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors group cursor-pointer"
+              >
+                <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center font-bold text-xs shadow-xs group-hover:ring-2 group-hover:ring-blue-500/50 transition-all">
+                  {userName ? userName.charAt(0).toUpperCase() : "U"}
+                </div>
+                <div className="hidden sm:block text-left">
+                  <p className="text-[13px] font-semibold text-zinc-900 dark:text-zinc-100 leading-none group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                    {userName}
+                  </p>
+                  <p className="text-[10px] mt-0.5 leading-none" style={{ color: "var(--color-text-secondary)" }}>
+                    {ROLE_LABELS[role] || role}
+                  </p>
+                </div>
+              </Link>
+              <form action={logoutAction}>
+                <button
+                  type="submit"
+                  title="Sign out"
+                  className="flex items-center justify-center w-8 h-8 rounded-md transition-colors hover:bg-red-50 dark:hover:bg-red-950/20 text-zinc-400 hover:text-red-600 cursor-pointer"
+                >
+                  <LogOut className="w-4 h-4" />
+                </button>
+              </form>
+            </div>
+          );
+        })()}
       </div>
     </header>
   );

@@ -2,6 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
+import { revalidatePath } from "next/cache";
 
 export async function getDeliveryBoysForDate(dateStr: string) {
   const session = await getSession();
@@ -133,17 +134,42 @@ export async function getDeliveryBoysForDate(dateStr: string) {
       }
     },
     select: {
-      deliveryBoyId: true
+      id: true,
+      deliveryBoyId: true,
+      submissionStatus: true,
+      actualCashGiven: true,
+      shortageAmount: true,
+      excessAmount: true,
+      shortageAddedToUdhari: true,
+      submittedAt: true,
+      managerVerifiedAt: true,
+      adminConfirmedAt: true,
+      notes: true,
+      returnedQty: true,
     }
   });
-  const closedBoyIds = new Set(closedEntries.map(e => e.deliveryBoyId));
+  const closedMap = new Map(closedEntries.map((e) => [e.deliveryBoyId, e]));
 
   // Convert products record to array
-  const result = Object.values(grouped).map((g) => ({
-    ...g,
-    products: Object.values(g.products),
-    alreadyClosed: closedBoyIds.has(g.deliveryBoy.id),
-  }));
+  const result = Object.values(grouped).map((g) => {
+    const entry = closedMap.get(g.deliveryBoy.id);
+    return {
+      ...g,
+      products: Object.values(g.products),
+      alreadyClosed: entry?.submissionStatus === "APPROVED",
+      submissionStatus: entry?.submissionStatus || "PENDING",
+      employeeClosingId: entry?.id || null,
+      actualCashGiven: entry?.actualCashGiven ?? 0,
+      submittedNotes: entry?.notes ?? "",
+      submittedReturnedQty: entry?.returnedQty ?? g.returnedQty,
+      shortageAmount: entry?.shortageAmount ?? 0,
+      excessAmount: entry?.excessAmount ?? 0,
+      shortageAddedToUdhari: entry?.shortageAddedToUdhari ?? false,
+      submittedAt: entry?.submittedAt ? entry.submittedAt.toISOString() : null,
+      managerVerifiedAt: entry?.managerVerifiedAt ? entry.managerVerifiedAt.toISOString() : null,
+      adminConfirmedAt: entry?.adminConfirmedAt ? entry.adminConfirmedAt.toISOString() : null,
+    };
+  });
 
   return { deliveryBoys: result };
 }
@@ -365,6 +391,7 @@ export async function createDailyClosingWithEmployees(formDataJson: string) {
         kmBasedExtra: emp.kmBasedExtra || 0,
         expectedTotal: expectedTotal,
         actualCashGiven: actualCash,
+        cashDenominations: emp.cashDenominations || [],
         shortageAmount: empShortage,
         excessAmount: empExcess,
         notes: emp.notes || null,
@@ -480,7 +507,110 @@ export async function updateDailyClosingEmployee(employeeClosingId: string, form
   const excessAmount = actualCash > expectedCash ? actualCash - expectedCash : 0;
 
   const result = await prisma.$transaction(async (tx) => {
-    // 1. Update the employee closing row
+    // 1. Fetch current employee closing to know previous shortage, salaryAdvanceId, and parent closing
+    const existing = await tx.dailyClosingEmployee.findUnique({
+      where: { id: employeeClosingId, agencyId: session.agencyId! },
+      include: { dailyClosing: true },
+    });
+    if (!existing) throw new Error("Closing record not found");
+
+    let newSalaryAdvanceId = existing.salaryAdvanceId;
+    let shortageAddedToUdhari = existing.shortageAddedToUdhari;
+
+    // Check if the closing or employee row is approved
+    const isApproved = existing.dailyClosing.status === "APPROVED" || existing.submissionStatus === "APPROVED";
+
+    if (isApproved && !existing.isOfficeSale) {
+      const closingDate = existing.dailyClosing.date;
+
+      if (shortageAmount > 0) {
+        if (existing.salaryAdvanceId) {
+          // Update existing SalaryAdvance amount
+          await tx.salaryAdvance.update({
+            where: { id: existing.salaryAdvanceId },
+            data: {
+              amount: shortageAmount,
+              balanceAmount: shortageAmount,
+              notes: `Daily Closing Cash Shortage updated by Admin on ${closingDate.toISOString().slice(0, 10)}.`,
+            },
+          });
+
+          // Update corresponding SalaryDrawing if present
+          await tx.salaryDrawing.updateMany({
+            where: {
+              employeeId: existing.deliveryBoyId,
+              agencyId: session.agencyId!,
+              date: closingDate,
+              type: "ADVANCE",
+            },
+            data: {
+              amount: shortageAmount,
+              remarks: `Daily Closing Shortage: ₹${shortageAmount.toFixed(0)} (${closingDate.toISOString().slice(0, 10)}) [Admin Adjusted]`,
+            },
+          });
+          shortageAddedToUdhari = true;
+        } else {
+          // Previously had no shortage advance, create one now
+          const advance = await tx.salaryAdvance.create({
+            data: {
+              employeeId: existing.deliveryBoyId,
+              amount: shortageAmount,
+              recoveredAmount: 0,
+              balanceAmount: shortageAmount,
+              advanceDate: closingDate,
+              reason: `Daily Closing Cash Shortage - ${closingDate.toISOString().slice(0, 10)}`,
+              notes: `Automatically added to delivery boy udhari from Daily Closing cash shortage on ${closingDate.toISOString().slice(0, 10)} (Admin Adjusted).`,
+              status: "PENDING",
+              agencyId: session.agencyId!,
+            },
+          });
+          newSalaryAdvanceId = advance.id;
+          shortageAddedToUdhari = true;
+
+          await tx.salaryDrawing.create({
+            data: {
+              employeeId: existing.deliveryBoyId,
+              type: "ADVANCE",
+              amount: shortageAmount,
+              month: closingDate.getMonth() + 1,
+              year: closingDate.getFullYear(),
+              remarks: `Daily Closing Shortage: ₹${shortageAmount.toFixed(0)} (${closingDate.toISOString().slice(0, 10)}) [Admin Adjusted]`,
+              date: closingDate,
+              agencyId: session.agencyId!,
+            },
+          });
+        }
+      } else {
+        // Shortage is now 0, but previously had an advance
+        if (existing.salaryAdvanceId) {
+          try {
+            await tx.salaryAdvance.delete({
+              where: { id: existing.salaryAdvanceId },
+            });
+          } catch {
+            // Ignore if already deleted
+          }
+
+          try {
+            await tx.salaryDrawing.deleteMany({
+              where: {
+                employeeId: existing.deliveryBoyId,
+                agencyId: session.agencyId!,
+                date: closingDate,
+                type: "ADVANCE",
+              },
+            });
+          } catch {
+            // Ignore
+          }
+
+          newSalaryAdvanceId = null;
+          shortageAddedToUdhari = false;
+        }
+      }
+    }
+
+    // 2. Update the employee closing row
     const empClosing = await tx.dailyClosingEmployee.update({
       where: { id: employeeClosingId, agencyId: session.agencyId! },
       data: {
@@ -494,20 +624,23 @@ export async function updateDailyClosingEmployee(employeeClosingId: string, form
         kmBasedExtra: kmBasedExtra || 0,
         expectedTotal: expectedTotal || 0,
         actualCashGiven: actualCash,
+        cashDenominations: (payload.cashDenominations !== undefined ? payload.cashDenominations : (existing.cashDenominations ?? [])) as any,
         shortageAmount,
         excessAmount,
+        salaryAdvanceId: newSalaryAdvanceId,
+        shortageAddedToUdhari,
         notes: notes || null,
         editedByManagerId: session.userId,
         editedAt: new Date(),
       },
     });
 
-    // 2. Query all sibling employee closings for this daily closing
+    // 3. Query all sibling employee closings for this daily closing
     const allEmpClosings = await tx.dailyClosingEmployee.findMany({
       where: { dailyClosingId: empClosing.dailyClosingId },
     });
 
-    // 3. Re-aggregate totals
+    // 4. Re-aggregate totals
     let totalDeliveries = 0;
     let totalCashCollected = 0;
     let totalOnlinePayment = 0;
@@ -536,7 +669,7 @@ export async function updateDailyClosingEmployee(employeeClosingId: string, form
       excessAmountTotal += emp.excessAmount;
     }
 
-    // 4. Update parent daily closing
+    // 5. Update parent daily closing
     await tx.dailyClosing.update({
       where: { id: empClosing.dailyClosingId },
       data: {
@@ -557,6 +690,15 @@ export async function updateDailyClosingEmployee(employeeClosingId: string, form
 
     return empClosing;
   });
+
+  revalidatePath("/admin/daily-closing");
+  revalidatePath("/manager/daily-closing");
+  revalidatePath("/delivery-boy/daily-closing");
+  revalidatePath("/admin/stock");
+  revalidatePath("/manager/stock");
+  revalidatePath("/stock");
+  revalidatePath("/salaries");
+  revalidatePath("/credit-ledger");
 
   return { success: true, employeeClosing: result };
 }
@@ -619,13 +761,591 @@ export async function approveDailyClosing(id: string, role: string) {
   const session = await getSession();
   if (!session || !["ADMIN", "MANAGER"].includes(session.role) || !session.agencyId) return { success: false };
 
-  const data =
-    role === "ADMIN"
-      ? { status: "APPROVED" as const, adminApprovedAt: new Date() }
-      : { managerApprovedAt: new Date() };
+  const result = await prisma.$transaction(async (tx) => {
+    const closing = await tx.dailyClosing.findUnique({
+      where: { id, agencyId: session.agencyId! },
+      include: { employeeClosings: true },
+    });
+    if (!closing) throw new Error("Closing not found");
 
-  await prisma.dailyClosing.update({ where: { id, agencyId: session.agencyId }, data });
-  return { success: true };
+    if (role === "ADMIN") {
+      // 1. Mark DailyClosing as APPROVED
+      await tx.dailyClosing.update({
+        where: { id },
+        data: {
+          status: "APPROVED",
+          adminApprovedAt: new Date(),
+        },
+      });
+
+      // 2. Mark all employee closings as APPROVED and adminConfirmedAt
+      for (const emp of closing.employeeClosings) {
+        let advanceId = emp.salaryAdvanceId;
+
+        // If there is cash shortage, automatically add directly into that delivery boy's Udhari (Advance)!
+        if (emp.shortageAmount > 0 && !emp.salaryAdvanceId && !emp.isOfficeSale) {
+          const advanceDate = closing.date;
+          const advance = await tx.salaryAdvance.create({
+            data: {
+              employeeId: emp.deliveryBoyId,
+              amount: emp.shortageAmount,
+              recoveredAmount: 0,
+              balanceAmount: emp.shortageAmount,
+              advanceDate: advanceDate,
+              reason: `Daily Closing Cash Shortage - ${advanceDate.toISOString().slice(0, 10)}`,
+              notes: `Automatically added to delivery boy udhari from Daily Closing cash shortage on ${advanceDate.toISOString().slice(0, 10)}.`,
+              status: "PENDING",
+              agencyId: session.agencyId!,
+            },
+          });
+          advanceId = advance.id;
+
+          await tx.salaryDrawing.create({
+            data: {
+              employeeId: emp.deliveryBoyId,
+              type: "ADVANCE",
+              amount: emp.shortageAmount,
+              month: advanceDate.getMonth() + 1,
+              year: advanceDate.getFullYear(),
+              remarks: `Daily Closing Shortage: ₹${emp.shortageAmount.toFixed(0)} (${advanceDate.toISOString().slice(0, 10)})`,
+              date: advanceDate,
+              agencyId: session.agencyId!,
+            },
+          });
+        }
+
+        await tx.dailyClosingEmployee.update({
+          where: { id: emp.id },
+          data: {
+            submissionStatus: "APPROVED",
+            adminConfirmedAt: new Date(),
+            shortageAddedToUdhari: emp.shortageAmount > 0,
+            salaryAdvanceId: advanceId,
+          },
+        });
+      }
+    } else {
+      // MANAGER: Marks manager approval & verified by manager, forwards to Admin
+      await tx.dailyClosing.update({
+        where: { id },
+        data: {
+          managerApprovedAt: new Date(),
+          cashVerified: true,
+          cashVerifiedById: session.userId,
+          cashVerifiedAt: new Date(),
+        },
+      });
+
+      await tx.dailyClosingEmployee.updateMany({
+        where: { dailyClosingId: id },
+        data: {
+          submissionStatus: "VERIFIED_BY_MANAGER",
+          managerVerifiedAt: new Date(),
+        },
+      });
+    }
+
+    return true;
+  });
+
+  revalidatePath("/delivery-boy/daily-closing");
+  revalidatePath("/manager/daily-closing");
+  revalidatePath("/admin/daily-closing");
+  revalidatePath("/stock");
+  revalidatePath("/admin/stock");
+  revalidatePath("/manager/stock");
+  revalidatePath("/salaries");
+  revalidatePath("/credit-ledger");
+
+  return { success: !!result };
+}
+
+// ─── Delivery Boy Closing Flow Actions ──────────────────────────────────────────
+
+export async function getDeliveryBoyClosingForDate(dateStr?: string) {
+  const session = await getSession();
+  if (!session || session.role !== "DELIVERY_BOY" || !session.agencyId) {
+    return { error: "Unauthorized" };
+  }
+
+  const selectedDate = dateStr || new Date().toISOString().slice(0, 10);
+  const start = new Date(selectedDate);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(selectedDate);
+  end.setHours(23, 59, 59, 999);
+
+  // 1. Fetch delivery records for today
+  const deliveries = await prisma.deliveryRecord.findMany({
+    where: {
+      agencyId: session.agencyId,
+      deliveredById: session.userId,
+      date: { gte: start, lte: end },
+    },
+    include: {
+      product: {
+        select: { id: true, name: true, saleRate: true },
+      },
+      customer: {
+        select: { type: true, customerCode: true, name: true, phone: true },
+      },
+    },
+  });
+
+  let totalDelivered = 0;
+  let pendingQty = 0;
+  let returnedQty = 0;
+  let cashCollected = 0;
+  let onlineAmount = 0;
+  let udhariAmount = 0;
+
+  const productsMap: Record<string, {
+    productId: string;
+    productName: string;
+    soldQty: number;
+    baseRate: number;
+    kmRate: number;
+    kmExtra: number;
+    totalAmt: number;
+  }> = {};
+
+  for (const d of deliveries) {
+    totalDelivered += d.deliveredQty;
+    pendingQty += d.pendingQty;
+    returnedQty += d.returnedQty;
+
+    const isCash = d.paymentMode === "CASH";
+    const isCredit = d.paymentMode === "CREDIT";
+    const isPartial = d.paymentMode === "PARTIAL";
+
+    let cashVal = 0;
+    let onlineVal = 0;
+    let creditVal = 0;
+
+    if (isCash) {
+      cashVal = d.cashCollected;
+    } else if (isCredit) {
+      creditVal = d.creditAmount || 0;
+    } else if (isPartial) {
+      cashVal = d.cashCollected;
+      const isDom = d.customer.type === "DOMESTIC";
+      if (isDom) {
+        onlineVal = d.creditAmount || 0;
+      } else {
+        creditVal = d.creditAmount || 0;
+      }
+    } else {
+      onlineVal = d.cashCollected;
+    }
+
+    cashCollected += cashVal;
+    onlineAmount += onlineVal;
+    udhariAmount += creditVal;
+
+    const prodId = d.productId;
+    const totalAmtForDelivery = cashVal + onlineVal + creditVal;
+    const actualRate = d.deliveredQty > 0 ? Math.round((totalAmtForDelivery / d.deliveredQty) * 100) / 100 : d.product.saleRate;
+    const key = `${prodId}_${actualRate}`;
+
+    if (!productsMap[key]) {
+      productsMap[key] = {
+        productId: prodId,
+        productName: d.product.name,
+        soldQty: 0,
+        baseRate: actualRate,
+        kmRate: actualRate,
+        kmExtra: 0,
+        totalAmt: 0,
+      };
+    }
+    const pInfo = productsMap[key];
+    pInfo.soldQty += d.deliveredQty;
+    pInfo.totalAmt += (d.deliveredQty * actualRate);
+  }
+
+  const expectedTotal = cashCollected + onlineAmount + udhariAmount;
+  const expectedCash = expectedTotal - onlineAmount - udhariAmount;
+
+  // 2. Check if a closing already exists
+  const existingClosing = await prisma.dailyClosingEmployee.findFirst({
+    where: {
+      agencyId: session.agencyId,
+      deliveryBoyId: session.userId,
+      isOfficeSale: false,
+      dailyClosing: {
+        date: { gte: start, lte: end },
+        agencyId: session.agencyId,
+      },
+    },
+    include: {
+      dailyClosing: {
+        select: {
+          id: true,
+          status: true,
+          managerApprovedAt: true,
+          adminApprovedAt: true,
+        },
+      },
+    },
+  });
+
+  // 3. Fetch delivery boy's current total pending advance / udhari balance
+  const activeAdvances = await prisma.salaryAdvance.findMany({
+    where: {
+      agencyId: session.agencyId,
+      employeeId: session.userId,
+      status: { in: ["PENDING", "PARTIAL"] },
+    },
+    select: { balanceAmount: true },
+  });
+  const currentAdvanceBalance = activeAdvances.reduce((sum, a) => sum + (a.balanceAmount || 0), 0);
+
+  return {
+    date: selectedDate,
+    totalDelivered,
+    pendingQty,
+    returnedQty,
+    cashCollected,
+    onlineAmount,
+    udhariAmount,
+    expectedTotal,
+    expectedCash,
+    products: Object.values(productsMap),
+    existingClosing: existingClosing
+      ? {
+          id: existingClosing.id,
+          dailyClosingId: existingClosing.dailyClosingId,
+          submissionStatus: existingClosing.submissionStatus,
+          actualCashGiven: existingClosing.actualCashGiven,
+          cashDenominations: existingClosing.cashDenominations as any,
+          shortageAmount: existingClosing.shortageAmount,
+          excessAmount: existingClosing.excessAmount,
+          notes: existingClosing.notes,
+          shortageAddedToUdhari: existingClosing.shortageAddedToUdhari,
+          submittedAt: existingClosing.submittedAt ? existingClosing.submittedAt.toISOString() : null,
+          managerVerifiedAt: existingClosing.managerVerifiedAt ? existingClosing.managerVerifiedAt.toISOString() : null,
+          adminConfirmedAt: existingClosing.adminConfirmedAt ? existingClosing.adminConfirmedAt.toISOString() : null,
+          dailyClosingStatus: existingClosing.dailyClosing.status,
+        }
+      : null,
+    currentAdvanceBalance,
+  };
+}
+
+export async function submitDeliveryBoyClosing(payload: {
+  date: string;
+  actualCashGiven: number;
+  cashDenominations?: any[];
+  returnedQty?: number;
+  notes?: string;
+}) {
+  const session = await getSession();
+  if (!session || session.role !== "DELIVERY_BOY" || !session.agencyId) {
+    return { error: "Unauthorized" };
+  }
+
+  const { date, actualCashGiven, cashDenominations, returnedQty, notes } = payload;
+  const start = new Date(date);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(date);
+  end.setHours(23, 59, 59, 999);
+
+  // Compute live stats for the delivery boy
+  const deliveries = await prisma.deliveryRecord.findMany({
+    where: {
+      agencyId: session.agencyId,
+      deliveredById: session.userId,
+      date: { gte: start, lte: end },
+    },
+    include: {
+      product: { select: { id: true, name: true, saleRate: true } },
+      customer: { select: { type: true } },
+    },
+  });
+
+  let totalDelivered = 0;
+  let pendingQty = 0;
+  let computedReturned = 0;
+  let cashCollected = 0;
+  let onlineAmount = 0;
+  let udhariAmount = 0;
+
+  const productsMap: Record<string, any> = {};
+
+  for (const d of deliveries) {
+    totalDelivered += d.deliveredQty;
+    pendingQty += d.pendingQty;
+    computedReturned += d.returnedQty;
+
+    const isCash = d.paymentMode === "CASH";
+    const isCredit = d.paymentMode === "CREDIT";
+    const isPartial = d.paymentMode === "PARTIAL";
+
+    let cashVal = 0;
+    let onlineVal = 0;
+    let creditVal = 0;
+
+    if (isCash) {
+      cashVal = d.cashCollected;
+    } else if (isCredit) {
+      creditVal = d.creditAmount || 0;
+    } else if (isPartial) {
+      cashVal = d.cashCollected;
+      const isDom = d.customer.type === "DOMESTIC";
+      if (isDom) onlineVal = d.creditAmount || 0;
+      else creditVal = d.creditAmount || 0;
+    } else {
+      onlineVal = d.cashCollected;
+    }
+
+    cashCollected += cashVal;
+    onlineAmount += onlineVal;
+    udhariAmount += creditVal;
+
+    const prodId = d.productId;
+    const totalAmtForDelivery = cashVal + onlineVal + creditVal;
+    const actualRate = d.deliveredQty > 0 ? Math.round((totalAmtForDelivery / d.deliveredQty) * 100) / 100 : d.product.saleRate;
+    const key = `${prodId}_${actualRate}`;
+
+    if (!productsMap[key]) {
+      productsMap[key] = {
+        productId: prodId,
+        productName: d.product.name,
+        soldQty: 0,
+        baseRate: actualRate,
+        kmRate: actualRate,
+        kmExtra: 0,
+        totalAmt: 0,
+      };
+    }
+    const pInfo = productsMap[key];
+    pInfo.soldQty += d.deliveredQty;
+    pInfo.totalAmt += (d.deliveredQty * actualRate);
+  }
+
+  const expectedTotal = cashCollected + onlineAmount + udhariAmount;
+  const expectedCash = expectedTotal - onlineAmount - udhariAmount;
+  const actualCash = Number(actualCashGiven) || 0;
+  const shortageAmount = expectedCash > actualCash ? expectedCash - actualCash : 0;
+  const excessAmount = actualCash > expectedCash ? actualCash - expectedCash : 0;
+
+  const result = await prisma.$transaction(async (tx) => {
+    // 1. Find or create master DailyClosing
+    let closing = await tx.dailyClosing.findFirst({
+      where: {
+        agencyId: session.agencyId!,
+        date: { gte: start, lte: end },
+      },
+    });
+
+    if (!closing) {
+      closing = await tx.dailyClosing.create({
+        data: {
+          date: new Date(date),
+          agencyId: session.agencyId!,
+          status: "PENDING",
+        },
+      });
+    }
+
+    // 2. Find or create DailyClosingEmployee
+    let empClosing = await tx.dailyClosingEmployee.findFirst({
+      where: {
+        dailyClosingId: closing.id,
+        deliveryBoyId: session.userId,
+        isOfficeSale: false,
+        agencyId: session.agencyId!,
+      },
+    });
+
+    const empData = {
+      cylinderBreakdown: Object.values(productsMap),
+      totalDelivered,
+      pendingQty,
+      returnedQty: returnedQty !== undefined ? Number(returnedQty) : computedReturned,
+      udhariAmount,
+      cashCollected,
+      onlineAmount,
+      kmBasedExtra: 0,
+      expectedTotal,
+      actualCashGiven: actualCash,
+      cashDenominations: cashDenominations || [],
+      shortageAmount,
+      excessAmount,
+      notes: notes || null,
+      fetchedFromDeliveries: true,
+      isOfficeSale: false,
+      submissionStatus: "SUBMITTED_TO_MANAGER",
+      submittedAt: new Date(),
+    };
+
+    if (empClosing) {
+      empClosing = await tx.dailyClosingEmployee.update({
+        where: { id: empClosing.id },
+        data: empData,
+      });
+    } else {
+      empClosing = await tx.dailyClosingEmployee.create({
+        data: {
+          ...empData,
+          dailyClosingId: closing.id,
+          deliveryBoyId: session.userId,
+          agencyId: session.agencyId!,
+        },
+      });
+    }
+
+    // 3. Recalculate daily closing master aggregates
+    const allEmpClosings = await tx.dailyClosingEmployee.findMany({
+      where: { dailyClosingId: closing.id },
+    });
+
+    let totalDeliveriesSum = 0;
+    let totalCashCollectedSum = 0;
+    let totalOnlinePaymentSum = 0;
+    let totalUdhariSum = 0;
+    let totalCollectionSum = 0;
+    let pendingDeliveriesSum = 0;
+    let returnedCylindersSum = 0;
+    let grandExpectedSum = 0;
+    let cashOnHandSum = 0;
+    let shortageAmountSum = 0;
+    let excessAmountSum = 0;
+
+    for (const ec of allEmpClosings) {
+      totalDeliveriesSum += ec.totalDelivered;
+      totalCashCollectedSum += ec.cashCollected;
+      totalOnlinePaymentSum += ec.onlineAmount;
+      totalUdhariSum += ec.udhariAmount;
+      totalCollectionSum += ec.cashCollected + ec.onlineAmount;
+      pendingDeliveriesSum += ec.pendingQty;
+      returnedCylindersSum += ec.returnedQty;
+      grandExpectedSum += ec.expectedTotal;
+      cashOnHandSum += ec.actualCashGiven;
+      shortageAmountSum += ec.shortageAmount;
+      excessAmountSum += ec.excessAmount;
+    }
+
+    await tx.dailyClosing.update({
+      where: { id: closing.id },
+      data: {
+        totalDeliveries: totalDeliveriesSum,
+        totalCashCollected: totalCashCollectedSum,
+        totalOnlinePayment: totalOnlinePaymentSum,
+        totalUdhari: totalUdhariSum,
+        totalCollection: totalCollectionSum,
+        pendingDeliveries: pendingDeliveriesSum,
+        returnedCylinders: returnedCylindersSum,
+        grandExpected: grandExpectedSum,
+        cashOnHand: cashOnHandSum,
+        shortageAmount: shortageAmountSum,
+        excessAmount: excessAmountSum,
+      },
+    });
+
+    return empClosing;
+  });
+
+  revalidatePath("/delivery-boy/daily-closing");
+  revalidatePath("/manager/daily-closing");
+  revalidatePath("/admin/daily-closing");
+  revalidatePath("/stock");
+  revalidatePath("/admin/stock");
+  revalidatePath("/manager/stock");
+
+  return { success: true, employeeClosing: result };
+}
+
+export async function managerVerifyEmployeeClosing(payload: {
+  employeeClosingId: string;
+  verifiedCash: number;
+  cashDenominations?: any[];
+  addShortageToUdhari?: boolean;
+  notes?: string;
+}) {
+  const session = await getSession();
+  if (!session || !["ADMIN", "MANAGER"].includes(session.role) || !session.agencyId) {
+    return { error: "Unauthorized" };
+  }
+
+  const { employeeClosingId, verifiedCash, cashDenominations, addShortageToUdhari = true, notes } = payload;
+
+  const result = await prisma.$transaction(async (tx) => {
+    const existing = await tx.dailyClosingEmployee.findUnique({
+      where: { id: employeeClosingId, agencyId: session.agencyId! },
+      include: { dailyClosing: true },
+    });
+    if (!existing) throw new Error("Closing record not found");
+
+    const expectedCash = existing.expectedTotal - existing.onlineAmount - existing.udhariAmount;
+    const actualCash = Number(verifiedCash) || 0;
+    const shortageAmount = expectedCash > actualCash ? expectedCash - actualCash : 0;
+    const excessAmount = actualCash > expectedCash ? actualCash - expectedCash : 0;
+
+    const updated = await tx.dailyClosingEmployee.update({
+      where: { id: employeeClosingId },
+      data: {
+        actualCashGiven: actualCash,
+        cashDenominations: (cashDenominations !== undefined ? cashDenominations : (existing.cashDenominations ?? [])) as any,
+        shortageAmount,
+        excessAmount,
+        shortageAddedToUdhari: shortageAmount > 0 ? !!addShortageToUdhari : false,
+        submissionStatus: "VERIFIED_BY_MANAGER",
+        managerVerifiedAt: new Date(),
+        editedByManagerId: session.userId,
+        editedAt: new Date(),
+        notes: notes !== undefined ? notes : existing.notes,
+      },
+    });
+
+    // Mark dailyClosing master managerApprovedAt and cashVerified
+    await tx.dailyClosing.update({
+      where: { id: existing.dailyClosingId },
+      data: {
+        managerApprovedAt: new Date(),
+        cashVerified: true,
+        cashVerifiedById: session.userId,
+        cashVerifiedAt: new Date(),
+      },
+    });
+
+    // Re-aggregate master totals
+    const allEmpClosings = await tx.dailyClosingEmployee.findMany({
+      where: { dailyClosingId: existing.dailyClosingId },
+    });
+
+    let grandExpectedSum = 0;
+    let cashOnHandSum = 0;
+    let shortageAmountSum = 0;
+    let excessAmountSum = 0;
+
+    for (const ec of allEmpClosings) {
+      grandExpectedSum += ec.expectedTotal;
+      cashOnHandSum += ec.actualCashGiven;
+      shortageAmountSum += ec.shortageAmount;
+      excessAmountSum += ec.excessAmount;
+    }
+
+    await tx.dailyClosing.update({
+      where: { id: existing.dailyClosingId },
+      data: {
+        grandExpected: grandExpectedSum,
+        cashOnHand: cashOnHandSum,
+        shortageAmount: shortageAmountSum,
+        excessAmount: excessAmountSum,
+      },
+    });
+
+    return updated;
+  });
+
+  revalidatePath("/delivery-boy/daily-closing");
+  revalidatePath("/manager/daily-closing");
+  revalidatePath("/admin/daily-closing");
+  revalidatePath("/stock");
+  revalidatePath("/admin/stock");
+  revalidatePath("/manager/stock");
+
+  return { success: true, employeeClosing: result };
 }
 
 // Old/Simple compatibility export
@@ -651,3 +1371,4 @@ export async function createDailyClosing(formData: FormData) {
   });
   return { closing };
 }
+

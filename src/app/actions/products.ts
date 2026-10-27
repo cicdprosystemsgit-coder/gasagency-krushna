@@ -14,6 +14,8 @@ export async function createProduct(formData: FormData): Promise<{ product?: Pro
 
   const isCylinder = formData.get("isCylinder") === "true";
   const hsnCode = (formData.get("hsnCode") as string)?.trim() || null;
+  const rawGst = formData.get("gstRate");
+  const gstRate = rawGst !== null && rawGst !== "" ? Math.max(0, Number(rawGst)) : 5;
 
   const product = await prisma.product.create({
     data: {
@@ -23,6 +25,7 @@ export async function createProduct(formData: FormData): Promise<{ product?: Pro
       margin: Number(formData.get("margin")) || 0,
       isCylinder,
       hsnCode,
+      gstRate,
       agencyId: session.agencyId,
     },
   });
@@ -39,6 +42,8 @@ export async function updateProduct(formData: FormData): Promise<{ product?: Pro
 
   const isCylinder = formData.get("isCylinder") === "true";
   const hsnCode = (formData.get("hsnCode") as string)?.trim() || null;
+  const rawGst = formData.get("gstRate");
+  const gstRate = rawGst !== null && rawGst !== "" ? Math.max(0, Number(rawGst)) : 5;
 
   const product = await prisma.product.update({
     where: { id, agencyId: session.agencyId },
@@ -49,6 +54,7 @@ export async function updateProduct(formData: FormData): Promise<{ product?: Pro
       margin: Number(formData.get("margin")) || 0,
       isCylinder,
       hsnCode,
+      gstRate,
     },
   });
   return { product };

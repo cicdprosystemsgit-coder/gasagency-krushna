@@ -2,11 +2,10 @@ import { getSessionWithFeatures, requireFeature } from "@/lib/feature-gate";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
-import { GodownKeeperClient } from "./GodownKeeperClient";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Warehouse } from "lucide-react";
+import { GodownTabsContainer } from "@/app/(dashboard)/admin/godown/GodownTabsContainer";
 import { CylinderLoader } from "@/components/ui/CylinderLoader";
-
-import { getAgencyTodayRange } from "@/lib/utils";
-
 import { checkPermission } from "@/lib/rbac";
 
 interface PageProps {
@@ -31,7 +30,19 @@ export default async function GodownKeeperGodownPage({ searchParams }: PageProps
   const dateEnd = new Date(targetDate);
   dateEnd.setHours(23, 59, 59, 999);
 
-  const [records, totals, deliveryVehicles, deliveryBoys, todayTripLogs, cylinderTypes, deliveryRequests, allProducts] = await Promise.all([
+  const [
+    records,
+    totals,
+    deliveryVehicles,
+    deliveryBoys,
+    todayTripLogs,
+    cylinderTypes,
+    todayMovements,
+    deliveryRequests,
+    allProducts,
+    deletedRecords,
+    deletedTripLogs,
+  ] = await Promise.all([
     prisma.godownRecord.findMany({
       where: {
         agencyId: session.agencyId!,
@@ -47,7 +58,6 @@ export default async function GodownKeeperGodownPage({ searchParams }: PageProps
         agencyId: session.agencyId!,
         isDeleted: false,
         status: "APPROVED",
-        entryDate: { gte: dateStart, lte: dateEnd },
       },
     }),
     prisma.deliveryVehicle.findMany({
@@ -72,6 +82,14 @@ export default async function GodownKeeperGodownPage({ searchParams }: PageProps
       where: { agencyId: session.agencyId!, isCylinder: true, isActive: true },
       select: { id: true, name: true },
       orderBy: { name: "asc" },
+    }),
+    prisma.godownInventory.findMany({
+      where: { agencyId: session.agencyId!, date: { gte: dateStart, lte: dateEnd } },
+      orderBy: { date: "desc" },
+      include: {
+        product: { select: { name: true } },
+        recordedBy: { select: { name: true } },
+      },
     }),
     prisma.deliveryCountRequest.findMany({
       where: {
@@ -99,6 +117,25 @@ export default async function GodownKeeperGodownPage({ searchParams }: PageProps
       where: { agencyId: session.agencyId!, isActive: true },
       select: { id: true, name: true, isCylinder: true },
       orderBy: { name: "asc" },
+    }),
+    prisma.godownRecord.findMany({
+      where: {
+        agencyId: session.agencyId!,
+        isDeleted: true,
+      },
+      orderBy: { deletedAt: "desc" },
+      include: { submittedBy: { select: { name: true } } },
+    }),
+    prisma.vehicleTripLog.findMany({
+      where: {
+        agencyId: session.agencyId!,
+        isDeleted: true,
+      },
+      orderBy: { deletedAt: "desc" },
+      include: {
+        vehicle: { select: { vehicleNo: true, vehicleName: true, assignedTo: { select: { name: true } } } },
+        recordedBy: { select: { name: true } },
+      },
     }),
   ]);
 
@@ -132,24 +169,41 @@ export default async function GodownKeeperGodownPage({ searchParams }: PageProps
   }));
 
   return (
-    <Suspense fallback={
-      <div className="flex items-center justify-center py-24">
-        <CylinderLoader size="lg" message="Loading Godown Stock" subtitle="Calculating cylinder inventory and vehicle dispatches..." />
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center py-24">
+          <CylinderLoader size="lg" message="Loading Godown Stock" subtitle="Calculating cylinder inventory and vehicle dispatches..." />
+        </div>
+      }
+    >
+      <div>
+        <PageHeader
+          title="Godown Management"
+          subtitle="Track company supply vehicles, manage internal delivery fleet, and view live GPS tracking"
+          icon={<Warehouse className="w-5 h-5 text-blue-600" />}
+        />
+
+        <GodownTabsContainer
+          initialRecords={records}
+          initialDeletedRecords={deletedRecords}
+          totalFilled={totals._sum.filledCylindersReceived ?? 0}
+          totalEmpty={totals._sum.emptyCylindersReturned ?? 0}
+          deliveryVehicles={deliveryVehicles}
+          deliveryBoys={deliveryBoys}
+          todayTripLogs={todayTripLogs}
+          initialDeletedTripLogs={deletedTripLogs}
+          cylinderTypes={cylinderTypes}
+          isAdmin={false}
+          userId={session.userId}
+          userRole={session.role}
+          mapRecords={records}
+          mapTrips={todayTripLogs}
+          mapMovements={todayMovements}
+          selectedDate={selectedDate}
+          deliveryRequests={serializedRequests}
+          products={allProducts}
+        />
       </div>
-    }>
-      <GodownKeeperClient
-        initialRecords={records}
-        totalFilled={totals._sum.filledCylindersReceived ?? 0}
-        totalEmpty={totals._sum.emptyCylindersReturned ?? 0}
-        userId={session.userId}
-        cylinderTypes={cylinderTypes}
-        initialVehicles={deliveryVehicles}
-        initialTripLogs={todayTripLogs}
-        deliveryBoys={deliveryBoys}
-        selectedDate={selectedDate}
-        deliveryRequests={serializedRequests}
-        products={allProducts}
-      />
     </Suspense>
   );
 }

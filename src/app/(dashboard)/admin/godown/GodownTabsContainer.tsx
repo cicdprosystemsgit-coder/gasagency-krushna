@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import dynamic from "next/dynamic";
-import { Warehouse, Truck, MapPin, Map, CheckCircle2 } from "lucide-react";
+import Link from "next/link";
+import { Warehouse, Truck, MapPin, Map, CheckCircle2, ClipboardCheck } from "lucide-react";
 import { GodownClient } from "./GodownClient";
 import { InternalVehiclesClient } from "./InternalVehiclesClient";
 import { DeliveryRequestsClient, GodownDeliveryRequest } from "../../godown-keeper/delivery-requests/DeliveryRequestsClient";
@@ -75,7 +76,9 @@ export function GodownTabsContainer({
 }: Props) {
   const [activeTab, setActiveTab] = useState<"supply" | "fleet" | "requests" | "live">("supply");
 
+  const pendingRequestsCount = deliveryRequests.filter((r) => r.status === "PENDING").length;
   const approvedRequestsCount = deliveryRequests.filter((r) => r.status === "APPROVED").length;
+  const totalActiveRequests = pendingRequestsCount + approvedRequestsCount;
 
   return (
     <div className="space-y-6">
@@ -116,9 +119,9 @@ export function GodownTabsContainer({
           >
             <Truck className="w-4 h-4" />
             <span>Vehicle Loading</span>
-            {approvedRequestsCount > 0 && (
+            {totalActiveRequests > 0 && (
               <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-indigo-600 text-white shadow-xs animate-pulse">
-                {approvedRequestsCount}
+                {totalActiveRequests}
               </span>
             )}
           </button>
@@ -136,10 +139,19 @@ export function GodownTabsContainer({
           </button>
         </div>
 
-        {/* Date Selector Integration */}
-        <div className="flex items-center gap-2 self-stretch sm:self-auto justify-between sm:justify-end border-t sm:border-t-0 pt-2 sm:pt-0 border-slate-100">
-          <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Date:</span>
-          <DateNavigationHeader selectedDate={selectedDate} />
+        {/* Date Selector & Stock Register Quick Link */}
+        <div className="flex items-center gap-2.5 self-stretch sm:self-auto justify-between sm:justify-end border-t sm:border-t-0 pt-2 sm:pt-0 border-slate-100 flex-wrap">
+          <Link
+            href={`${userRole === "ADMIN" ? "/admin" : userRole === "MANAGER" ? "/manager" : "/godown-keeper"}/stock?date=${selectedDate}`}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 transition shadow-2xs"
+          >
+            <ClipboardCheck className="w-3.5 h-3.5" />
+            <span>Stock Register</span>
+          </Link>
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Date:</span>
+            <DateNavigationHeader selectedDate={selectedDate} />
+          </div>
         </div>
       </div>
 

@@ -1,94 +1,64 @@
 "use client";
 
-import { PageHeader } from "@/components/ui/PageHeader";
-import { Warehouse } from "lucide-react";
-import { GodownClient } from "../../admin/godown/GodownClient";
-import { InternalVehiclesClient } from "../../admin/godown/InternalVehiclesClient";
-import { DateNavigationHeader } from "@/components/ui/DateNavigationHeader";
+import { GodownTabsContainer } from "../../admin/godown/GodownTabsContainer";
 
 interface GodownKeeperClientProps {
   initialRecords: any[];
+  initialDeletedRecords?: any[];
   totalFilled: number;
   totalEmpty: number;
   userId: string;
   cylinderTypes: any[];
   initialVehicles: any[];
   initialTripLogs: any[];
+  initialDeletedTripLogs?: any[];
   deliveryBoys: any[];
   selectedDate?: string;
   deliveryRequests?: any[];
   products?: any[];
+  todayMovements?: any[];
 }
 
-const EMPTY_DELIVERY_REQUESTS: any[] = [];
-const EMPTY_PRODUCTS: any[] = [];
+const EMPTY_LIST: any[] = [];
 
 export function GodownKeeperClient({
   initialRecords,
+  initialDeletedRecords = EMPTY_LIST,
   totalFilled,
   totalEmpty,
   userId,
   cylinderTypes,
   initialVehicles,
   initialTripLogs,
+  initialDeletedTripLogs = EMPTY_LIST,
   deliveryBoys,
   selectedDate,
-  deliveryRequests = EMPTY_DELIVERY_REQUESTS,
-  products = EMPTY_PRODUCTS,
+  deliveryRequests = EMPTY_LIST,
+  products = EMPTY_LIST,
+  todayMovements = EMPTY_LIST,
 }: GodownKeeperClientProps) {
   const activeDate = selectedDate || new Date().toISOString().slice(0, 10);
+
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <PageHeader
-          title="Godown Keeper Dashboard"
-          subtitle="Track company supply vehicles and manage internal delivery fleet operations"
-          icon={<Warehouse className="w-5 h-5 text-blue-600" />}
-        />
-        <div className="flex items-center gap-2 self-end sm:self-auto">
-          <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Date:</span>
-          <DateNavigationHeader selectedDate={activeDate} />
-        </div>
-      </div>
-
-      {/* Company Vehicle Section */}
-      <div className="mb-2">
-        <div className="flex items-center gap-2 mb-4">
-          <div className="w-2 h-2 rounded-full" style={{ background: "#2563EB" }} />
-          <p className="text-[13px] font-semibold uppercase tracking-wide text-slate-600">Company Supply Vehicle (Bharat Gas)</p>
-        </div>
-        <GodownClient
-          initialRecords={initialRecords}
-          totalFilled={totalFilled}
-          totalEmpty={totalEmpty}
-          isAdmin={false}
-          userId={userId}
-          cylinderTypes={cylinderTypes}
-          selectedDate={activeDate}
-        />
-      </div>
-
-      {/* Divider */}
-      <div className="my-8" style={{ borderTop: "2px dashed #E2E8F0" }} />
-
-      {/* Internal Fleet Section */}
-      <div>
-        <div className="flex items-center gap-2 mb-4">
-          <div className="w-2 h-2 rounded-full" style={{ background: "#16A34A" }} />
-          <p className="text-[13px] font-semibold uppercase tracking-wide text-slate-600">Internal Delivery Fleet</p>
-        </div>
-        <InternalVehiclesClient
-          initialVehicles={initialVehicles}
-          initialTripLogs={initialTripLogs}
-          deliveryBoys={deliveryBoys}
-          isAdmin={false}
-          userId={userId}
-          cylinderTypes={cylinderTypes}
-          selectedDate={activeDate}
-          deliveryRequests={deliveryRequests}
-          products={products.length > 0 ? products : cylinderTypes}
-        />
-      </div>
-    </div>
+    <GodownTabsContainer
+      initialRecords={initialRecords}
+      initialDeletedRecords={initialDeletedRecords}
+      totalFilled={totalFilled}
+      totalEmpty={totalEmpty}
+      deliveryVehicles={initialVehicles}
+      deliveryBoys={deliveryBoys}
+      todayTripLogs={initialTripLogs}
+      initialDeletedTripLogs={initialDeletedTripLogs}
+      cylinderTypes={cylinderTypes}
+      isAdmin={false}
+      userId={userId}
+      userRole="GODOWN_KEEPER"
+      mapRecords={initialRecords}
+      mapTrips={initialTripLogs}
+      mapMovements={todayMovements}
+      selectedDate={activeDate}
+      deliveryRequests={deliveryRequests}
+      products={products.length > 0 ? products : cylinderTypes}
+    />
   );
 }

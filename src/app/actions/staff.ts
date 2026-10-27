@@ -12,7 +12,7 @@ import { revalidatePath } from "next/cache";
 const USER_SELECT = {
   id: true, name: true, email: true, phone: true, role: true,
   customRole: true, customRoleId: true,
-  isActive: true, createdAt: true,
+  isActive: true, createdAt: true, twoFactorEnabled: true,
   bankAccountNo: true, bankName: true, ifscCode: true,
   aadhaarNo: true, panNo: true, photoBase64: true,
   salaryProfile: {
@@ -44,6 +44,7 @@ export async function createStaffUser(formData: FormData) {
   const customRole   = optStr(formData, "customRole");
   const customRoleId = optStr(formData, "customRoleId");
   const password     = str(formData, "password");
+  const loginPin     = optStr(formData, "loginPin");
 
   // Extended profile
   const bankAccountNo = optStr(formData, "bankAccountNo");
@@ -64,6 +65,7 @@ export async function createStaffUser(formData: FormData) {
   if (phone && !/^\d{10}$/.test(phone))        return { error: "Phone must be 10 digits" };
   const pwCheck = validatePassword(password);
   if (!pwCheck.valid) return { error: pwCheck.message };
+  if (loginPin && !/^\d{4,6}$/.test(loginPin)) return { error: "Security PIN must be 4 to 6 numbers only" };
   if (bankAccountNo && !/^\d{9,18}$/.test(bankAccountNo)) return { error: "Bank account must be 9–18 digits" };
   if (ifscCode && !/^[A-Z]{4}0[A-Z0-9]{6}$/.test(ifscCode.toUpperCase())) return { error: "Invalid IFSC code (e.g. SBIN0001234)" };
   if (aadhaarNo && !/^\d{12}$/.test(aadhaarNo))           return { error: "Aadhaar must be exactly 12 digits" };
@@ -76,9 +78,12 @@ export async function createStaffUser(formData: FormData) {
   if (exists) return { error: "Email already registered" };
 
   const hashed = await bcrypt.hash(password, 12);
+  const hashedPin = loginPin ? await bcrypt.hash(loginPin, 10) : null;
+
   const user = await prisma.user.create({
     data: {
       name, email, phone, role, password: hashed,
+      loginPin: hashedPin,
       customRole,
       customRoleId,
       agencyId: session.agencyId,
@@ -114,6 +119,7 @@ export async function updateStaffUser(formData: FormData) {
   const customRole   = optStr(formData, "customRole");
   const customRoleId = optStr(formData, "customRoleId");
   const newPassword = str(formData, "password");
+  const newLoginPin = optStr(formData, "loginPin");
 
   // Extended profile
   const bankAccountNo = optStr(formData, "bankAccountNo");
@@ -135,6 +141,9 @@ export async function updateStaffUser(formData: FormData) {
   if (newPassword) {
     const pwCheck = validatePassword(newPassword);
     if (!pwCheck.valid) return { error: pwCheck.message };
+  }
+  if (newLoginPin && !/^\d{4,6}$/.test(newLoginPin)) {
+    return { error: "Security PIN must be 4 to 6 numbers only" };
   }
   if (bankAccountNo && !/^\d{9,18}$/.test(bankAccountNo)) return { error: "Bank account must be 9–18 digits" };
   if (ifscCode && !/^[A-Z]{4}0[A-Z0-9]{6}$/.test(ifscCode.toUpperCase())) return { error: "Invalid IFSC code" };
@@ -166,6 +175,9 @@ export async function updateStaffUser(formData: FormData) {
   if (newPassword) {
     data.password = await bcrypt.hash(newPassword, 12);
     data.passwordChangedAt = new Date(); // invalidates old sessions
+  }
+  if (newLoginPin) {
+    data.loginPin = await bcrypt.hash(newLoginPin, 10);
   }
 
   // Track whether salary should be cleared (cannot use nested deleteMany on one-to-one)
