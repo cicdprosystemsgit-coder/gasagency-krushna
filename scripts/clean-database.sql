@@ -63,6 +63,7 @@ DELETE FROM "OfficeTransaction";
 DELETE FROM "CommercialSale";
 DELETE FROM "DeliveryCountRequest";
 DELETE FROM "DeliveryRecord";
+DELETE FROM "Customer";
 DELETE FROM "VehicleTripLog";
 DELETE FROM "DailyClosingEmployee";
 DELETE FROM "DailyClosing";

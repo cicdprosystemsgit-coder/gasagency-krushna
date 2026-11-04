@@ -170,6 +170,7 @@ async function main() {
   await prisma.commercialSale.deleteMany();
   await prisma.deliveryCountRequest.deleteMany();
   await prisma.deliveryRecord.deleteMany();
+  await prisma.customer.deleteMany();
   await prisma.vehicleTripLog.deleteMany();
   await prisma.dailyClosingEmployee.deleteMany();
   await prisma.dailyClosing.deleteMany();
