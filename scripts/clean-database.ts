@@ -1,10 +1,36 @@
-import "dotenv/config";
-import { prisma } from "../src/lib/prisma";
 import fs from "fs";
 import path from "path";
+import dotenv from "dotenv";
+
+// 1. Load environment variables before initializing Prisma
+const envFiles = [".env.production", ".env.local", ".env"];
+let loadedEnv = false;
+for (const file of envFiles) {
+  const envPath = path.resolve(process.cwd(), file);
+  if (fs.existsSync(envPath)) {
+    dotenv.config({ path: envPath });
+    console.log(`Loaded environment from: ${file}`);
+    loadedEnv = true;
+  }
+}
+
+if (!loadedEnv && !process.env.DATABASE_URL) {
+  console.warn("⚠️ Warning: No .env, .env.production, or .env.local found in current directory.");
+}
+
+let prismaInstance: any = null;
 
 async function main() {
   console.log("=== STARTING DATABASE CLEANUP ===");
+
+  if (!process.env.DATABASE_URL) {
+    console.error("❌ Error: DATABASE_URL is missing. Please check your .env or .env.production file.");
+    process.exit(1);
+  }
+
+  // Dynamic import so Prisma initializes with loaded DATABASE_URL
+  const { prisma } = await import("../src/lib/prisma");
+  prismaInstance = prisma;
 
   // 1. Verify what we are preserving
   const preserved = {
@@ -229,6 +255,8 @@ main()
     process.exit(1);
   })
   .finally(async () => {
-    await prisma.$disconnect();
+    if (prismaInstance) {
+      await prismaInstance.$disconnect();
+    }
   });
 
