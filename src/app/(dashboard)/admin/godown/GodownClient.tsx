@@ -144,9 +144,10 @@ function getLocalDateTimeString(d: Date = new Date()) {
   return `${year}-${month}-${day}T${hours}:${minutes}`;
 }
 
-function newRow(products: Product[]): CylinderItem {
-  const p = products[0];
-  return { id: makeId(), productId: p?.id ?? "", productName: p?.name ?? "", qty: 10 }; // Default qty to 10 for convenience
+function newRow(products: Product[], existingItems: CylinderItem[] = []): CylinderItem {
+  const selectedIds = new Set(existingItems.map((i) => i.productId).filter(Boolean));
+  const p = products.find((prod) => !selectedIds.has(prod.id)) || products[0];
+  return { id: makeId(), productId: p?.id ?? "", productName: p?.name ?? "", qty: 10 };
 }
 
 /* â”€â”€ Cylinders Mini-Table Editor (Professional Grid) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
@@ -194,9 +195,11 @@ function CylinderRows({
         </label>
         <button
           type="button"
-          onClick={() => onChange([...items, newRow(products)])}
-          className="flex items-center gap-1 text-[11px] font-bold px-3 py-1.5 rounded-lg transition-all border shadow-sm cursor-pointer"
+          disabled={items.length >= products.length}
+          onClick={() => onChange([...items, newRow(products, items)])}
+          className="flex items-center gap-1 text-[11px] font-bold px-3 py-1.5 rounded-lg transition-all border shadow-sm cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
           style={{ background: "#EFF6FF", color: "#2563EB", borderColor: "#BFDBFE" }}
+          title={items.length >= products.length ? "All available cylinder types are already added" : undefined}
         >
           <Plus className="w-3.5 h-3.5" /> Add Cylinder Type
         </button>
@@ -223,7 +226,15 @@ function CylinderRows({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {items.map((row) => (
+                {items.map((row) => {
+                  const otherSelectedIds = new Set(
+                    items.filter((r) => r.id !== row.id && r.productId).map((r) => r.productId)
+                  );
+                  const availableProductsForRow = products.filter(
+                    (p) => p.id === row.productId || !otherSelectedIds.has(p.id)
+                  );
+
+                  return (
                   <tr key={row.id} className="hover:bg-slate-50/50 transition-colors">
                     <td className="p-2">
                       <CustomSelect
@@ -231,7 +242,7 @@ function CylinderRows({
                         onChange={(val) => {
                           updateRow(row.id, "productId", val);
                         }}
-                        options={products.map((p) => ({ value: p.id, label: p.name }))}
+                        options={availableProductsForRow.map((p) => ({ value: p.id, label: p.name }))}
                         placeholder="Select Type..."
                         onAddClick={() => {
                           onAddType((p) => {
@@ -284,7 +295,8 @@ function CylinderRows({
                       </button>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>

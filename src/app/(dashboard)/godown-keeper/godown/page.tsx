@@ -42,6 +42,7 @@ export default async function GodownKeeperGodownPage({ searchParams }: PageProps
     allProducts,
     deletedRecords,
     deletedTripLogs,
+    godownMovementsAgg,
   ] = await Promise.all([
     prisma.godownRecord.findMany({
       where: {
@@ -137,7 +138,31 @@ export default async function GodownKeeperGodownPage({ searchParams }: PageProps
         recordedBy: { select: { name: true } },
       },
     }),
+    // Godown stock aggregation for real-time stock guard in UI
+    prisma.godownInventory.groupBy({
+      by: ["productId", "moveType"],
+      where: { agencyId: session.agencyId! },
+      _sum: { qty: true },
+    }),
   ]);
+
+  // Build stockMap: productId → { officeStock, godownStock }
+  const godownStockByProduct: Record<string, number> = {};
+  for (const agg of godownMovementsAgg) {
+    if (!godownStockByProduct[agg.productId]) godownStockByProduct[agg.productId] = 0;
+    if (agg.moveType === "RECEIVED") godownStockByProduct[agg.productId] += agg._sum.qty ?? 0;
+    if (agg.moveType === "DISPATCHED") godownStockByProduct[agg.productId] -= agg._sum.qty ?? 0;
+  }
+  const stockMap: Record<string, { officeStock: number; godownStock: number }> = {};
+  for (const p of allProducts) {
+    const gStock = godownStockByProduct[p.id] ?? 0;
+    stockMap[p.id] = { officeStock: 0, godownStock: Math.max(0, gStock) };
+  }
+  for (const [productId, godownStock] of Object.entries(godownStockByProduct)) {
+    if (!stockMap[productId]) {
+      stockMap[productId] = { officeStock: 0, godownStock: Math.max(0, godownStock) };
+    }
+  }
 
   const serializedRequests = deliveryRequests.map((r) => ({
     id: r.id,
@@ -202,6 +227,7 @@ export default async function GodownKeeperGodownPage({ searchParams }: PageProps
           selectedDate={selectedDate}
           deliveryRequests={serializedRequests}
           products={allProducts}
+          stockMap={stockMap}
         />
       </div>
     </Suspense>

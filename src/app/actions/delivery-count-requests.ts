@@ -244,6 +244,34 @@ export async function fulfillDeliveryCountRequest(
       0
     );
 
+    // ── Godown stock availability check per product ───────────────────────────
+    const validFulfillItems = (data.fulfilledItems || []).filter((it) => Number(it.loadedQty) > 0);
+    if (validFulfillItems.length > 0) {
+      const godownAgg = await prisma.godownInventory.groupBy({
+        by: ["productId", "moveType"],
+        where: { agencyId: session.agencyId! },
+        _sum: { qty: true },
+      });
+
+      const godownStockMap: Record<string, number> = {};
+      godownAgg.forEach((m) => {
+        if (!godownStockMap[m.productId]) godownStockMap[m.productId] = 0;
+        if (m.moveType === "RECEIVED") godownStockMap[m.productId] += m._sum.qty ?? 0;
+        if (m.moveType === "DISPATCHED") godownStockMap[m.productId] -= m._sum.qty ?? 0;
+      });
+
+      for (const item of validFulfillItems) {
+        const requestedQty = Number(item.loadedQty);
+        const available = Math.max(0, godownStockMap[item.productId] ?? 0);
+        if (requestedQty > available) {
+          return {
+            error: `Insufficient godown stock for "${item.productName}". Requested: ${requestedQty}, Available in godown: ${available}. Please ensure godown stock is received from the company before dispatching to delivery vehicles.`,
+          };
+        }
+      }
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
     const tripItems = (data.fulfilledItems || []).map((it) => ({
       productId: it.productId,
       productName: it.productName,

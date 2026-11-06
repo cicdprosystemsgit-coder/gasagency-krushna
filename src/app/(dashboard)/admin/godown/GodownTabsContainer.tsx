@@ -47,6 +47,9 @@ interface Props {
   // For Delivery Requests & Vehicle Loading Flow
   deliveryRequests?: GodownDeliveryRequest[];
   products?: any[];
+
+  // Godown stock map (productId → { officeStock, godownStock })
+  stockMap?: Record<string, { officeStock: number; godownStock: number }>;
 }
 
 const EMPTY_RECORDS: any[] = [];
@@ -73,6 +76,7 @@ export function GodownTabsContainer({
   selectedDate,
   deliveryRequests = EMPTY_DELIVERY_REQUESTS,
   products = EMPTY_PRODUCTS,
+  stockMap = {},
 }: Props) {
   const [activeTab, setActiveTab] = useState<"supply" | "fleet" | "requests" | "live">("supply");
 
@@ -199,6 +203,7 @@ export function GodownTabsContainer({
               selectedDate={selectedDate}
               deliveryRequests={deliveryRequests}
               products={products.length > 0 ? products : cylinderTypes}
+              stockMap={stockMap}
             />
           </div>
         )}

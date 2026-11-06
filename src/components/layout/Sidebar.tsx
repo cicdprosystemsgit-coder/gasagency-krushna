@@ -10,7 +10,7 @@ import {
   BarChart3, PanelLeftClose, PanelLeft, Flame, Boxes, CreditCard,
   Banknote, CalendarDays, Car, TrendingUp, Clock, FolderOpen, MessageSquarePlus,
   ShieldCheck, Building2, KeyRound, FileDown, Palette, BadgeDollarSign, PieChart,
-  Activity, ArrowRightLeft, Layers, Percent, X, User,
+  Activity, ArrowRightLeft, Layers, Percent, X, User, Calculator, FileSpreadsheet,
 } from "lucide-react";
 
 
@@ -43,6 +43,8 @@ interface NavSection {
 const RESOURCE_TO_NAV: Record<string, { section: string; label: string; href: string; icon: React.ReactNode }> = {
   // Operations
   stock:            { section: "Operations",  label: "Stock Register",      href: "/stock",               icon: <ClipboardCheck className="w-4 h-4" /> },
+  dailySheet:       { section: "Operations",  label: "Daily Sheet",         href: "/daily-sheet",         icon: <Calculator className="w-4 h-4" /> },
+  monthlyRecords:   { section: "Operations",  label: "Monthly Records",     href: "/monthly-records",     icon: <FileSpreadsheet className="w-4 h-4" /> },
   inventory:        { section: "Operations",  label: "Office Stock",        href: "/inventory",           icon: <Boxes className="w-4 h-4" /> },
   godown:           { section: "Operations",  label: "Godown & Fleet",      href: "/godown",              icon: <Warehouse className="w-4 h-4" /> },
   deliveryRequests: { section: "Operations",  label: "Vehicle Loading",     href: "/delivery-requests",   icon: <Truck className="w-4 h-4" /> },
@@ -171,6 +173,8 @@ function getNavSections(
       {
         label: "Operations",
         items: [
+          { label: "Daily Sheet",       href: `${base}/daily-sheet`,        icon: <Calculator className="w-4 h-4" />,     featureKey: "stock"              },
+          { label: "Monthly Records",   href: `${base}/monthly-records`,    icon: <FileSpreadsheet className="w-4 h-4" />, featureKey: "stock"              },
           { label: "Stock Register",    href: `${base}/stock`,              icon: <ClipboardCheck className="w-4 h-4" />, featureKey: "stock"              },
           { label: "Inventory",         href: `${base}/inventory`,          icon: <Boxes className="w-4 h-4" />,       featureKey: "inventory"          },
           { label: "Godown",            href: `${base}/godown`,             icon: <Warehouse className="w-4 h-4" />,   featureKey: "godown"             },
@@ -245,6 +249,8 @@ function getNavSections(
       {
         label: "Operations",
         items: [
+          { label: "Daily Sheet",       href: `${base}/daily-sheet`,        icon: <Calculator className="w-4 h-4" />, featureKey: "stock"  },
+          { label: "Monthly Records",   href: `${base}/monthly-records`,    icon: <FileSpreadsheet className="w-4 h-4" />, featureKey: "stock"  },
           { label: "Stock Register",    href: `${base}/stock`,             icon: <ClipboardCheck className="w-4 h-4" />, featureKey: "stock"  },
           { label: "Godown & Fleet",    href: `${base}/godown`,            icon: <Warehouse className="w-4 h-4" />, featureKey: "godown"     },
           { label: "Vehicle Loading",   href: `${base}/delivery-requests`, icon: <Truck className="w-4 h-4" />                                },

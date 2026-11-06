@@ -17,6 +17,7 @@ interface GodownKeeperClientProps {
   deliveryRequests?: any[];
   products?: any[];
   todayMovements?: any[];
+  stockMap?: Record<string, { officeStock: number; godownStock: number }>;
 }
 
 const EMPTY_LIST: any[] = [];
@@ -36,6 +37,7 @@ export function GodownKeeperClient({
   deliveryRequests = EMPTY_LIST,
   products = EMPTY_LIST,
   todayMovements = EMPTY_LIST,
+  stockMap = {},
 }: GodownKeeperClientProps) {
   const activeDate = selectedDate || new Date().toISOString().slice(0, 10);
 
@@ -59,6 +61,7 @@ export function GodownKeeperClient({
       selectedDate={activeDate}
       deliveryRequests={deliveryRequests}
       products={products.length > 0 ? products : cylinderTypes}
+      stockMap={stockMap}
     />
   );
 }

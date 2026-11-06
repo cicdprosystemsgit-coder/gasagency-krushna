@@ -123,7 +123,7 @@ export async function createVehicleTripLog(formData: FormData) {
     const departureStr = formData.get("departureTime") as string;
 
     const itemsStr = formData.get("items") as string;
-    let items = null;
+    let items: any[] | null = null;
     let cylindersLoaded = Number(formData.get("cylindersLoaded")) || 0;
 
     if (itemsStr) {
@@ -136,6 +136,41 @@ export async function createVehicleTripLog(formData: FormData) {
         console.error("[createVehicleTripLog] JSON parse error on items:", parseErr);
       }
     }
+
+    // ── Godown stock availability check per product ───────────────────────────
+    if (Array.isArray(items) && items.length > 0) {
+      const godownAgg = await prisma.godownInventory.groupBy({
+        by: ["productId", "moveType"],
+        where: { agencyId: session.agencyId },
+        _sum: { qty: true },
+      });
+
+      const godownStockMap: Record<string, number> = {};
+      godownAgg.forEach((m) => {
+        if (!godownStockMap[m.productId]) godownStockMap[m.productId] = 0;
+        if (m.moveType === "RECEIVED") godownStockMap[m.productId] += m._sum.qty ?? 0;
+        if (m.moveType === "DISPATCHED") godownStockMap[m.productId] -= m._sum.qty ?? 0;
+      });
+
+      for (const item of items) {
+        const requestedQty = Number(item.loaded) || 0;
+        if (!item.productId || requestedQty <= 0) continue;
+        const available = Math.max(0, godownStockMap[item.productId] ?? 0);
+        if (requestedQty > available) {
+          const product = await prisma.product.findUnique({
+            where: { id: item.productId },
+            select: { name: true },
+          });
+          const productName = product?.name ?? item.productName ?? "Unknown product";
+          return {
+            error: available === 0
+              ? `Cannot assign cylinders: "${productName}" has 0 stock in inventory. You cannot dispatch cylinders when stock is zero.`
+              : `Insufficient inventory stock for "${productName}". Requested: ${requestedQty}, Available in inventory: ${available}. Cannot assign more than available stock.`,
+          };
+        }
+      }
+    }
+    // ─────────────────────────────────────────────────────────────────────────
 
     const departureLat = formData.get("departureLat") ? Number(formData.get("departureLat")) : null;
     const departureLng = formData.get("departureLng") ? Number(formData.get("departureLng")) : null;
@@ -295,6 +330,41 @@ export async function updateTripLog(id: string, formData: FormData) {
         console.error("[updateTripLog] JSON parse error on items:", parseErr);
       }
     }
+
+    // ── Godown stock availability check for loaded quantities (on edit) ───────
+    if (Array.isArray(items) && items.length > 0 && cylindersLoaded !== undefined) {
+      const godownAgg = await prisma.godownInventory.groupBy({
+        by: ["productId", "moveType"],
+        where: { agencyId: session.agencyId },
+        _sum: { qty: true },
+      });
+
+      const godownStockMap: Record<string, number> = {};
+      godownAgg.forEach((m) => {
+        if (!godownStockMap[m.productId]) godownStockMap[m.productId] = 0;
+        if (m.moveType === "RECEIVED") godownStockMap[m.productId] += m._sum.qty ?? 0;
+        if (m.moveType === "DISPATCHED") godownStockMap[m.productId] -= m._sum.qty ?? 0;
+      });
+
+      for (const item of items) {
+        const requestedQty = Number(item.loaded) || 0;
+        if (!item.productId || requestedQty <= 0) continue;
+        const currentStock = Math.max(0, godownStockMap[item.productId] ?? 0);
+        if (requestedQty > currentStock) {
+          const product = await prisma.product.findUnique({
+            where: { id: item.productId },
+            select: { name: true },
+          });
+          const productName = product?.name ?? item.productName ?? "Unknown product";
+          return {
+            error: currentStock === 0
+              ? `Cannot assign cylinders: "${productName}" has 0 stock in inventory. You cannot dispatch cylinders when stock is zero.`
+              : `Insufficient inventory stock for "${productName}". Requested: ${requestedQty}, Available in inventory: ${currentStock}. Cannot assign more than available stock.`,
+          };
+        }
+      }
+    }
+    // ─────────────────────────────────────────────────────────────────────────
 
     const updateData: any = {
       vehicleId: vehicleId || undefined,

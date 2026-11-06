@@ -117,6 +117,7 @@ export function InternalVehiclesClient({
   selectedDate,
   deliveryRequests = EMPTY_DELIVERY_REQUESTS,
   products = EMPTY_PRODUCTS,
+  stockMap = {},
 }: {
   initialVehicles: DeliveryVehicle[];
   initialTripLogs: TripLog[];
@@ -129,6 +130,7 @@ export function InternalVehiclesClient({
   selectedDate?: string;
   deliveryRequests?: GodownDeliveryRequest[];
   products?: Product[];
+  stockMap?: Record<string, { officeStock: number; godownStock: number }>;
 }) {
   const router = useRouter();
   const [vehicles, setVehicles] = useState(initialVehicles);
@@ -201,7 +203,8 @@ export function InternalVehiclesClient({
     );
     const target = available || (products.length > 0 ? products[0] : productsState[0]);
     if (target) {
-      setLoadItems([...loadItems, { productId: target.id, productName: target.name, loadedQty: 1 }]);
+      const avail = stockMap[target.id]?.godownStock ?? 0;
+      setLoadItems([...loadItems, { productId: target.id, productName: target.name, loadedQty: Math.min(1, avail) }]);
     }
   };
 
@@ -219,6 +222,23 @@ export function InternalVehiclesClient({
     if (validItems.length === 0) {
       setLoadModalError("At least one product must have loaded quantity > 0");
       return;
+    }
+
+    // Client-side inventory stock validation
+    for (const it of validItems) {
+      const avail = stockMap[it.productId]?.godownStock ?? 0;
+      if (avail <= 0) {
+        const msg = `Cannot assign stock: "${it.productName}" is out of stock in inventory (Available: 0). You cannot dispatch when inventory is zero.`;
+        setLoadModalError(msg);
+        toast.error(msg);
+        return;
+      }
+      if (it.loadedQty > avail) {
+        const msg = `Cannot assign stock: Requested quantity (${it.loadedQty}) exceeds available inventory (${avail}) for "${it.productName}".`;
+        setLoadModalError(msg);
+        toast.error(msg);
+        return;
+      }
     }
 
     startTransition(async () => {
@@ -273,20 +293,23 @@ export function InternalVehiclesClient({
     setAddTypeCallback(null);
   }
 
-  function newDepartureRow(products: Product[]): CylinderRowItem {
-    const p = products[0];
+  function newDepartureRow(products: Product[], existingItems: CylinderRowItem[] = []): CylinderRowItem {
+    const selectedIds = new Set(existingItems.map((i) => i.productId).filter(Boolean));
+    const p = products.find((prod) => !selectedIds.has(prod.id)) || products[0];
+    const avail = p ? (stockMap[p.id]?.godownStock ?? 0) : 0;
     return {
       id: Math.random().toString(36).substring(2, 9),
       productId: p?.id ?? "",
       productName: p?.name ?? "",
-      loaded: 10,
+      loaded: Math.min(1, avail),
       unsoldReturned: 0,
       emptyReturned: 0,
     };
   }
 
-  function newReturnRow(products: Product[]): CylinderRowItem {
-    const p = products[0];
+  function newReturnRow(products: Product[], existingItems: CylinderRowItem[] = []): CylinderRowItem {
+    const selectedIds = new Set(existingItems.map((i) => i.productId).filter(Boolean));
+    const p = products.find((prod) => !selectedIds.has(prod.id)) || products[0];
     return {
       id: Math.random().toString(36).substring(2, 9),
       productId: p?.id ?? "",
@@ -356,10 +379,28 @@ export function InternalVehiclesClient({
     if (departureItems.length === 0) { setError("Please add at least one cylinder type"); return; }
     if (departureItems.some(item => !item.productId)) { setError("Please select a cylinder type for all loaded rows"); return; }
 
+    // ── Pre-submission Inventory Stock Validation ──
+    for (const item of departureItems) {
+      const avail = stockMap[item.productId]?.godownStock ?? 0;
+      if (avail <= 0 && item.loaded > 0) {
+        setError(`Cannot assign stock: "${item.productName || "Product"}" has 0 stock in inventory. You cannot dispatch cylinders when stock is zero.`);
+        return;
+      }
+      if (item.loaded > avail) {
+        setError(`Cannot assign stock: Requested quantity (${item.loaded}) exceeds available inventory (${avail}) for "${item.productName || "Product"}".`);
+        return;
+      }
+    }
+
+    const totalLoaded = departureItems.reduce((sum, r) => sum + r.loaded, 0);
+    if (totalLoaded === 0) {
+      setError("Please specify at least 1 cylinder loaded from available stock to record vehicle departure.");
+      return;
+    }
+
     const fd = new FormData();
     Object.entries(tForm).forEach(([k, v]) => fd.append(k, v));
     
-    const totalLoaded = departureItems.reduce((sum, r) => sum + r.loaded, 0);
     fd.append("cylindersLoaded", String(totalLoaded));
     fd.append("items", JSON.stringify(departureItems.map(item => ({
       productId: item.productId,
@@ -1099,223 +1140,337 @@ export function InternalVehiclesClient({
       </Modal>
 
       {/* Record Trip Modal */}
-      <Modal
-        open={tripModal}
-        onClose={() => { setTripModal(false); setEditTripLogId(null); }}
-        title={editTripLogId ? "Modify Vehicle Departure" : "Record Vehicle Departure"}
-        size="lg"
-        centerFooter={true}
-        footer={
-          <>
-            <button type="button" onClick={() => { setTripModal(false); setEditTripLogId(null); }} className="btn btn-secondary">Cancel</button>
-            <button form="trip-form" type="submit" disabled={isPending} className="btn btn-primary shadow-sm px-5">
-              {isPending ? "Saving…" : (editTripLogId ? "Update Departure" : "Record Departure")}
-            </button>
-          </>
-        }
-      >
-        <form id="trip-form" onSubmit={handleTripSubmit} className="space-y-4">
-          {error && (
-            <div className="text-[13px] px-3.5 py-2.5 rounded-xl border flex items-center gap-2" style={{ background: "#FEF2F2", borderColor: "#FCA5A5", color: "#B91C1C" }}>
-              <AlertCircle className="w-4 h-4 shrink-0" />
-              <span className="font-medium">{error}</span>
-            </div>
-          )}
+      {(() => {
+        const departureHasZeroStockItem = departureItems.some(r => r.productId && (stockMap[r.productId]?.godownStock ?? 0) <= 0 && r.loaded > 0);
+        const departureHasOverStockItem = departureItems.some(r => r.productId && r.loaded > (stockMap[r.productId]?.godownStock ?? 0));
+        const departureTotalLoaded = departureItems.reduce((sum, r) => sum + r.loaded, 0);
+        const departureHasStockError = departureHasZeroStockItem || departureHasOverStockItem;
+        const isDepartureDisabled = isPending || departureHasStockError || departureTotalLoaded === 0;
 
-          <LocationStatusCard
-            location={{
-              lat: departureGps.gps.lat,
-              lng: departureGps.gps.lng,
-              accuracy: departureGps.gps.accuracy,
-              status: departureGps.gps.loading ? "loading" : departureGps.gps.lat !== null ? "success" : departureGps.gps.error ? "denied" : "idle",
-              error: departureGps.gps.error,
-              hint: departureGps.gps.hint ?? null,
-            }}
-            onCapture={departureGps.captureGps}
-            showWhenIdle
-            label="Departure Location"
-          />
-          
-          <div className="rounded-xl border border-slate-200 overflow-visible">
-            <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-200 rounded-t-xl">
-              <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Select Vehicle</p>
-            </div>
-            <div className="p-4">
-              <CustomSelect
-                value={tForm.vehicleId}
-                onChange={(val) => setTForm({ ...tForm, vehicleId: val })}
-                options={vehicles.filter((v) => v.status === "ACTIVE").map((v) => ({
-                  value: v.id,
-                  label: `${v.vehicleNo} — ${v.vehicleName} ${v.assignedTo ? `(${v.assignedTo.name})` : ""}`
-                }))}
-                placeholder="Choose vehicle…"
-              />
-            </div>
-          </div>
-
-          <div className="rounded-xl border border-slate-200 overflow-hidden">
-            <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-200">
-              <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Schedule</p>
-            </div>
-            <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1.5">Date</label>
-                <input type="date" value={tForm.date} onChange={(e) => setTForm({ ...tForm, date: e.target.value })} className="input text-[13px]" />
-              </div>
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1.5">Departure Time</label>
-                <input type="datetime-local" value={tForm.departureTime} onChange={(e) => setTForm({ ...tForm, departureTime: e.target.value })} className="input text-[13px]" />
-              </div>
-            </div>
-          </div>
-
-          <div className="rounded-xl border border-slate-200 overflow-visible">
-            <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-200 rounded-t-xl flex items-center justify-between">
-              <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Cylinders Loaded</p>
-              <div className="flex items-center gap-1.5">
+        return (
+          <Modal
+            open={tripModal}
+            onClose={() => { setTripModal(false); setEditTripLogId(null); }}
+            title={editTripLogId ? "Modify Vehicle Departure" : "Record Vehicle Departure"}
+            size="lg"
+            centerFooter={true}
+            footer={
+              <>
+                <button type="button" onClick={() => { setTripModal(false); setEditTripLogId(null); }} className="btn btn-secondary">Cancel</button>
                 <button
-                  type="button"
-                  onClick={() => {
-                    if (productsState.length > 0) {
-                      setDepartureItems(prev => [...prev, newDepartureRow(productsState)]);
-                    }
-                  }}
-                  className="flex items-center gap-1 text-[11px] font-bold px-2 py-1 rounded-lg border bg-blue-50 text-blue-600 border-blue-200 shadow-sm hover:bg-blue-100 transition-all cursor-pointer"
+                  form="trip-form"
+                  type="submit"
+                  disabled={isDepartureDisabled}
+                  className="btn btn-primary shadow-sm px-5 disabled:opacity-50 disabled:cursor-not-allowed"
+                  title={departureHasStockError ? "Cannot assign: Stock is 0 or exceeds inventory" : undefined}
                 >
-                  <Plus className="w-3 h-3" /> Add Cylinder Type
+                  {isPending ? "Saving…" : (editTripLogId ? "Update Departure" : "Record Departure")}
                 </button>
-                <button
-                  type="button"
-                  onClick={() => openAddType(() => {})}
-                  className="flex items-center gap-1 text-[11px] font-bold px-2 py-1 rounded-lg border bg-emerald-50 text-emerald-600 border-emerald-200 shadow-sm hover:bg-emerald-100 transition-all cursor-pointer"
-                >
-                  <Plus className="w-3 h-3" /> Add New Type
-                </button>
-              </div>
-            </div>
-            
-            <div className="p-4 space-y-3">
-              {departureItems.length === 0 ? (
-                <div className="flex flex-col items-center justify-center p-6 border border-dashed rounded-xl text-center bg-slate-50/50" style={{ borderColor: "#E2E8F0" }}>
-                  <AlertCircle className="w-5 h-5 mb-1.5 text-slate-400" />
-                  <p className="text-[12px] font-medium text-slate-500">No cylinder types loaded</p>
-                  <p className="text-[10px] text-slate-400 mt-0.5">Click "Add Cylinder Type" to add cylinders to this trip.</p>
+              </>
+            }
+          >
+            <form id="trip-form" onSubmit={handleTripSubmit} className="space-y-4">
+              {error && (
+                <div className="text-[13px] px-3.5 py-2.5 rounded-xl border flex items-center gap-2" style={{ background: "#FEF2F2", borderColor: "#FCA5A5", color: "#B91C1C" }}>
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span className="font-medium">{error}</span>
                 </div>
-              ) : (
-                <div className="border border-slate-200 rounded-xl overflow-visible bg-white shadow-xs">
-                  <div className="overflow-visible">
-                    <table className="w-full text-left border-collapse">
-                      <thead>
-                        <tr className="bg-slate-50 border-b border-slate-200">
-                          <th className="py-2.5 px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400">Type</th>
-                          <th className="py-2.5 px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400 text-center w-36">Quantity</th>
-                          <th className="py-2.5 px-3 w-10 text-center"></th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {departureItems.map((row) => (
-                          <tr key={row.id} className="hover:bg-slate-50/30 transition-colors">
-                            <td className="p-2">
-                              <CustomSelect
-                                value={row.productId}
-                                onChange={(val) => {
-                                  const selectedProduct = productsState.find(p => p.id === val);
-                                  setDepartureItems(prev =>
-                                    prev.map(r => r.id === row.id ? { ...r, productId: val, productName: selectedProduct?.name ?? "" } : r)
-                                  );
-                                }}
-                                options={productsState.map((p) => ({ value: p.id, label: p.name }))}
-                                placeholder="Select Type..."
-                                onAddClick={() => {
-                                  openAddType((p) => {
-                                    setDepartureItems(prev =>
-                                      prev.map(r => r.id === row.id ? { ...r, productId: p.id, productName: p.name } : r)
-                                    );
-                                  });
-                                }}
-                                addLabel="+ Add New Type..."
-                                size="sm"
-                              />
-                            </td>
-                            <td className="p-2">
-                              <div className="flex items-center justify-center">
-                                <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden h-7 bg-white">
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setDepartureItems(prev =>
-                                        prev.map(r => r.id === row.id ? { ...r, loaded: Math.max(0, r.loaded - 1) } : r)
-                                      );
-                                    }}
-                                    className="w-7 h-7 flex items-center justify-center hover:bg-slate-50 transition-colors"
-                                  >
-                                    <Minus className="w-3 h-3 text-slate-500" />
-                                  </button>
-                                  <input
-                                    type="number"
-                                    min="0"
-                                    value={row.loaded}
-                                    onChange={(e) => {
-                                      const val = Math.max(0, parseInt(e.target.value) || 0);
-                                      setDepartureItems(prev =>
-                                        prev.map(r => r.id === row.id ? { ...r, loaded: val } : r)
-                                      );
-                                    }}
-                                    className="w-10 h-7 text-center font-semibold text-slate-800 text-[12px] focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none border-x border-slate-200"
-                                  />
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setDepartureItems(prev =>
-                                        prev.map(r => r.id === row.id ? { ...r, loaded: r.loaded + 1 } : r)
-                                      );
-                                    }}
-                                    className="w-7 h-7 flex items-center justify-center hover:bg-slate-50 transition-colors"
-                                  >
-                                    <Plus className="w-3 h-3 text-slate-500" />
-                                  </button>
-                                </div>
-                              </div>
-                            </td>
-                            <td className="p-2 text-center">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setDepartureItems(prev => prev.filter(r => r.id !== row.id));
-                                }}
-                                className="text-rose-500 hover:text-rose-700 p-1 hover:bg-rose-50 rounded"
-                              >
-                                <X className="w-3.5 h-3.5" />
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+              )}
+
+              {departureHasStockError && (
+                <div className="text-[13px] px-3.5 py-3 rounded-xl border flex items-start gap-2.5 bg-red-50 border-red-300 text-red-800 shadow-2xs">
+                  <AlertCircle className="w-4 h-4 mt-0.5 shrink-0 text-red-600" />
+                  <div className="space-y-0.5">
+                    <p className="font-bold text-red-900">Cannot assign cylinders to delivery vehicle</p>
+                    <p className="text-[12px] text-red-700 leading-relaxed">
+                      {departureHasZeroStockItem
+                        ? "One or more selected cylinders have 0 available stock in inventory. You cannot assign cylinders when stock is zero."
+                        : "Requested quantity exceeds available inventory stock. Please adjust quantities."}
+                    </p>
                   </div>
-                  {departureItems.length > 0 && (
-                    <div className="flex items-center justify-between px-3 py-2 bg-slate-50 border-t border-slate-200">
-                      <span className="text-[10px] font-bold text-slate-500 uppercase">Total Loaded</span>
-                      <span className="text-[13px] font-extrabold text-slate-800">
-                        {departureItems.reduce((sum, r) => sum + r.loaded, 0)} <span className="text-[10px] font-normal text-slate-500">pcs</span>
-                      </span>
+                </div>
+              )}
+
+              <LocationStatusCard
+                location={{
+                  lat: departureGps.gps.lat,
+                  lng: departureGps.gps.lng,
+                  accuracy: departureGps.gps.accuracy,
+                  status: departureGps.gps.loading ? "loading" : departureGps.gps.lat !== null ? "success" : departureGps.gps.error ? "denied" : "idle",
+                  error: departureGps.gps.error,
+                  hint: departureGps.gps.hint ?? null,
+                }}
+                onCapture={departureGps.captureGps}
+                showWhenIdle
+                label="Departure Location"
+              />
+              
+              <div className="rounded-xl border border-slate-200 overflow-visible">
+                <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-200 rounded-t-xl">
+                  <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Select Vehicle</p>
+                </div>
+                <div className="p-4">
+                  <CustomSelect
+                    value={tForm.vehicleId}
+                    onChange={(val) => setTForm({ ...tForm, vehicleId: val })}
+                    options={vehicles.filter((v) => v.status === "ACTIVE").map((v) => ({
+                      value: v.id,
+                      label: `${v.vehicleNo} — ${v.vehicleName} ${v.assignedTo ? `(${v.assignedTo.name})` : ""}`
+                    }))}
+                    placeholder="Choose vehicle…"
+                  />
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-slate-200 overflow-hidden">
+                <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-200">
+                  <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Schedule</p>
+                </div>
+                <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1.5">Date</label>
+                    <input type="date" value={tForm.date} onChange={(e) => setTForm({ ...tForm, date: e.target.value })} className="input text-[13px]" />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1.5">Departure Time</label>
+                    <input type="datetime-local" value={tForm.departureTime} onChange={(e) => setTForm({ ...tForm, departureTime: e.target.value })} className="input text-[13px]" />
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-slate-200 overflow-visible">
+                <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-200 rounded-t-xl flex items-center justify-between">
+                  <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Cylinders Loaded</p>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      disabled={departureItems.length >= productsState.length}
+                      onClick={() => {
+                        if (productsState.length > 0) {
+                          setDepartureItems((prev) => [...prev, newDepartureRow(productsState, prev)]);
+                        }
+                      }}
+                      className="flex items-center gap-1 text-[11px] font-bold px-2 py-1 rounded-lg border bg-blue-50 text-blue-600 border-blue-200 shadow-sm hover:bg-blue-100 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                      title={departureItems.length >= productsState.length ? "All available cylinder types are already added" : undefined}
+                    >
+                      <Plus className="w-3 h-3" /> Add Cylinder Type
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openAddType(() => {})}
+                      className="flex items-center gap-1 text-[11px] font-bold px-2 py-1 rounded-lg border bg-emerald-50 text-emerald-600 border-emerald-200 shadow-sm hover:bg-emerald-100 transition-all cursor-pointer"
+                    >
+                      <Plus className="w-3 h-3" /> Add New Type
+                    </button>
+                  </div>
+                </div>
+
+                {/* Godown Stock Summary Banner */}
+                {productsState.length > 0 && (
+                  <div className="px-4 py-2.5 border-b border-slate-100 bg-blue-50/40">
+                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Current Godown Inventory Stock</p>
+                    <div className="flex flex-wrap gap-2">
+                      {productsState.map((p) => {
+                        const avail = stockMap[p.id]?.godownStock ?? 0;
+                        return (
+                          <span
+                            key={p.id}
+                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold border ${
+                              avail === 0
+                                ? "bg-red-50 text-red-700 border-red-200"
+                                : avail <= 5
+                                ? "bg-orange-50 text-orange-700 border-orange-200"
+                                : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                            }`}
+                          >
+                            {p.name}: <strong>{avail} {avail === 0 ? "(Zero Stock)" : "units"}</strong>
+                            {avail === 0 && <AlertCircle className="w-3 h-3 ml-0.5 text-red-600" />}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+                
+                <div className="p-4 space-y-3">
+                  {departureItems.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center p-6 border border-dashed rounded-xl text-center bg-slate-50/50" style={{ borderColor: "#E2E8F0" }}>
+                      <AlertCircle className="w-5 h-5 mb-1.5 text-slate-400" />
+                      <p className="text-[12px] font-medium text-slate-500">No cylinder types loaded</p>
+                      <p className="text-[10px] text-slate-400 mt-0.5">Click "Add Cylinder Type" to add cylinders to this trip.</p>
+                    </div>
+                  ) : (
+                    <div className="border border-slate-200 rounded-xl overflow-visible bg-white shadow-xs">
+                      <div className="overflow-visible">
+                        <table className="w-full text-left border-collapse">
+                          <thead>
+                            <tr className="bg-slate-50 border-b border-slate-200">
+                              <th className="py-2.5 px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400">Type</th>
+                              <th className="py-2.5 px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400 text-center w-36">Quantity</th>
+                              <th className="py-2.5 px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400 text-center">In Inventory</th>
+                              <th className="py-2.5 px-3 w-10 text-center"></th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {departureItems.map((row) => {
+                              const godownAvailable = stockMap[row.productId]?.godownStock ?? 0;
+                              const isOverStock = row.productId && row.loaded > godownAvailable;
+                              const isZeroStock = row.productId && godownAvailable === 0;
+
+                              // Filter out products already selected in other rows
+                              const otherSelectedIds = new Set(
+                                departureItems
+                                  .filter((r) => r.id !== row.id && r.productId)
+                                  .map((r) => r.productId)
+                              );
+                              const availableProductsForRow = productsState.filter(
+                                (p) => p.id === row.productId || !otherSelectedIds.has(p.id)
+                              );
+
+                              return (
+                              <tr key={row.id} className={`hover:bg-slate-50/30 transition-colors ${isZeroStock && row.loaded > 0 ? "bg-red-50/60" : isOverStock ? "bg-red-50/40" : ""}`}>
+                                <td className="p-2">
+                                  <CustomSelect
+                                    value={row.productId}
+                                    onChange={(val) => {
+                                      const selectedProduct = productsState.find(p => p.id === val);
+                                      const avail = stockMap[val]?.godownStock ?? 0;
+                                      setDepartureItems(prev =>
+                                        prev.map(r => r.id === row.id ? {
+                                          ...r,
+                                          productId: val,
+                                          productName: selectedProduct?.name ?? "",
+                                          loaded: Math.min(r.loaded, avail),
+                                        } : r)
+                                      );
+                                    }}
+                                    options={availableProductsForRow.map((p) => {
+                                      const avail = stockMap[p.id]?.godownStock ?? 0;
+                                      return {
+                                        value: p.id,
+                                        label: `${p.name} (${avail === 0 ? "Out of Stock: 0" : `Stock: ${avail}`})`,
+                                      };
+                                    })}
+                                    placeholder="Select Type..."
+                                    onAddClick={() => {
+                                      openAddType((p) => {
+                                        setDepartureItems(prev =>
+                                          prev.map(r => r.id === row.id ? { ...r, productId: p.id, productName: p.name } : r)
+                                        );
+                                      });
+                                    }}
+                                    addLabel="+ Add New Type..."
+                                    size="sm"
+                                  />
+                                </td>
+                                <td className="p-2">
+                                  <div className="flex flex-col items-center gap-1">
+                                    <div className="flex items-center justify-center">
+                                      <div className={`flex items-center border rounded-lg overflow-hidden h-7 bg-white ${isOverStock || (isZeroStock && row.loaded > 0) ? "border-red-400" : "border-slate-200"}`}>
+                                        <button
+                                          type="button"
+                                          disabled={row.loaded <= 0}
+                                          onClick={() => {
+                                            setDepartureItems(prev =>
+                                              prev.map(r => r.id === row.id ? { ...r, loaded: Math.max(0, r.loaded - 1) } : r)
+                                            );
+                                          }}
+                                          className="w-7 h-7 flex items-center justify-center hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                                        >
+                                          <Minus className="w-3 h-3 text-slate-500" />
+                                        </button>
+                                        <input
+                                          type="number"
+                                          min="0"
+                                          max={godownAvailable}
+                                          value={row.loaded}
+                                          onChange={(e) => {
+                                            const val = Math.max(0, parseInt(e.target.value) || 0);
+                                            setDepartureItems(prev =>
+                                              prev.map(r => r.id === row.id ? { ...r, loaded: val } : r)
+                                            );
+                                          }}
+                                          className={`w-10 h-7 text-center font-semibold text-[12px] focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none border-x border-slate-200 ${isOverStock || (isZeroStock && row.loaded > 0) ? "text-red-700 bg-red-50/50" : "text-slate-800"}`}
+                                        />
+                                        <button
+                                          type="button"
+                                          disabled={godownAvailable <= 0 || row.loaded >= godownAvailable}
+                                          onClick={() => {
+                                            if (row.loaded >= godownAvailable) return;
+                                            setDepartureItems(prev =>
+                                              prev.map(r => r.id === row.id ? { ...r, loaded: r.loaded + 1 } : r)
+                                            );
+                                          }}
+                                          className="w-7 h-7 flex items-center justify-center hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                                        >
+                                          <Plus className="w-3 h-3 text-slate-500" />
+                                        </button>
+                                      </div>
+                                    </div>
+                                    {isZeroStock && row.loaded > 0 && (
+                                      <span className="text-[9px] font-bold text-red-600 leading-none">0 in inventory!</span>
+                                    )}
+                                    {isOverStock && !isZeroStock && (
+                                      <span className="text-[9px] font-bold text-red-600 leading-none">Max: {godownAvailable}</span>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="p-2 text-center">
+                                  {row.productId ? (
+                                    <div className="flex flex-col items-center gap-0.5">
+                                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold ${isZeroStock ? "bg-red-100 text-red-700 border border-red-200" : isOverStock ? "bg-orange-100 text-orange-700 border border-orange-200" : "bg-emerald-50 text-emerald-700 border border-emerald-200"}`}>
+                                        {godownAvailable} avail
+                                      </span>
+                                      {isZeroStock && (
+                                        <span className="text-[9px] font-semibold text-red-600">Zero Stock</span>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <span className="text-[11px] text-slate-400">—</span>
+                                  )}
+                                </td>
+                                <td className="p-2 text-center">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setDepartureItems(prev => prev.filter(r => r.id !== row.id));
+                                    }}
+                                    className="text-rose-500 hover:text-rose-700 p-1 hover:bg-rose-50 rounded"
+                                  >
+                                    <X className="w-3.5 h-3.5" />
+                                  </button>
+                                </td>
+                              </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                      {departureItems.length > 0 && (
+                        <div className="flex items-center justify-between px-3 py-2 bg-slate-50 border-t border-slate-200">
+                          <span className="text-[10px] font-bold text-slate-500 uppercase">Total Loaded</span>
+                          <span className="text-[13px] font-extrabold text-slate-800">
+                            {departureItems.reduce((sum, r) => sum + r.loaded, 0)} <span className="text-[10px] font-normal text-slate-500">pcs</span>
+                          </span>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
-              )}
-            </div>
-          </div>
+              </div>
 
-          <div className="rounded-xl border border-slate-200 overflow-hidden">
-            <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-200">
-              <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Notes (Optional)</p>
-            </div>
-            <div className="p-4">
-              <textarea value={tForm.notes} onChange={(e) => setTForm({ ...tForm, notes: e.target.value })} rows={2} placeholder="Any remarks…" className="input text-[13px] resize-none" />
-            </div>
-          </div>
-        </form>
-      </Modal>
+              <div className="rounded-xl border border-slate-200 overflow-hidden">
+                <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-200">
+                  <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Notes (Optional)</p>
+                </div>
+                <div className="p-4">
+                  <textarea value={tForm.notes} onChange={(e) => setTForm({ ...tForm, notes: e.target.value })} rows={2} placeholder="Any remarks…" className="input text-[13px] resize-none" />
+                </div>
+              </div>
+            </form>
+          </Modal>
+        );
+      })()}
 
       {/* Update Trip Status Modal */}
       <Modal
@@ -1379,12 +1534,14 @@ export function InternalVehiclesClient({
               <div className="flex items-center gap-1.5">
                 <button
                   type="button"
+                  disabled={returnItems.length >= productsState.length}
                   onClick={() => {
                     if (productsState.length > 0) {
-                      setReturnItems(prev => [...prev, newReturnRow(productsState)]);
+                      setReturnItems((prev) => [...prev, newReturnRow(productsState, prev)]);
                     }
                   }}
-                  className="flex items-center gap-1 text-[11px] font-bold px-2 py-1 rounded-lg border bg-blue-50 text-blue-600 border-blue-200 shadow-sm hover:bg-blue-100 transition-all cursor-pointer"
+                  className="flex items-center gap-1 text-[11px] font-bold px-2 py-1 rounded-lg border bg-blue-50 text-blue-600 border-blue-200 shadow-sm hover:bg-blue-100 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                  title={returnItems.length >= productsState.length ? "All available cylinder types are already added" : undefined}
                 >
                   <Plus className="w-3 h-3" /> Add Cylinder Type
                 </button>
@@ -1419,7 +1576,17 @@ export function InternalVehiclesClient({
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
-                        {returnItems.map((row) => (
+                        {returnItems.map((row) => {
+                          const otherSelectedIds = new Set(
+                            returnItems
+                              .filter((r) => r.id !== row.id && r.productId)
+                              .map((r) => r.productId)
+                          );
+                          const availableProductsForRow = productsState.filter(
+                            (p) => p.id === row.productId || !otherSelectedIds.has(p.id)
+                          );
+
+                          return (
                           <tr key={row.id} className="hover:bg-slate-50/30 transition-colors">
                             <td className="p-2">
                               <CustomSelect
@@ -1430,7 +1597,7 @@ export function InternalVehiclesClient({
                                     prev.map(r => r.id === row.id ? { ...r, productId: val, productName: selectedProduct?.name ?? "" } : r)
                                   );
                                 }}
-                                options={productsState.map((p) => ({ value: p.id, label: p.name }))}
+                                options={availableProductsForRow.map((p) => ({ value: p.id, label: p.name }))}
                                 placeholder="Select Type..."
                                 onAddClick={() => {
                                   openAddType((p) => {
@@ -1590,7 +1757,8 @@ export function InternalVehiclesClient({
                               </button>
                             </td>
                           </tr>
-                        ))}
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
