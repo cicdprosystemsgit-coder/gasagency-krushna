@@ -42,6 +42,8 @@ export const DEFAULT_PERMISSIONS: Record<Role, Record<string, string[]>> = {
     analytics: ["create", "read", "update", "delete"],
     export: ["create", "read", "update", "delete"],
     stock: ["create", "read", "update", "delete"],
+    dailySheet: ["create", "read", "update", "delete"],
+    monthlyRecords: ["create", "read", "update", "delete"],
   },
   MANAGER: {
     customers: ["create", "read", "update"],
@@ -74,6 +76,8 @@ export const DEFAULT_PERMISSIONS: Record<Role, Record<string, string[]>> = {
     analytics: ["read"],
     export: ["read"],
     stock: ["create", "read", "update"],
+    dailySheet: ["create", "read", "update"],
+    monthlyRecords: ["create", "read", "update"],
   },
   GODOWN_KEEPER: {
     inventory: ["read", "update"],
@@ -88,6 +92,8 @@ export const DEFAULT_PERMISSIONS: Record<Role, Record<string, string[]>> = {
     expenses: ["create", "read"],
     salaries: ["read"],
     stock: ["create", "read", "update"],
+    dailySheet: ["create", "read", "update"],
+    monthlyRecords: ["create", "read", "update"],
   },
   CASHIER: {
     customers: ["create", "read", "update"],
@@ -118,6 +124,8 @@ export const DEFAULT_PERMISSIONS: Record<Role, Record<string, string[]>> = {
     salaries: ["read"],
     paymentReceipts: ["create", "read"],
     stock: ["create", "read", "update"],
+    dailySheet: ["create", "read", "update"],
+    monthlyRecords: ["create", "read", "update"],
   },
   DELIVERY_BOY: {
     deliveries: ["read", "update"],

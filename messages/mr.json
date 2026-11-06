@@ -1,6 +1,9 @@
 {
   "nav": {
     "dashboard": "डॅशबोर्ड",
+    "daily_sheet": "दैनिक पत्रक (Daily Sheet)",
+    "monthly_records": "मासिक हिशोब (Monthly Records)",
+    "stock_register": "स्टॉक नोंदवही",
     "inventory": "इन्व्हेंटरी",
     "godown": "गोदाम आणि ताफा",
     "vehicle_management": "वाहन व्यवस्थापन",

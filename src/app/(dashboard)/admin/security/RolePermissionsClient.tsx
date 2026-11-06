@@ -7,7 +7,8 @@ import {
   Boxes, Warehouse, Truck, Users, Receipt, ShoppingCart, CreditCard,
   ShieldCheck, FileText, Wallet, BarChart3, CalendarDays, BookOpen,
   TrendingUp, FileDown, FolderOpen, MessageSquarePlus, Building2,
-  KeyRound, Car, PieChart, Clock, LayoutDashboard, X, Sparkles
+  KeyRound, Car, PieChart, Clock, LayoutDashboard, X, Sparkles,
+  Calculator, FileSpreadsheet
 } from "lucide-react";
 import { getRolePermissions, savePermissionsBatch } from "@/app/actions/rbac";
 import { deleteCustomRole } from "@/app/actions/staff";
@@ -40,6 +41,8 @@ const ROLES: { key: string; label: string; baseRole?: string }[] = [
 
 export const RESOURCES: ResourceItem[] = [
   // Operations
+  { key: "dailySheet", label: "Daily Cylinder Reconciliation Sheet", category: "Operations", description: "Daily cylinder delivery, full/empty return calculator and vehicle tallies", icon: Calculator },
+  { key: "monthlyRecords", label: "Monthly Master Executive Ledger", category: "Operations", description: "Monthly P&L, driver cylinder distribution, payroll advances & stock audit", icon: FileSpreadsheet },
   { key: "stock", label: "Daily Stock Register & Tally", category: "Operations", description: "Daily cylinder opening, arrivals, vehicle dispatches & closing tallies", icon: BookOpen },
   { key: "inventory", label: "Office Cylinder Stock", category: "Operations", description: "Direct office cylinder counts and physical floor inventory logs", icon: Boxes },
   { key: "godown", label: "Godown & Yard Management", category: "Operations", description: "Godown tanker/truck arrival, bulk receipt and empty cylinder movements", icon: Warehouse },

@@ -275,16 +275,23 @@ function getNavSections(
     return [
       { items: [dashboard] },
       {
-        label: "Modules",
+        label: "Operations",
         items: [
+          { label: "Daily Sheet",         href: `${base}/daily-sheet`,         icon: <Calculator className="w-4 h-4" />,     featureKey: "stock"              },
+          { label: "Monthly Records",     href: `${base}/monthly-records`,     icon: <FileSpreadsheet className="w-4 h-4" />, featureKey: "stock"              },
           { label: "Stock Register",      href: `${base}/stock`,               icon: <ClipboardCheck className="w-4 h-4" />, featureKey: "stock"              },
+          { label: "Office Stock",        href: `${base}/inventory`,           icon: <Boxes className="w-4 h-4" />,       featureKey: "inventory"           },
+        ],
+      },
+      {
+        label: "Accounts",
+        items: [
           { label: "Customer Management", href: `${base}/customer-management`, icon: <Users className="w-4 h-4" />,        featureKey: "customer_management" },
           { label: "Office Transactions", href: `${base}/office-transactions`, icon: <Receipt className="w-4 h-4" />,      featureKey: "office_transactions" },
           { label: "Commercial Sales",    href: `${base}/commercial-sales`,    icon: <ShoppingCart className="w-4 h-4" />, featureKey: "commercial_sales"    },
           { label: "Credit Ledger",       href: `${base}/credit-ledger`,       icon: <CreditCard className="w-4 h-4" />,  featureKey: "credit_ledger"       },
           { label: "Regulator Ledger",    href: `${base}/regulators`,          icon: <ShieldCheck className="w-4 h-4" />,  featureKey: "regulator_ledger"    },
           { label: "GST Invoicing",       href: `${base}/gst-invoicing`,       icon: <FileText className="w-4 h-4" />,    featureKey: "gst_invoicing"       },
-          { label: "Office Stock",        href: `${base}/inventory`,           icon: <Boxes className="w-4 h-4" />,       featureKey: "inventory"           },
         ],
       },
       {
@@ -340,9 +347,19 @@ function filterSections(sections: NavSection[], enabledFeatures: string[]): NavS
   return sections
     .map((section) => ({
       ...section,
-      items: section.items.filter(
-        (item) => !item.featureKey || enabledFeatures.includes(item.featureKey)
-      ),
+      items: section.items.filter((item) => {
+        if (!item.featureKey) return true;
+        // Support flexible fallback feature keys for Daily Sheet and Monthly Records
+        if (item.featureKey === "stock") {
+          if (item.label === "Daily Sheet") {
+            return enabledFeatures.includes("stock") || enabledFeatures.includes("daily_sheet");
+          }
+          if (item.label === "Monthly Records") {
+            return enabledFeatures.includes("stock") || enabledFeatures.includes("monthly_records");
+          }
+        }
+        return enabledFeatures.includes(item.featureKey);
+      }),
     }))
     .filter((section) => section.items.length > 0);
 }
@@ -381,6 +398,9 @@ export function Sidebar({
   const getTranslationKey = (label: string): string => {
     const map: Record<string, string> = {
       "Dashboard": "dashboard",
+      "Daily Sheet": "daily_sheet",
+      "Monthly Records": "monthly_records",
+      "Stock Register": "stock_register",
       "Inventory": "inventory",
       "Godown": "godown",
       "Godown & Fleet": "godown",

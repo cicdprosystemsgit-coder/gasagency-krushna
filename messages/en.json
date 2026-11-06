@@ -1,6 +1,9 @@
 {
   "nav": {
     "dashboard": "Dashboard",
+    "daily_sheet": "Daily Sheet",
+    "monthly_records": "Monthly Records",
+    "stock_register": "Stock Register",
     "inventory": "Inventory",
     "godown": "Godown & Fleet",
     "vehicle_management": "Vehicle Management",
