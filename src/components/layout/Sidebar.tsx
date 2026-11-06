@@ -349,14 +349,15 @@ function filterSections(sections: NavSection[], enabledFeatures: string[]): NavS
       ...section,
       items: section.items.filter((item) => {
         if (!item.featureKey) return true;
-        // Support flexible fallback feature keys for Daily Sheet and Monthly Records
-        if (item.featureKey === "stock") {
-          if (item.label === "Daily Sheet") {
-            return enabledFeatures.includes("stock") || enabledFeatures.includes("daily_sheet");
-          }
-          if (item.label === "Monthly Records") {
-            return enabledFeatures.includes("stock") || enabledFeatures.includes("monthly_records");
-          }
+        // Support flexible fallback feature keys for Daily Sheet, Monthly Records, and Stock Register
+        if (item.featureKey === "stock" || item.featureKey === "daily_sheet" || item.featureKey === "monthly_records") {
+          return (
+            enabledFeatures.includes("stock") ||
+            enabledFeatures.includes("daily_sheet") ||
+            enabledFeatures.includes("monthly_records") ||
+            enabledFeatures.includes("inventory") ||
+            enabledFeatures.includes("godown")
+          );
         }
         return enabledFeatures.includes(item.featureKey);
       }),

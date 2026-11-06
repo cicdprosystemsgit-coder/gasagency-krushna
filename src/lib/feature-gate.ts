@@ -51,6 +51,21 @@ export function requireFeature(
   const { enabledFeatures } = session;
   // Empty array = legacy agency with all features unlocked
   if (enabledFeatures.length === 0) return;
+
+  // Stock, Daily Sheet & Monthly Records are core operations:
+  // If agency has stock, daily_sheet, monthly_records, inventory or godown enabled, grant access.
+  if (featureKey === "stock" || featureKey === "daily_sheet" || featureKey === "monthly_records") {
+    if (
+      enabledFeatures.includes("stock") ||
+      enabledFeatures.includes("daily_sheet") ||
+      enabledFeatures.includes("monthly_records") ||
+      enabledFeatures.includes("inventory") ||
+      enabledFeatures.includes("godown")
+    ) {
+      return;
+    }
+  }
+
   if (!enabledFeatures.includes(featureKey)) {
     redirect("/feature-disabled");
   }

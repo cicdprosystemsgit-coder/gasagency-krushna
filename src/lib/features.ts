@@ -7,6 +7,9 @@ export interface FeatureDef {
 
 export const ALL_FEATURES: FeatureDef[] = [
   // Operations
+  { key: "daily_sheet",         label: "Daily Sheet",              description: "Daily cylinder delivery, empty return calculator and vehicle tallies", category: "Operations"    },
+  { key: "monthly_records",     label: "Monthly Records",          description: "Monthly P&L, driver cylinder distribution, payroll advances & stock audit", category: "Operations" },
+  { key: "stock",               label: "Stock Register",           description: "Daily cylinder opening, arrivals, vehicle dispatches & closing tallies", category: "Operations" },
   { key: "inventory",           label: "Inventory Management",    description: "Track office stock of cylinders and products",                   category: "Operations"    },
   { key: "godown",              label: "Godown Management",        description: "Manage godown stock and cylinder in/out movements",               category: "Operations"    },
   { key: "vehicle_management",  label: "Vehicle Management",       description: "Track delivery vehicles, trips, and fleet status",                category: "Operations"    },
@@ -54,5 +57,14 @@ export const ALL_FEATURE_KEYS = ALL_FEATURES.map((f) => f.key);
 /** Returns true when a feature is accessible — empty array means all features enabled (backward compat) */
 export function isFeatureEnabled(enabledFeatures: string[], key: string): boolean {
   if (enabledFeatures.length === 0) return true;
+  if (key === "stock" || key === "daily_sheet" || key === "monthly_records") {
+    return (
+      enabledFeatures.includes("stock") ||
+      enabledFeatures.includes("daily_sheet") ||
+      enabledFeatures.includes("monthly_records") ||
+      enabledFeatures.includes("inventory") ||
+      enabledFeatures.includes("godown")
+    );
+  }
   return enabledFeatures.includes(key);
 }
