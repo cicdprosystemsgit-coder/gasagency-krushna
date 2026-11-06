@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useTransition, useMemo, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, useTransition, useMemo, useCallback } from "react";
+import { useRouter, usePathname } from "next/navigation";
 import {
   FileSpreadsheet,
   Printer,
@@ -31,6 +31,7 @@ import {
   Lock,
   BookOpen,
   X,
+  Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -48,11 +49,20 @@ interface Props {
 
 export function MonthlyMasterClient({ initialData, userRole = "ADMIN" }: Props) {
   const router = useRouter();
+  const pathname = usePathname();
   const [data, setData] = useState<MonthlyMasterSheetData>(initialData);
   const [activeTab, setActiveTab] = useState<
     "summary" | "salary" | "credit" | "distribution" | "stock" | "fleetDigital"
   >("summary");
   const [isPending, startTransition] = useTransition();
+
+  // Keep state updated whenever initialData changes via URL navigation
+  useEffect(() => {
+    setData(initialData);
+    setDailySheetData(null);
+    const maxDays = new Date(initialData.year, initialData.month, 0).getDate();
+    setSelectedDay((prev) => Math.min(prev, maxDays));
+  }, [initialData]);
 
   // Day Browser state
   const [viewMode, setViewMode] = useState<"monthly" | "daily">("monthly");
@@ -93,7 +103,9 @@ export function MonthlyMasterClient({ initialData, userRole = "ADMIN" }: Props) 
       nextMonth = 12;
       nextYear -= 1;
     }
-    router.push(`/admin/monthly-records?year=${nextYear}&month=${nextMonth}`);
+    startTransition(() => {
+      router.push(`${pathname}?year=${nextYear}&month=${nextMonth}`);
+    });
   };
 
   const handlePrint = () => {
@@ -189,17 +201,20 @@ export function MonthlyMasterClient({ initialData, userRole = "ADMIN" }: Props) 
           <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
             <button
               onClick={() => handleMonthChange(-1)}
-              className="p-1.5 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-white transition-all shadow-2xs"
+              disabled={isPending}
+              className="p-1.5 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-white transition-all shadow-2xs disabled:opacity-50"
               title="Previous Month"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
-            <span className="px-2 text-xs font-bold text-slate-700 min-w-[90px] text-center">
+            <span className="px-2 text-xs font-bold text-slate-700 min-w-[100px] text-center flex items-center justify-center gap-1.5">
+              {isPending && <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-600" />}
               {monthLabel}
             </span>
             <button
               onClick={() => handleMonthChange(1)}
-              className="p-1.5 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-white transition-all shadow-2xs"
+              disabled={isPending}
+              className="p-1.5 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-white transition-all shadow-2xs disabled:opacity-50"
               title="Next Month"
             >
               <ChevronRight className="w-4 h-4" />

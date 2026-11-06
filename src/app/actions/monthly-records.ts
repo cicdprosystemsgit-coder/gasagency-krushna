@@ -391,47 +391,85 @@ export async function getMonthlyMasterSheet(
       })
     );
 
-    // Special Points: Godown, Rahul Office, NC, TV OUT
+    // ── Special Points: Godown, Office, NC, TV OUT (strictly agency real data)
+    const godownDeliveries = monthDeliveries.filter((d) => !d.deliveredById || (d.deliveredBy?.name || "").toLowerCase().includes("godown"));
+    const godown14 = godownDeliveries.filter((d) => (d.productName || "").includes("14.2")).reduce((s, x) => s + (x.deliveredQty || 0), 0);
+    const godown19 = godownDeliveries.filter((d) => (d.productName || "").includes("19")).reduce((s, x) => s + (x.deliveredQty || 0), 0);
+
+    const monthOfficeTxns = await prisma.officeTransaction.findMany({
+      where: {
+        agencyId,
+        date: { gte: monthStart, lte: monthEnd },
+      },
+      select: {
+        type: true,
+        qty: true,
+        productName: true,
+        amount: true,
+      },
+    });
+
+    let office14 = 0;
+    let office19 = 0;
+    let nc14 = 0;
+    let nc19 = 0;
+
+    monthOfficeTxns.forEach((tx) => {
+      const pName = (tx.productName || "").toLowerCase();
+      const q = tx.qty || 1;
+      if (tx.type === "CYLINDER_REFILL") {
+        if (pName.includes("19")) office19 += q;
+        else office14 += q;
+      } else if (tx.type === "NEW_CONNECTION") {
+        if (pName.includes("19")) nc19 += q;
+        else nc14 += q;
+      }
+    });
+
+    const tvOutDeliveries = monthDeliveries.filter((d) => (d.productName || "").toLowerCase().includes("tv"));
+    const tvOut14 = tvOutDeliveries.filter((d) => (d.productName || "").includes("14.2")).reduce((s, x) => s + (x.deliveredQty || 0), 0);
+    const tvOut19 = tvOutDeliveries.filter((d) => (d.productName || "").includes("19")).reduce((s, x) => s + (x.deliveredQty || 0), 0);
+
     const specialPoints: DriverDistributionRow[] = [
       {
         driverId: "pt-godown",
         driverName: "गोडाऊन (Direct Godown)",
         isSpecialPoint: true,
-        cylinder14Qty: 415,
-        cylinder19Qty: 2,
+        cylinder14Qty: godown14,
+        cylinder19Qty: godown19,
         cylinder5DomQty: 0,
         cylinder5ComQty: 0,
-        totalCylinders: 417,
+        totalCylinders: godown14 + godown19,
       },
       {
         driverId: "pt-office",
-        driverName: "राहुल ऑफिस (Office Counter)",
+        driverName: "कार्यालय / काउंटर (Office Counter)",
         isSpecialPoint: true,
-        cylinder14Qty: 1044,
-        cylinder19Qty: 24,
+        cylinder14Qty: office14,
+        cylinder19Qty: office19,
         cylinder5DomQty: 0,
         cylinder5ComQty: 0,
-        totalCylinders: 1068,
+        totalCylinders: office14 + office19,
       },
       {
         driverId: "pt-nc",
         driverName: "NC (New Connections)",
         isSpecialPoint: true,
-        cylinder14Qty: 68,
-        cylinder19Qty: 0,
+        cylinder14Qty: nc14,
+        cylinder19Qty: nc19,
         cylinder5DomQty: 0,
         cylinder5ComQty: 0,
-        totalCylinders: 68,
+        totalCylinders: nc14 + nc19,
       },
       {
         driverId: "pt-tvout",
         driverName: "TV OUT (Transfer Voucher Out)",
         isSpecialPoint: true,
-        cylinder14Qty: 12,
-        cylinder19Qty: 0,
+        cylinder14Qty: tvOut14,
+        cylinder19Qty: tvOut19,
         cylinder5DomQty: 0,
         cylinder5ComQty: 0,
-        totalCylinders: 12,
+        totalCylinders: tvOut14 + tvOut19,
       },
     ];
 
@@ -456,8 +494,8 @@ export async function getMonthlyMasterSheet(
 
     dailyClosings.forEach((c) => {
       const dayNum = new Date(c.date).getDate();
-      // Estimated daily gross profit = totalCollection * ~15% or net formula
-      const estProfit = Math.round(c.totalCollection * 0.14) || 56000;
+      // Estimated daily gross margin from actual day collection
+      const estProfit = Math.round(c.totalCollection * 0.14);
       profitMap.set(dayNum, {
         profit: estProfit,
         deliveries: c.totalDeliveries,
@@ -477,7 +515,7 @@ export async function getMonthlyMasterSheet(
       });
     }
 
-    // ── 5. Block 5: स्टॉक तपशील (Stock Details & Valuation) ────────────────
+    // ── 5. Block 5: स्टॉक तपशील (Stock Details & Valuation - Agency Specific) ──
     const products = await prisma.product.findMany({
       where: { agencyId, isActive: true, isDeleted: false },
       select: {
@@ -490,43 +528,127 @@ export async function getMonthlyMasterSheet(
       orderBy: { sortOrder: "asc" },
     });
 
-    // Standard client items configuration
-    const standardProducts = [
-      { name: "14.2 kg Domestic", cat: "CYLINDER" as const, open: 610, load: 5040, sale: 12768, nc: 38, rate: 797 },
-      { name: "19 kg Commercial", cat: "CYLINDER" as const, open: 24, load: 750, sale: 71, nc: 2, rate: 1735 },
-      { name: "5 kg Dom", cat: "CYLINDER" as const, open: 0, load: 0, sale: 0, nc: 0, rate: 327 },
-      { name: "5 kg Com", cat: "CYLINDER" as const, open: 0, load: 0, sale: 3, nc: 2, rate: 489.5 },
-      { name: "Stove Ujjwala", cat: "STOVE" as const, open: 0, load: 0, sale: 0, nc: 0, rate: 990 },
-      { name: "Stove 2B 2200", cat: "STOVE" as const, open: 6, load: 0, sale: 1, nc: 0, rate: 2200 },
-      { name: "Stove 2B 2400", cat: "STOVE" as const, open: 0, load: 0, sale: 1, nc: 0, rate: 2400 },
-      { name: "Stove 2B 2600", cat: "STOVE" as const, open: 0, load: 0, sale: 0, nc: 0, rate: 2600 },
-      { name: "Stove 2B 3000", cat: "STOVE" as const, open: 0, load: 0, sale: 0, nc: 0, rate: 3000 },
-      { name: "Stove 2B Hi Star", cat: "STOVE" as const, open: 1, load: 0, sale: 0, nc: 0, rate: 2800 },
-      { name: "Stove 3B 3800", cat: "STOVE" as const, open: 1, load: 0, sale: 1, nc: 0, rate: 3800 },
-      { name: "Suraksha R (Hose)", cat: "ACCESSORY" as const, open: 374, load: 0, sale: 125, nc: 25, rate: 190 },
-      { name: "Lighter", cat: "ACCESSORY" as const, open: 362, load: 0, sale: 4, nc: 0, rate: 100 },
-      { name: "DPR (Regulator)", cat: "ACCESSORY" as const, open: 0, load: 500, sale: 0, nc: 26, rate: 0 },
-      { name: "DGCC R (Card)", cat: "ACCESSORY" as const, open: 670, load: 0, sale: 60, nc: 25, rate: 59 },
-      { name: "DGCC U (Card)", cat: "ACCESSORY" as const, open: 482, load: 0, sale: 90, nc: 0, rate: 25 },
-    ];
+    // Inward stock movements in month
+    const monthGodownMoves = await prisma.godownInventory.findMany({
+      where: {
+        agencyId,
+        date: { gte: monthStart, lte: monthEnd },
+      },
+      select: {
+        productId: true,
+        qty: true,
+        moveType: true,
+      },
+    });
 
-    const stockDetails: MonthlyStockRow[] = standardProducts.map((sp) => {
-      const dbProd = products.find((p) => p.name.toLowerCase().includes(sp.name.toLowerCase()));
-      const rate = dbProd?.saleRate || sp.rate;
-      const closingStock = sp.open + sp.load - sp.sale - sp.nc;
-      const amount = closingStock * rate;
+    // Inward loads from plant truckloads
+    const monthPlantLoads = await prisma.godownRecord.findMany({
+      where: {
+        agencyId,
+        entryDate: { gte: monthStart, lte: monthEnd },
+        isDeleted: false,
+      },
+      select: {
+        items: true,
+        filledCylindersReceived: true,
+      },
+    });
+
+    // Prior inventory for opening stock calculation
+    const priorGodownMoves = await prisma.godownInventory.findMany({
+      where: {
+        agencyId,
+        date: { lt: monthStart },
+      },
+      select: {
+        productId: true,
+        qty: true,
+        moveType: true,
+      },
+    });
+
+    const stockDetails: MonthlyStockRow[] = products.map((p) => {
+      const pNameLower = p.name.toLowerCase();
+      let category: "CYLINDER" | "STOVE" | "ACCESSORY" | "OTHER" = "OTHER";
+      if (p.isCylinder || pNameLower.includes("kg") || pNameLower.includes("cylinder")) {
+        category = "CYLINDER";
+      } else if (pNameLower.includes("stove") || pNameLower.includes("शेगडी") || pNameLower.includes("चुल्हा")) {
+        category = "STOVE";
+      } else if (
+        pNameLower.includes("regulator") ||
+        pNameLower.includes("pipe") ||
+        pNameLower.includes("hose") ||
+        pNameLower.includes("suraksha") ||
+        pNameLower.includes("lighter")
+      ) {
+        category = "ACCESSORY";
+      }
+
+      // 1. Opening stock: net sum of prior movements
+      let openStock = 0;
+      priorGodownMoves
+        .filter((m) => m.productId === p.id)
+        .forEach((m) => {
+          if (m.moveType === "RECEIVED") openStock += m.qty;
+          else if (m.moveType === "DISPATCHED") openStock -= m.qty;
+        });
+
+      // 2. Load: inward receipts during this month
+      let loadQty = 0;
+      monthGodownMoves
+        .filter((m) => m.productId === p.id && m.moveType === "RECEIVED")
+        .forEach((m) => {
+          loadQty += m.qty;
+        });
+
+      monthPlantLoads.forEach((gr) => {
+        if (gr.items) {
+          try {
+            const itms = typeof gr.items === "string" ? JSON.parse(gr.items) : gr.items;
+            if (Array.isArray(itms)) {
+              itms.forEach((it: any) => {
+                if (it.productId === p.id || String(it.productName || "").toLowerCase() === pNameLower) {
+                  loadQty += Number(it.filledReceived) || 0;
+                }
+              });
+            }
+          } catch {}
+        } else if (category === "CYLINDER" && pNameLower.includes("14.2")) {
+          loadQty += gr.filledCylindersReceived || 0;
+        }
+      });
+
+      // 3. Sale: delivered quantity in this month
+      let saleQty = 0;
+      monthDeliveries
+        .filter((d) => d.productId === p.id || (d.productName && d.productName.toLowerCase() === pNameLower))
+        .forEach((d) => {
+          saleQty += d.deliveredQty || 0;
+        });
+
+      // 4. NC: New Connections issued in this month
+      let ncQty = 0;
+      monthOfficeTxns
+        .filter((tx) => tx.type === "NEW_CONNECTION" && (tx.productName && tx.productName.toLowerCase() === pNameLower))
+        .forEach((tx) => {
+          ncQty += tx.qty || 1;
+        });
+
+      const closingStock = openStock + loadQty - saleQty - ncQty;
+      const rate = p.saleRate || 0;
+      const amount = Math.round(closingStock * rate);
 
       return {
-        productId: dbProd?.id || sp.name,
-        productName: sp.name,
-        category: sp.cat,
-        openingStock: sp.open,
-        loadQty: sp.load,
-        saleQty: sp.sale,
-        ncQty: sp.nc,
+        productId: p.id,
+        productName: p.name,
+        category,
+        openingStock: Math.max(0, openStock),
+        loadQty,
+        saleQty,
+        ncQty,
         closingStock,
         rate,
-        amount: Math.round(amount),
+        amount,
       };
     });
 
@@ -566,12 +688,6 @@ export async function getMonthlyMasterSheet(
         }
       });
 
-      // Sample defaults matching sample sheet if fresh
-      if (maint === 0 && fuel === 0) {
-        maint = Math.floor(Math.random() * 4000) + 1000;
-        fuel = Math.floor(Math.random() * 8000) + 4000;
-      }
-
       return {
         vehicleId: v.id,
         vehicleNo: v.vehicleNo,
@@ -582,7 +698,7 @@ export async function getMonthlyMasterSheet(
       };
     });
 
-    // ── 7. Block 7: एकूण डिजिटल रक्कम (Digital Collection) ─────────────────
+    // ── 7. Block 7: एकूण डिजिटल रक्कम (Digital Collection - Real Time) ──────
     const digitalDeliveries = await prisma.deliveryRecord.findMany({
       where: {
         agencyId,
@@ -609,40 +725,38 @@ export async function getMonthlyMasterSheet(
       else if (mode.includes("CHEQUE") || mode.includes("BANK")) mCheque += amt;
     });
 
-    const hasDigitalDeliveries = mPaytm > 0 || mSap > 0 || mPhonePe > 0 || mCheque > 0;
-
     const digitalCollections: DigitalCollectionRow[] = [
       {
         channel: "Paytm",
         channelLabel: "पेटीएम (Paytm QR)",
-        recordedAmount: hasDigitalDeliveries ? mPaytm : 2522620.5,
-        receivedAmount: hasDigitalDeliveries ? mPaytm : 2522621,
-        variance: hasDigitalDeliveries ? 0 : 0.5,
+        recordedAmount: mPaytm,
+        receivedAmount: mPaytm,
+        variance: 0,
       },
       {
         channel: "SAP",
         channelLabel: "SAP / Company Portal",
-        recordedAmount: hasDigitalDeliveries ? mSap : 391491,
-        receivedAmount: hasDigitalDeliveries ? mSap : 391491,
+        recordedAmount: mSap,
+        receivedAmount: mSap,
         variance: 0,
       },
       {
         channel: "PhonePe",
         channelLabel: "फोन पे (PhonePe)",
-        recordedAmount: hasDigitalDeliveries ? mPhonePe : 354290,
-        receivedAmount: hasDigitalDeliveries ? mPhonePe : 354290,
+        recordedAmount: mPhonePe,
+        receivedAmount: mPhonePe,
         variance: 0,
       },
       {
         channel: "Cheque/Bank",
         channelLabel: "चेक / बँक (Cheques)",
-        recordedAmount: hasDigitalDeliveries ? mCheque : 769335,
-        receivedAmount: hasDigitalDeliveries ? mCheque : 769335,
+        recordedAmount: mCheque,
+        receivedAmount: mCheque,
         variance: 0,
       },
     ];
 
-    // ── 8. Block 8: बँक तपशील (Bank Account Balances) ─────────────────────
+    // ── 8. Block 8: बँक तपशील (Agency Bank Account Balances) ───────────────
     const personalAccounts = await prisma.personalAccount.findMany({
       where: { agencyId, isActive: true },
       include: {
@@ -662,7 +776,7 @@ export async function getMonthlyMasterSheet(
         if (tx.type === "EXPENSE" || tx.type === "TRANSFER_OUT") dr += tx.amount;
       });
 
-      const open = acc.openingBalance || 100000;
+      const open = acc.openingBalance || 0;
       const close = open + cr - dr;
 
       return {
@@ -675,15 +789,6 @@ export async function getMonthlyMasterSheet(
         closingBalance: Math.round(close),
       };
     });
-
-    // Fallback sample bank accounts if empty
-    if (bankAccounts.length === 0) {
-      bankAccounts.push(
-        { accountId: "ubi", bankName: "UBI (Union Bank)", accountNo: "4521", openingBalance: 231807.24, creditAmount: 4195599.72, debitAmount: 4404079.33, closingBalance: 23327.63 },
-        { accountId: "icici", bankName: "ICICI Bank Current", accountNo: "8890", openingBalance: 123323.09, creditAmount: 4545800, debitAmount: 4650965, closingBalance: 18158.09 },
-        { accountId: "sgb", bankName: "SGB (Gramin Bank)", accountNo: "1102", openingBalance: -16737.05, creditAmount: 5051251, debitAmount: 4525703.34, closingBalance: 508810.61 }
-      );
-    }
 
     // ── 9. Block 10: काउंटर सेवा (Counter Extra Services) ─────────────────
     const officeTxns = await prisma.officeTransaction.findMany({
@@ -724,7 +829,7 @@ export async function getMonthlyMasterSheet(
       }
     });
 
-    let counterServices: CounterServiceRow[] = Array.from(counterStaffMap.entries()).map(
+    const counterServices: CounterServiceRow[] = Array.from(counterStaffMap.entries()).map(
       ([id, val]) => ({
         staffId: id,
         staffName: val.name,
@@ -736,71 +841,127 @@ export async function getMonthlyMasterSheet(
       })
     );
 
-    if (counterServices.length === 0) {
-      counterServices = [
-        { staffId: "st-1", staffName: "Ravi Pawara", ekycAmount: 300, nameChangeAmount: 2100, formAmount: 0, refillService: 28200, totalAmount: 30600 },
-        { staffId: "st-2", staffName: "Harshal Patil", ekycAmount: 1200, nameChangeAmount: 1200, formAmount: 1700, refillService: 10900, totalAmount: 15000 },
-        { staffId: "st-3", staffName: "Rohit Kalal", ekycAmount: 800, nameChangeAmount: 500, formAmount: 650, refillService: 13800, totalAmount: 15750 },
-        { staffId: "st-4", staffName: "Prafull Patil", ekycAmount: 3000, nameChangeAmount: 4100, formAmount: 3200, refillService: 18900, totalAmount: 29200 },
-        { staffId: "st-5", staffName: "Pankaj Patil", ekycAmount: 1600, nameChangeAmount: 3700, formAmount: 0, refillService: 3500, totalAmount: 8800 },
-        { staffId: "st-6", staffName: "Virendra Pawara", ekycAmount: 0, nameChangeAmount: 0, formAmount: 0, refillService: 1900, totalAmount: 1900 },
-        { staffId: "st-7", staffName: "Vijay Mali", ekycAmount: 1100, nameChangeAmount: 3700, formAmount: 1200, refillService: 7900, totalAmount: 13900 },
-        { staffId: "st-8", staffName: "Delivery Boys", ekycAmount: 0, nameChangeAmount: 600, formAmount: 0, refillService: 0, totalAmount: 600 },
-      ];
-    }
+    // ── 10. Block 9: संपूर्ण महिन्याचा एकूण हिशोब (Grand Cash Reconciliation) ─
+    // 1. Opening Cash: from closest DailyClosing prior to this month
+    const priorClosing = await prisma.dailyClosing.findFirst({
+      where: {
+        agencyId,
+        date: { lt: monthStart },
+      },
+      orderBy: { date: "desc" },
+      select: { cashOnHand: true },
+    });
+    const openingCash = priorClosing?.cashOnHand || 0;
 
-    // ── 10. Block 9: संपूर्ण महिन्याचा एकूण हिशोब (Grand Cash Reconciliation)
-    const openingCash = 263350;
-    const cylinderRevenue = 12954249.5;
-    const vehicleFuelAndRepairs = vehicleExpenses.reduce((s, v) => s + v.totalExpense, 0) || 227055;
-    const creditIssuedMonth = creditLedgers.reduce((s, c) => s + c.currentCredit, 0) || 1216665;
-    const creditRecovered = creditLedgers.reduce((s, c) => s + c.creditDeposited, 0) || 1044390;
-    const digitalReceivedTotal = digitalCollections.reduce((s, d) => s + d.receivedAmount, 0) || 4037736.5;
-    const nonCylinderRevenue = stockDetails.filter((s) => s.category !== "CYLINDER").reduce((s, x) => s + (x.saleQty * x.rate), 0) || 211141;
-    const otherOfficeReceipts = 200;
-    const otherOfficeExpenses = 266930;
-    const officeExpensesTotal = 178373;
-    const salaryAdvancePaidTotal = salaryAdvances.reduce((s, a) => s + a.monthAdvance, 0) || 286355;
-    const advanceRepaidTotal = salaryAdvances.reduce((s, a) => s + a.advanceRepaid, 0) || 0;
-    const partnerDrawings = 1224380; // भरत पाटील हिशोब
-    const commercial19KgAmount = 299330;
-    const bankDeposits = 6897170;
+    // 2. Cylinder Revenue: actual deliveries of cylinder products
+    const cylinderProductIds = new Set(
+      products.filter((p) => p.isCylinder || p.name.toLowerCase().includes("kg")).map((p) => p.id)
+    );
+    let cylinderRevenue = 0;
+    monthDeliveries.forEach((d) => {
+      const isCyl = cylinderProductIds.has(d.productId) || (d.productName || "").toLowerCase().includes("kg");
+      if (isCyl) {
+        const prod = products.find((p) => p.id === d.productId);
+        const rate = prod?.saleRate || ((d.productName || "").includes("19") ? 1735 : 797);
+        cylinderRevenue += (d.deliveredQty || 0) * rate;
+      }
+    });
 
-    // Mathematical formula for Closing Cash in Safe:
-    // Net Safe Cash = Opening Cash + Cash Inflows - Cash Outflows
+    const vehicleFuelAndRepairs = vehicleExpenses.reduce((s, v) => s + v.totalExpense, 0);
+    const creditRecovered = creditLedgers.reduce((s, c) => s + c.creditDeposited, 0);
+    const digitalReceivedTotal = digitalCollections.reduce((s, d) => s + d.receivedAmount, 0);
+    const nonCylinderRevenue = stockDetails
+      .filter((s) => s.category !== "CYLINDER")
+      .reduce((s, x) => s + x.saleQty * x.rate, 0);
+
+    // Other office receipts (cash transactions)
+    let otherOfficeReceipts = 0;
+    monthOfficeTxns.forEach((tx) => {
+      if (tx.type !== "CYLINDER_REFILL") {
+        otherOfficeReceipts += tx.amount || 0;
+      }
+    });
+
+    // Office general expenses
+    let officeExpensesTotal = 0;
+    let otherOfficeExpenses = 0;
+    expenses.forEach((e) => {
+      const desc = (e.description || "").toLowerCase();
+      const isVeh = vehicles.some((v) => desc.includes(v.vehicleNo.toLowerCase()));
+      if (!isVeh) {
+        const cat = (e.category || "").toLowerCase();
+        if (cat.includes("office") || cat.includes("rent") || cat.includes("hamali") || cat.includes("electricity")) {
+          officeExpensesTotal += e.amount;
+        } else {
+          otherOfficeExpenses += e.amount;
+        }
+      }
+    });
+
+    const salaryAdvancePaidTotal = salaryAdvances.reduce((s, a) => s + a.monthAdvance, 0);
+    const advanceRepaidTotal = salaryAdvances.reduce((s, a) => s + a.advanceRepaid, 0);
+
+    // Partner drawings for this month
+    const partnerDrawingsList = await prisma.salaryDrawing.findMany({
+      where: {
+        agencyId,
+        year,
+        month,
+        type: "SALARY",
+      },
+      select: { amount: true },
+    });
+    const partnerDrawings = partnerDrawingsList.reduce((s, d) => s + d.amount, 0);
+
+    // 19kg commercial cylinder sales in month
+    let commercial19KgAmount = 0;
+    monthDeliveries.forEach((d) => {
+      if ((d.productName || "").toLowerCase().includes("19")) {
+        const prod = products.find((p) => p.id === d.productId);
+        commercial19KgAmount += (d.deliveredQty || 0) * (prod?.saleRate || 1735);
+      }
+    });
+
+    // Bank deposits in month
+    let bankDeposits = 0;
+    bankAccounts.forEach((ba) => {
+      bankDeposits += ba.creditAmount;
+    });
+
+    // Net safe cash calculation formula
     const closingCashInHand = Math.round(
       openingCash +
-      (cylinderRevenue - digitalReceivedTotal) +
-      nonCylinderRevenue +
-      otherOfficeReceipts +
-      creditRecovered +
-      advanceRepaidTotal -
-      vehicleFuelAndRepairs -
-      officeExpensesTotal -
-      otherOfficeExpenses -
-      salaryAdvancePaidTotal -
-      bankDeposits
+        (cylinderRevenue - digitalReceivedTotal) +
+        nonCylinderRevenue +
+        otherOfficeReceipts +
+        creditRecovered +
+        advanceRepaidTotal -
+        vehicleFuelAndRepairs -
+        officeExpensesTotal -
+        otherOfficeExpenses -
+        salaryAdvancePaidTotal -
+        bankDeposits
     );
 
     const totalProfitMonth = dailyProfits.reduce((s, p) => s + p.profit, 0);
 
     const grandReconciliation: GrandCashReconciliation = {
-      openingCash,
-      cylinderRevenue,
-      nonCylinderRevenue,
-      otherOfficeReceipts,
-      creditRecovered,
-      advanceRepaidTotal,
-      digitalReceivedTotal,
-      vehicleFuelAndRepairs,
-      officeExpenses: officeExpensesTotal,
-      otherOfficeExpenses,
-      salaryAdvancePaidTotal,
-      commercial19KgAmount,
-      bankDeposits,
-      partnerDrawings,
-      closingCashInHand: closingCashInHand > 0 ? closingCashInHand : 437996,
-      totalProfitMonth,
+      openingCash: Math.round(openingCash),
+      cylinderRevenue: Math.round(cylinderRevenue),
+      nonCylinderRevenue: Math.round(nonCylinderRevenue),
+      otherOfficeReceipts: Math.round(otherOfficeReceipts),
+      creditRecovered: Math.round(creditRecovered),
+      advanceRepaidTotal: Math.round(advanceRepaidTotal),
+      digitalReceivedTotal: Math.round(digitalReceivedTotal),
+      vehicleFuelAndRepairs: Math.round(vehicleFuelAndRepairs),
+      officeExpenses: Math.round(officeExpensesTotal),
+      otherOfficeExpenses: Math.round(otherOfficeExpenses),
+      salaryAdvancePaidTotal: Math.round(salaryAdvancePaidTotal),
+      commercial19KgAmount: Math.round(commercial19KgAmount),
+      bankDeposits: Math.round(bankDeposits),
+      partnerDrawings: Math.round(partnerDrawings),
+      closingCashInHand,
+      totalProfitMonth: Math.round(totalProfitMonth),
     };
 
     return {
@@ -1421,14 +1582,25 @@ export async function getMonthlyDaySheet(
       }
       const entry = computerStockMap.get(pid)!;
       const moveType = String(inv.moveType);
-      if (moveType === "IN") entry.full += inv.qty;
-      if (moveType === "OUT") entry.full -= inv.qty;
+      if (moveType === "RECEIVED" || moveType === "IN") entry.full += inv.qty;
+      if (moveType === "DISPATCHED" || moveType === "OUT") entry.full -= inv.qty;
       if (moveType === "ADJUSTMENT") entry.full += inv.qty;
     });
 
+    // ── E. Physical vs Computer Stock
+    const agencyProducts = await prisma.product.findMany({
+      where: { agencyId, isActive: true, isDeleted: false },
+      select: { id: true, name: true, isCylinder: true },
+      orderBy: { sortOrder: "asc" },
+    });
+
+    const productKeys =
+      agencyProducts.length > 0
+        ? agencyProducts.map((p) => p.name)
+        : ["14.2 kg Domestic", "19 kg Commercial"];
+
     // Physical stock from daily register
     const physicalStockAudit: PhysicalStockEntry[] = [];
-    const productKeys = ["14.2 kg", "19 kg", "5 kg Dom", "5 kg Com"];
 
     productKeys.forEach((key) => {
       const phys = physicalStockData[key] || { full: 0, empty: 0 };
@@ -1437,6 +1609,7 @@ export async function getMonthlyDaySheet(
 
       computerStockMap.forEach((val) => {
         if (
+          val.name.toLowerCase() === key.toLowerCase() ||
           val.name
             .toLowerCase()
             .includes(key.toLowerCase().replace(" kg", ""))
@@ -1554,8 +1727,8 @@ export async function getMonthlyDaySheet(
       sap = 0,
       phonepe = 0,
       cheque = 0,
-      udhariGiven = 0;
-    const udhariReceived = 0;
+      udhariGiven = 0,
+      udhariReceived = 0;
 
     dayDeliveries.forEach((del) => {
       const mode = (del.paymentMode || "").toUpperCase();
@@ -1567,6 +1740,18 @@ export async function getMonthlyDaySheet(
       else if (mode.includes("CHEQUE") || mode.includes("BANK"))
         cheque += cash;
       udhariGiven += del.creditAmount || 0;
+    });
+
+    const dayCreditEntries = await prisma.creditLedgerEntry.findMany({
+      where: {
+        agencyId,
+        date: { gte: dayStart, lte: dayEnd },
+      },
+      select: { amount: true, type: true },
+    });
+    dayCreditEntries.forEach((e) => {
+      if (e.type === "GIVEN" || e.type === "DEBIT") udhariGiven += e.amount;
+      if (e.type === "RECEIVED" || e.type === "CREDIT") udhariReceived += e.amount;
     });
 
     const counterSalesAmount = sap;
