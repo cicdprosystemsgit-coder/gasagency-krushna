@@ -1,8 +1,10 @@
 "use client";
 
 import { X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
+
+const emptySubscribe = () => () => {};
 
 interface ModalProps {
   open?: boolean;
@@ -34,14 +36,10 @@ export function Modal({
   style,
 }: ModalProps) {
   const isModalOpen = open ?? isOpen ?? false;
-  const [mounted, setMounted] = useState(false);
+  const isMounted = useSyncExternalStore(emptySubscribe, () => true, () => false);
 
   useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  useEffect(() => {
-    if (!isModalOpen || !mounted) return;
+    if (!isModalOpen || !isMounted) return;
 
     const originalOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -55,9 +53,9 @@ export function Modal({
       document.body.style.overflow = originalOverflow;
       window.removeEventListener("keydown", onKey);
     };
-  }, [isModalOpen, onClose, mounted]);
+  }, [isModalOpen, onClose, isMounted]);
 
-  if (!isModalOpen || !mounted) return null;
+  if (!isModalOpen || !isMounted) return null;
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 md:p-6">
@@ -74,10 +72,10 @@ export function Modal({
 
       {/* Dialog — flex column so header + footer never scroll, only body does */}
       <div
-        className={`relative w-full flex flex-col animate-fade-up rounded-t-2xl sm:rounded-2xl border overflow-hidden shadow-2xl bg-white ${className || ""}`}
+        className={`relative w-full flex flex-col animate-fade-up rounded-t-2xl sm:rounded-2xl border overflow-hidden shadow-2xl bg-[var(--color-surface)] dark:bg-zinc-900 pb-[env(safe-area-inset-bottom)] sm:pb-0 ${className || ""}`}
         style={{
           maxWidth: widths[size],
-          maxHeight: "calc(100vh - 2rem)",
+          maxHeight: "calc(100dvh - 1rem)",
           borderColor: "var(--color-border)",
           boxShadow:
             "0 25px 50px -12px rgba(15, 23, 42, 0.25), 0 0 0 1px rgba(15, 23, 42, 0.04)",
@@ -86,25 +84,24 @@ export function Modal({
       >
         {/* ── Sticky Header ──────────────────────────────────────────────── */}
         <div
-          className="flex items-center justify-between px-6 py-4 flex-shrink-0 bg-white"
+          className="flex items-center justify-between px-4 sm:px-6 py-3.5 sm:py-4 flex-shrink-0 bg-[var(--color-surface)] dark:bg-zinc-900"
           style={{ borderBottom: "1px solid var(--color-border)" }}
         >
           <div>
             <h2
-              className="text-[15px] font-bold tracking-tight"
-              style={{ color: "var(--color-text-primary)" }}
+              className="text-[15px] font-bold tracking-tight text-zinc-900 dark:text-zinc-100"
             >
               {title}
             </h2>
             {subtitle && (
-              <p className="text-[12px] mt-0.5" style={{ color: "var(--color-text-muted)" }}>
+              <p className="text-[12px] mt-0.5 text-zinc-500 dark:text-zinc-400">
                 {subtitle}
               </p>
             )}
           </div>
           <button
             onClick={onClose}
-            className="flex items-center justify-center w-8 h-8 rounded-lg transition-all hover:bg-slate-100 text-slate-400 hover:text-slate-700 cursor-pointer"
+            className="flex items-center justify-center w-8 h-8 rounded-lg transition-all hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 cursor-pointer"
             aria-label="Close modal"
           >
             <X className="w-4 h-4" />
@@ -113,7 +110,7 @@ export function Modal({
 
         {/* ── Scrollable Body ─────────────────────────────────────────────── */}
         <div
-          className="px-6 py-5 overflow-y-auto flex-1 min-h-0 bg-white"
+          className="px-4 sm:px-6 py-4 sm:py-5 overflow-y-auto flex-1 min-h-0 bg-[var(--color-surface)] dark:bg-zinc-900"
           style={{ scrollbarWidth: "thin" }}
         >
           {children}
@@ -122,7 +119,7 @@ export function Modal({
         {/* ── Sticky Footer (only rendered if footer prop is passed) ───────── */}
         {footer && (
           <div
-            className={`flex items-center gap-2 px-6 py-4 flex-shrink-0 bg-white ${centerFooter ? "justify-center" : "justify-end"}`}
+            className={`flex items-center gap-2 px-4 sm:px-6 py-3.5 sm:py-4 flex-shrink-0 bg-[var(--color-surface)] dark:bg-zinc-900 ${centerFooter ? "justify-center" : "justify-end"}`}
             style={{ borderTop: "1px solid var(--color-border)" }}
           >
             {footer}

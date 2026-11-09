@@ -10,7 +10,7 @@ import {
   BarChart3, PanelLeftClose, PanelLeft, Flame, Boxes, CreditCard,
   Banknote, CalendarDays, Car, TrendingUp, Clock, FolderOpen, MessageSquarePlus,
   ShieldCheck, Building2, KeyRound, FileDown, Palette, BadgeDollarSign, PieChart,
-  Activity, ArrowRightLeft, Layers, Percent, X, User, Calculator, FileSpreadsheet,
+  Activity, ArrowRightLeft, Percent, X, User, Calculator, FileSpreadsheet,
 } from "lucide-react";
 
 
@@ -229,11 +229,11 @@ function getNavSections(
         items: [
           { label: "Branches", href: `${base}/branches`, icon: <Building2 className="w-4 h-4" />, featureKey: "branches" },
           ...(role === "ADMIN" ? [
-            { label: "Billing",        href: `${base}/billing`,  icon: <BadgeDollarSign className="w-4 h-4" /> },
-            { label: "API Gateway",   href: `${base}/api-keys`, icon: <KeyRound className="w-4 h-4" />,   featureKey: "api_gateway" },
-            { label: "Access & Security",href: `${base}/security`, icon: <ShieldCheck className="w-4 h-4" />,featureKey: "security"    },
-            { label: "Branding Config",href: `${base}/settings`, icon: <Palette className="w-4 h-4" /> },
-            { label: "My Profile",     href: `${base}/profile`,  icon: <User className="w-4 h-4" /> },
+            { label: "Billing",           href: `${base}/billing`,       icon: <BadgeDollarSign className="w-4 h-4" /> },
+            { label: "API Gateway",       href: `${base}/api-keys`,      icon: <KeyRound className="w-4 h-4" />,     featureKey: "api_gateway" },
+            { label: "Access & Security", href: `${base}/security`,      icon: <ShieldCheck className="w-4 h-4" />, featureKey: "security"    },
+            { label: "Branding Config",   href: `${base}/settings`,      icon: <Palette className="w-4 h-4" /> },
+            { label: "My Profile",        href: `${base}/profile`,       icon: <User className="w-4 h-4" /> },
           ] : [
             { label: "2-Step Verification", href: `${base}/security`, icon: <ShieldCheck className="w-4 h-4" /> },
             { label: "My Profile",          href: `${base}/profile`,  icon: <User className="w-4 h-4" /> },
@@ -487,6 +487,7 @@ export function Sidebar({
         >
           <div className="flex items-center min-w-0">
             {logoBase64 ? (
+              // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={logoBase64}
                 alt={agencyName ?? "GasAgency"}

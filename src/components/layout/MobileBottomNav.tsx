@@ -83,7 +83,7 @@ export function MobileBottomNav({ role, onOpenMobileMenu }: MobileBottomNavProps
   const primaryItems = getPrimaryItems();
 
   return (
-    <div className="md:hidden mobile-bottom-nav flex items-center justify-around px-1 z-40">
+    <div className="md:hidden mobile-bottom-nav flex items-center justify-around px-1 z-40 select-none">
       {primaryItems.map((item) => {
         const isActive =
           pathname === item.href || (item.href !== base && pathname.startsWith(item.href));
@@ -92,13 +92,13 @@ export function MobileBottomNav({ role, onOpenMobileMenu }: MobileBottomNavProps
             key={item.href}
             href={item.href}
             className={cn(
-              "flex flex-col items-center justify-center flex-1 h-full py-1 gap-0.5 text-[11px] font-medium transition-colors cursor-pointer",
+              "flex flex-col items-center justify-center flex-1 h-full py-1 gap-0.5 text-[11px] font-medium transition-transform cursor-pointer active:scale-90 touch-manipulation",
               isActive
                 ? "text-blue-600 dark:text-blue-400 font-semibold"
                 : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
             )}
           >
-            <div className={cn("p-1 rounded-full", isActive && "bg-blue-50 dark:bg-blue-950/40")}>
+            <div className={cn("p-1 rounded-full transition-colors", isActive && "bg-blue-50 dark:bg-blue-950/40")}>
               {item.icon}
             </div>
             <span className="leading-none">{item.label}</span>
@@ -110,7 +110,8 @@ export function MobileBottomNav({ role, onOpenMobileMenu }: MobileBottomNavProps
       <button
         onClick={onOpenMobileMenu}
         type="button"
-        className="flex flex-col items-center justify-center flex-1 h-full py-1 gap-0.5 text-[11px] font-medium text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 cursor-pointer"
+        aria-label="Open full agency navigation menu"
+        className="flex flex-col items-center justify-center flex-1 h-full py-1 gap-0.5 text-[11px] font-medium text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 cursor-pointer active:scale-90 touch-manipulation"
       >
         <div className="p-1 rounded-full">
           <Menu className="w-5 h-5" />

@@ -3,6 +3,7 @@
 import { LogOut, AlertTriangle, Menu } from "lucide-react";
 import { logoutAction } from "@/app/actions/auth";
 import Link from "next/link";
+import { cn } from "@/lib/utils";
 import { NotificationBell } from "@/components/layout/NotificationBell";
 import { GlobalSearch } from "@/components/ui/GlobalSearch";
 import { LanguageSwitcher } from "@/components/ui/LanguageSwitcher";
@@ -25,12 +26,13 @@ const ROLE_LABELS: Record<string, string> = {
 export function Navbar({ userName, role, renewalAlerts = 0, sidebarCollapsed, onOpenMobileMenu }: NavbarProps) {
   return (
     <header
-      className="fixed top-0 right-0 z-30 flex items-center h-[52px] transition-all duration-200 left-0 md:left-[220px]"
+      className={cn(
+        "fixed top-0 right-0 z-30 flex items-center h-[52px] transition-all duration-200 left-0 px-2.5 sm:px-3",
+        sidebarCollapsed ? "md:left-[52px]" : "md:left-[220px]"
+      )}
       style={{
-        left: typeof window !== "undefined" && window.innerWidth < 768 ? 0 : (sidebarCollapsed ? 52 : 220),
         background: "var(--color-surface)",
         borderBottom: "1px solid var(--color-border)",
-        padding: "0 12px",
       }}
     >
       {/* Mobile Menu Trigger */}

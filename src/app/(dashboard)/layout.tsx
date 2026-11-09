@@ -119,8 +119,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           paddingTop: 52,
         }}
       >
-        <div className="p-3.5 sm:p-5 lg:p-6 pb-10 md:pb-6 animate-fade-up flex-1">{children}</div>
-        <Footer className="pb-20 md:pb-4" />
+        <div className="p-3 sm:p-5 lg:p-6 pb-24 md:pb-6 animate-fade-up flex-1">{children}</div>
+        <Footer className="pb-24 md:pb-4" />
       </main>
 
       {/* Touch-Friendly Mobile Bottom Navigation Bar */}

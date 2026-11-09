@@ -1,15 +1,22 @@
 "use client";
 
 import { useState, useRef, useEffect, useTransition } from "react";
-import { SUPPORTED_LOCALES, getLocale, LocaleCode } from "@/lib/locale";
+import { useLocale } from "next-intl";
+import { SUPPORTED_LOCALES, LocaleCode } from "@/lib/locale";
 import { setLocaleCookie, setGoogleTranslateCookie } from "@/app/actions/locale";
 import Script from "next/script";
 
 declare global {
   interface Window {
     googleTranslateElementInit: () => void;
-    google: any;
   }
+}
+
+type GoogleTranslateElementConstructor = new (options: object, elementId: string) => void;
+
+function getGoogleTranslateElement(): GoogleTranslateElementConstructor | undefined {
+  if (typeof window === "undefined") return undefined;
+  return (window as unknown as { google?: { translate?: { TranslateElement?: GoogleTranslateElementConstructor } } }).google?.translate?.TranslateElement;
 }
 
 // Inline SVGs — no lucide-react import to avoid Turbopack ESM factory issues
@@ -111,7 +118,8 @@ function applyGoogleTranslate(langCode: string) {
   };
 
   // If widget is already loaded, apply immediately, else retry
-  if ((window as any).google?.translate?.TranslateElement) {
+  const TranslateEl = getGoogleTranslateElement();
+  if (TranslateEl) {
     doApply();
   } else {
     let attempts = 0;
@@ -135,11 +143,14 @@ export function LanguageSwitcher() {
     // 1. Define the callback Google's script will call
     window.googleTranslateElementInit = () => {
       try {
-        new window.google.translate.TranslateElement(
-          { pageLanguage: "en", autoDisplay: false },
-          "google_translate_element"
-        );
-      } catch (e) {
+        const TranslateEl = getGoogleTranslateElement();
+        if (TranslateEl) {
+          new TranslateEl(
+            { pageLanguage: "en", autoDisplay: false },
+            "google_translate_element"
+          );
+        }
+      } catch {
         // silently ignore if widget mounts more than once
       }
       // 2. Auto-apply saved Google language after widget is ready
@@ -209,7 +220,7 @@ export function LanguageSwitcher() {
 
   // ── Derived display state ─────────────────────────────────────────────────
 
-  const currentLocale = getLocale();
+  const currentLocale = useLocale();
   const activeNativeInfo = SUPPORTED_LOCALES.find((l) => l.code === currentLocale) || SUPPORTED_LOCALES[0];
   const activeGoogleInfo = GOOGLE_TRANSLATE_LANGUAGES.find((l) => l.code === activeGoogleLang);
 
@@ -245,7 +256,7 @@ export function LanguageSwitcher() {
         aria-expanded={isOpen}
       >
         <GlobeIcon className="w-3.5 h-3.5 text-zinc-500 dark:text-zinc-400" />
-        <span className="hidden sm:inline">{displayLabel}</span>
+        <span className="hidden sm:inline" suppressHydrationWarning>{displayLabel}</span>
         <ChevronDownIcon className={`w-3.5 h-3.5 text-zinc-400 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`} />
       </button>
 
