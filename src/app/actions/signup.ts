@@ -167,7 +167,7 @@ export async function signupAgencyAction(
       userAgent,
     });
 
-    await setAuthCookies(accessToken, rawRefreshToken);
+    await setAuthCookies(accessToken, rawRefreshToken, adminUser.email);
 
     await writeAuditLog({
       userId: adminUser.id,

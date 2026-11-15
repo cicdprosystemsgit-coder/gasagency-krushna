@@ -102,5 +102,16 @@ export async function GET(req: NextRequest) {
     // No `domain` — same-origin cookie (single-domain SaaS)
   });
 
+  // Keep last_active_email in sync for 6 hours
+  if (user.email) {
+    response.cookies.set("last_active_email", user.email, {
+      httpOnly: false,
+      secure:   IS_PROD,
+      sameSite: "lax",
+      maxAge:   6 * 60 * 60,
+      path:     "/",
+    });
+  }
+
   return response;
 }

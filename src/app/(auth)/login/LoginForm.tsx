@@ -17,7 +17,7 @@ import {
   ArrowRight,
 } from "lucide-react";
 import Link from "next/link";
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
 import { useTranslations } from "next-intl";
 import { LanguageSwitcher } from "@/components/ui/LanguageSwitcher";
 
@@ -43,8 +43,37 @@ export function LoginForm({
   const [useBackup, setUseBackup] = useState(false);
   const [isCancelling2FA, startCancelTransition] = useTransition();
   const [cancelled2FA, setCancelled2FA] = useState(false);
+  const [savedEmail, setSavedEmail] = useState("");
+  const [isAutoLoggingIn, setIsAutoLoggingIn] = useState(false);
   const t = useTranslations("login");
   const tRoles = useTranslations("roles");
+
+  useEffect(() => {
+    try {
+      const email = localStorage.getItem("last_active_email");
+      if (email) {
+        // Pre-fill input without triggering React cascading re-renders
+        const emailInput = document.getElementById("email") as HTMLInputElement | null;
+        if (emailInput && !emailInput.value) emailInput.value = email;
+        const idInput = document.getElementById("identifier") as HTMLInputElement | null;
+        if (idInput && !idInput.value) idInput.value = email;
+
+        // If user logged in within the last 6 hours, directly auto-login
+        fetch(`/api/auth/auto-login?email=${encodeURIComponent(email)}`)
+          .then((res) => res.json())
+          .then((data) => {
+            if (data?.directLogin && data?.dashboard) {
+              setSavedEmail(email);
+              setIsAutoLoggingIn(true);
+              window.location.href = data.dashboard;
+            }
+          })
+          .catch(() => {});
+      }
+    } catch {
+      // Ignore localStorage access restrictions
+    }
+  }, []);
 
   const requires2FA = (loginState.requires2FA || pinState.requires2FA || Boolean(twoFAState.error && twoFAState.email)) && !cancelled2FA;
   const targetEmail = twoFAState.email || loginState.email || pinState.email || "";
@@ -58,6 +87,48 @@ export function LoginForm({
       window.location.reload();
     });
   };
+
+  const handlePasswordSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    const fd = new FormData(e.currentTarget);
+    const emailVal = fd.get("email") as string;
+    if (emailVal) {
+      try {
+        localStorage.setItem("last_active_email", emailVal.toLowerCase().trim());
+      } catch {}
+    }
+  };
+
+  const handlePinSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    const fd = new FormData(e.currentTarget);
+    const idVal = fd.get("identifier") as string;
+    if (idVal && idVal.includes("@")) {
+      try {
+        localStorage.setItem("last_active_email", idVal.toLowerCase().trim());
+      } catch {}
+    }
+  };
+
+  if (isAutoLoggingIn) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-white dark:bg-zinc-950 p-6">
+        <div className="text-center space-y-4 max-w-sm">
+          <div className="w-12 h-12 rounded-2xl bg-blue-600 mx-auto flex items-center justify-center text-white shadow-lg shadow-blue-500/25 animate-pulse">
+            <ShieldCheck className="w-6 h-6" />
+          </div>
+          <div>
+            <h3 className="text-base font-bold text-zinc-900 dark:text-white">Active 6-Hour Session Found</h3>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
+              Directly signing you in as <span className="font-mono text-blue-500 font-semibold">{savedEmail}</span>...
+            </p>
+          </div>
+          <div className="flex items-center justify-center gap-2 text-xs text-blue-600 dark:text-blue-400 font-medium">
+            <Loader2 className="w-4 h-4 animate-spin" />
+            <span>Rolling session forward for next 6 hours...</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col lg:flex-row bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100">
@@ -221,7 +292,7 @@ export function LoginForm({
 
                 {/* ── Method A: Email + Password ── */}
                 {loginMethod === "password" ? (
-                  <form key="form-password-login" action={loginActionFn} className="space-y-4">
+                  <form key="form-password-login" onSubmit={handlePasswordSubmit} action={loginActionFn} className="space-y-4">
                     <div>
                       <label htmlFor="email" className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1.5">
                         {t("emailLabel")}
@@ -232,6 +303,7 @@ export function LoginForm({
                         name="email"
                         type="email"
                         required
+                        defaultValue={savedEmail}
                         autoComplete="email"
                         placeholder="you@agency.com"
                         className="w-full px-3.5 py-2.5 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm text-zinc-900 dark:text-white placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
@@ -280,7 +352,7 @@ export function LoginForm({
                   </form>
                 ) : (
                   /* ── Method B: Identifier + PIN ── */
-                  <form key="form-pin-login" action={pinActionFn} className="space-y-4 animate-in fade-in-50 duration-150">
+                  <form key="form-pin-login" onSubmit={handlePinSubmit} action={pinActionFn} className="space-y-4 animate-in fade-in-50 duration-150">
                     <div>
                       <label htmlFor="identifier" className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1.5">
                         Mobile Number or Email
@@ -291,6 +363,7 @@ export function LoginForm({
                         name="identifier"
                         type="text"
                         required
+                        defaultValue={savedEmail}
                         autoComplete="username"
                         placeholder="9876543210 or staff@agency.com"
                         className="w-full px-3.5 py-2.5 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm text-zinc-900 dark:text-white placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"

@@ -1,4 +1,4 @@
-import { getSession } from "@/lib/auth";
+import { getSession, rollSessionForNext6Hours } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { DEFAULT_PERMISSIONS } from "@/lib/rbac";
@@ -18,6 +18,10 @@ export async function GET() {
       }
     );
   }
+
+  // Rolling 6-hour refresh: when user interacts with the app within 6 hours,
+  // continuously refresh their access token & cookies for the next 6 hours.
+  await rollSessionForNext6Hours(session.userId).catch(() => {});
 
   let enabledFeatures: string[] = [];
   let themeColor = "#2563eb";

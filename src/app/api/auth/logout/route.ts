@@ -29,5 +29,9 @@ export async function POST(req: NextRequest) {
   }
 
   await clearAuthCookies();
-  return NextResponse.json({ ok: true });
+  const res = NextResponse.json({ ok: true });
+  res.cookies.delete("at");
+  res.cookies.delete("rt");
+  res.cookies.delete("last_active_email");
+  return res;
 }

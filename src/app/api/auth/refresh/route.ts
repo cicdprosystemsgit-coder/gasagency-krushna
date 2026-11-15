@@ -66,7 +66,7 @@ export async function POST(req: NextRequest) {
     userAgent,
   });
 
-  await setAuthCookies(accessToken, rawRefreshToken);
+  await setAuthCookies(accessToken, rawRefreshToken, user.email);
 
   return NextResponse.json({ ok: true });
 }

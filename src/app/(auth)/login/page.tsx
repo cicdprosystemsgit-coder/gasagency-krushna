@@ -1,17 +1,22 @@
 import { LoginForm } from "./LoginForm";
+import { getSession, getRoleDashboard } from "@/lib/auth";
+import { redirect } from "next/navigation";
 
 /**
  * Single-domain SaaS login page.
  *
- * Previously this page read x-tenant-slug from the request headers to load
- * per-agency branding (logo, theme color). That was part of the subdomain
- * architecture. Now that all agencies share one domain, we show a generic
- * login and apply agency branding inside the dashboard (via /api/session)
- * after the user has authenticated.
+ * If the user visited or logged in within the last 6 hours, getSession()
+ * resolves and automatically redirects them directly to their role dashboard
+ * without prompting for credentials.
  */
 export const dynamic = "force-dynamic";
 
-export default function LoginPage() {
+export default async function LoginPage() {
+  const session = await getSession();
+  if (session && session.role) {
+    redirect(getRoleDashboard(session.role));
+  }
+
   return (
     <LoginForm
       agencyName={null}

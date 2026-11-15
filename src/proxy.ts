@@ -73,17 +73,59 @@ function slideAtCookie(response: NextResponse, atValue: string): void {
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // ── 1. Public paths — always open ─────────────────────────────────────────
-  if (isPublicPath(pathname) || pathname === "/") {
+  // ── 1. Direct Login check: if user visits /login or /signup within 6 hours ───
+  // If user has an active session from browser or mobile app, directly redirect
+  // to their designated role dashboard without asking for credentials again.
+  if (pathname === "/login" || pathname === "/signup") {
+    const atToken = request.cookies.get("at")?.value;
+    const rtToken = request.cookies.get("rt")?.value;
+
+    if (atToken) {
+      const session = await verifyAccessTokenEdge(atToken);
+      if (session && ROLE_DASHBOARD[session.role]) {
+        const targetUrl = new URL(ROLE_DASHBOARD[session.role], request.url);
+        const res = NextResponse.redirect(targetUrl);
+        slideAtCookie(res, atToken);
+        return res;
+      }
+    }
+
+    if (rtToken) {
+      // Access token expired but refresh token exists — direct auto-login via silent refresh
+      return NextResponse.redirect(
+        new URL(`/api/auth/silent-refresh?next=${encodeURIComponent("/")}`, request.url)
+      );
+    }
+
     return NextResponse.next();
   }
 
-  // ── 2. API routes — pass through; server actions handle their own auth ─────
+  // ── 2. Root Landing Page: if authenticated within 6h, direct login to dashboard
+  if (pathname === "/") {
+    const atToken = request.cookies.get("at")?.value;
+    if (atToken) {
+      const session = await verifyAccessTokenEdge(atToken);
+      if (session && ROLE_DASHBOARD[session.role]) {
+        const targetUrl = new URL(ROLE_DASHBOARD[session.role], request.url);
+        const res = NextResponse.redirect(targetUrl);
+        slideAtCookie(res, atToken);
+        return res;
+      }
+    }
+    return NextResponse.next();
+  }
+
+  // ── 3. Public paths — always open ─────────────────────────────────────────
+  if (isPublicPath(pathname)) {
+    return NextResponse.next();
+  }
+
+  // ── 4. API routes — pass through; server actions handle their own auth ─────
   if (pathname.startsWith("/api/")) {
     return NextResponse.next();
   }
 
-  // ── 3. All other routes — require valid session ────────────────────────────
+  // ── 5. All other routes — require valid session ────────────────────────────
   const atToken = request.cookies.get("at")?.value;
   const rtToken = request.cookies.get("rt")?.value;
 

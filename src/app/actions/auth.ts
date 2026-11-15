@@ -67,7 +67,7 @@ async function issueSession(params: {
     userAgent,
   });
 
-  await setAuthCookies(accessToken, rawRefreshToken);
+  await setAuthCookies(accessToken, rawRefreshToken, user.email);
 
   await writeAuditLog({
     userId:     user.id,

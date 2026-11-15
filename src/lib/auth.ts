@@ -69,7 +69,7 @@ export interface SessionPayload {
 
 // ─── Token Creation ───────────────────────────────────────────────────────────
 
-const ACCESS_EXPIRY  = process.env.JWT_ACCESS_TOKEN_EXPIRY  ?? "15m";
+const ACCESS_EXPIRY  = process.env.JWT_ACCESS_TOKEN_EXPIRY  ?? "6h"; // 6-hour rolling session window
 const REFRESH_EXPIRY = process.env.JWT_REFRESH_TOKEN_EXPIRY ?? "7d";
 const KEY_ID         = process.env.JWT_KEY_ID ?? "v1";
 const ISSUER         = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
@@ -169,14 +169,14 @@ export async function verifyRefreshToken(token: string): Promise<RefreshTokenPay
 
 const IS_PROD = process.env.NODE_ENV === "production";
 
-export async function setAuthCookies(accessToken: string, refreshToken: string) {
+export async function setAuthCookies(accessToken: string, refreshToken: string, email?: string | null) {
   const cookieStore = await cookies();
 
   cookieStore.set("at", accessToken, {
     httpOnly: true,
     secure:   IS_PROD,
     sameSite: "lax",
-    maxAge:   6 * 60 * 60,   // 6 hours — proxy slides this on every request
+    maxAge:   6 * 60 * 60,   // 6 hours — sliding window renewed on every active request
     path:     "/",
     // No `domain` — same-origin cookie (single-domain SaaS, no subdomains)
   });
@@ -189,12 +189,79 @@ export async function setAuthCookies(accessToken: string, refreshToken: string) 
     path:     "/",
     // No `domain` — same-origin cookie
   });
+
+  if (email) {
+    cookieStore.set("last_active_email", email, {
+      httpOnly: false, // Accessible client-side for instant auto-login checks across mobile & browser
+      secure:   IS_PROD,
+      sameSite: "lax",
+      maxAge:   6 * 60 * 60,   // 6 hours
+      path:     "/",
+    });
+  }
 }
 
 export async function clearAuthCookies() {
   const cookieStore = await cookies();
   cookieStore.set("at", "", { path: "/", maxAge: 0 });
   cookieStore.set("rt", "", { path: "/", maxAge: 0 });
+  cookieStore.set("last_active_email", "", { path: "/", maxAge: 0 });
+}
+
+/**
+ * Rolls the session forward for the next 6 hours.
+ * Re-issues a fresh token pair with exp = now + 6h, stores refresh token, and updates cookies.
+ */
+export async function rollSessionForNext6Hours(userId: string) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      role: true,
+      customRole: true,
+      customRoleId: true,
+      agencyId: true,
+      isActive: true,
+      agency: { select: { slug: true } },
+    },
+  });
+
+  if (!user || !user.isActive) return null;
+
+  const { accessToken, rawRefreshToken, refreshJti } = await createTokenPair({
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    role: user.role,
+    customRole: user.customRole,
+    customRoleId: user.customRoleId,
+    agencyId: user.agencyId,
+    agencySlug: user.agency?.slug ?? null,
+  });
+
+  await storeRefreshToken({
+    jti: refreshJti,
+    userId: user.id,
+    rawToken: rawRefreshToken,
+    ipAddress: "auto-rolling-session",
+    userAgent: "sliding-window-refresh",
+  });
+
+  await setAuthCookies(accessToken, rawRefreshToken, user.email);
+
+  return {
+    accessToken,
+    rawRefreshToken,
+    user: {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+    },
+    dashboardUrl: getRoleDashboard(user.role),
+  };
 }
 
 // ─── Session Helpers (backward-compatible with existing actions) ──────────────
