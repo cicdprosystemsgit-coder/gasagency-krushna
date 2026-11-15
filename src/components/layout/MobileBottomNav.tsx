@@ -92,16 +92,23 @@ export function MobileBottomNav({ role, onOpenMobileMenu }: MobileBottomNavProps
             key={item.href}
             href={item.href}
             className={cn(
-              "flex flex-col items-center justify-center flex-1 h-full py-1 gap-0.5 text-[11px] font-medium transition-transform cursor-pointer active:scale-90 touch-manipulation",
+              "flex flex-col items-center justify-center flex-1 py-1.5 gap-0.5 text-[10.5px] font-medium transition-all cursor-pointer active:scale-95 touch-manipulation",
               isActive
                 ? "text-blue-600 dark:text-blue-400 font-semibold"
                 : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
             )}
           >
-            <div className={cn("p-1 rounded-full transition-colors", isActive && "bg-blue-50 dark:bg-blue-950/40")}>
+            <div
+              className={cn(
+                "p-1.5 rounded-full transition-all duration-150 flex items-center justify-center",
+                isActive
+                  ? "bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 scale-105"
+                  : "text-zinc-500 dark:text-zinc-400"
+              )}
+            >
               {item.icon}
             </div>
-            <span className="leading-none">{item.label}</span>
+            <span className="leading-tight tracking-tight">{item.label}</span>
           </Link>
         );
       })}
@@ -111,12 +118,12 @@ export function MobileBottomNav({ role, onOpenMobileMenu }: MobileBottomNavProps
         onClick={onOpenMobileMenu}
         type="button"
         aria-label="Open full agency navigation menu"
-        className="flex flex-col items-center justify-center flex-1 h-full py-1 gap-0.5 text-[11px] font-medium text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 cursor-pointer active:scale-90 touch-manipulation"
+        className="flex flex-col items-center justify-center flex-1 py-1.5 gap-0.5 text-[10.5px] font-medium text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 cursor-pointer active:scale-95 touch-manipulation transition-all"
       >
-        <div className="p-1 rounded-full">
+        <div className="p-1.5 rounded-full flex items-center justify-center">
           <Menu className="w-5 h-5" />
         </div>
-        <span className="leading-none">Menu</span>
+        <span className="leading-tight tracking-tight">Menu</span>
       </button>
     </div>
   );

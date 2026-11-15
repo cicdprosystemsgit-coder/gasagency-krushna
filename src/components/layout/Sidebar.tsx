@@ -482,8 +482,14 @@ export function Sidebar({
       >
         {/* Logo Header */}
         <div
-          className="flex items-center justify-between h-[52px] flex-shrink-0"
-          style={{ padding: collapsed && !mobileOpen ? "0 14px" : "0 16px", borderBottom: "1px solid var(--color-sidebar-border)" }}
+          className="flex items-center justify-between flex-shrink-0"
+          style={{
+            height: mobileOpen ? "calc(52px + env(safe-area-inset-top, 0px))" : 52,
+            paddingTop: mobileOpen ? "env(safe-area-inset-top, 0px)" : undefined,
+            paddingLeft: collapsed && !mobileOpen ? 14 : 16,
+            paddingRight: collapsed && !mobileOpen ? 14 : 16,
+            borderBottom: "1px solid var(--color-sidebar-border)",
+          }}
         >
           <div className="flex items-center min-w-0">
             {logoBase64 ? (
@@ -564,7 +570,11 @@ export function Sidebar({
         {/* User + collapse */}
         <div
           className="flex-shrink-0"
-          style={{ borderTop: "1px solid var(--color-sidebar-border)", padding: collapsed && !mobileOpen ? "8px 6px" : "8px" }}
+          style={{
+            borderTop: "1px solid var(--color-sidebar-border)",
+            padding: collapsed && !mobileOpen ? "8px 6px" : "8px",
+            paddingBottom: mobileOpen ? "max(16px, env(safe-area-inset-bottom, 16px))" : undefined,
+          }}
         >
           {(!collapsed || mobileOpen) && (
             <div className="flex items-center gap-2.5 px-2 py-2 rounded-md mb-1" style={{ background: "var(--color-sidebar-hover)" }}>

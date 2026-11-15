@@ -116,11 +116,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <main
         className={`transition-all duration-200 ${collapsed ? "ml-0 md:ml-[52px]" : "ml-0 md:ml-[220px]"} min-h-screen flex flex-col justify-between`}
         style={{
-          paddingTop: 52,
+          paddingTop: "var(--app-header-height, 56px)",
         }}
       >
-        <div className="p-3 sm:p-5 lg:p-6 pb-24 md:pb-6 animate-fade-up flex-1">{children}</div>
-        <Footer className="pb-24 md:pb-4" />
+        <div className="p-3 sm:p-5 lg:p-6 pb-[calc(var(--app-bottom-nav-height,76px)+16px)] md:pb-6 animate-fade-up flex-1">
+          {children}
+        </div>
+        <Footer className="pb-[calc(var(--app-bottom-nav-height,76px)+8px)] md:pb-4" />
       </main>
 
       {/* Touch-Friendly Mobile Bottom Navigation Bar */}
