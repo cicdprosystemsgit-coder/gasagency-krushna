@@ -12,7 +12,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { getSession } from "@/lib/auth";
+import { getSession, verifySession } from "@/lib/auth";
 import { burnWatermark } from "@/lib/watermark";
 import { uploadDeliveryProof } from "@/lib/cloudinary";
 import { prisma } from "@/lib/prisma";
@@ -23,8 +23,14 @@ export const maxDuration = 60;
 const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024; // 50 MB
 
 export async function POST(req: NextRequest) {
-  // 1 ── Auth check
-  const session = await getSession();
+  // 1 ── Auth check (supports both Web cookie session and Mobile Bearer token)
+  let session = await getSession();
+  if (!session) {
+    const authHeader = req.headers.get("Authorization");
+    if (authHeader?.startsWith("Bearer ")) {
+      session = await verifySession(authHeader.slice(7));
+    }
+  }
   if (!session || !session.agencyId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
