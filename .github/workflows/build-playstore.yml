@@ -2,7 +2,7 @@ name: Build Android App (APK & Play Store AAB)
 
 on:
   push:
-    branches: [ "main", "master" ]
+    branches: [ "main", "master", "new-full-mearge", "**" ]
   workflow_dispatch: # Allows manual trigger from GitHub Actions tab
 
 jobs:
