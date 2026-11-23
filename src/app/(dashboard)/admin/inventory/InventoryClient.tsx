@@ -8,7 +8,8 @@ import {
   Plus, Pencil, Trash2, Package, Boxes, TrendingUp, TrendingDown,
   Coins, BarChart2, DollarSign, ArrowUpRight, RotateCcw, AlertTriangle,
   CheckCircle2, Info, Search, Unlink, Link2, ExternalLink, Loader2,
-  GripVertical, ArrowUpDown, PlayCircle, Warehouse, Building2, Check
+  GripVertical, ArrowUpDown, PlayCircle, Warehouse, Building2, Check,
+  History, Calendar, ArrowRight
 } from "lucide-react";
 import {
   createProduct,
@@ -17,10 +18,12 @@ import {
   recoverProduct,
   permanentDeleteProduct,
   getProductLinkedHistory,
+  getProductUpdateHistory,
   unlinkProductRecord,
   unlinkAllProductRecords,
   updateProductsSortOrder,
   setInitialStartingStock,
+  type HistoryDiff,
 } from "@/app/actions/products";
 import type { Product } from "@/generated/prisma";
 import {
@@ -162,8 +165,8 @@ function InventoryDashboard({
     }
   }
 
-  const marginPercent = data.salesTotalRevenue > 0 
-    ? Math.round(((data.salesTotalRevenue - data.salesTotalCOGS) / data.salesTotalRevenue) * 100) 
+  const marginPercent = data.salesTotalRevenue > 0
+    ? Math.round(((data.salesTotalRevenue - data.salesTotalCOGS) / data.salesTotalRevenue) * 100)
     : 0;
 
   return (
@@ -238,7 +241,7 @@ function InventoryDashboard({
               <BarChart data={data.salesList} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#F4F4F5" />
                 <XAxis dataKey="productName" tick={{ fontSize: 9, fill: "#71717A" }} />
-                <YAxis tick={{ fontSize: 9, fill: "#71717A" }} tickFormatter={(v) => `₹${(v/1000).toFixed(0)}k`} />
+                <YAxis tick={{ fontSize: 9, fill: "#71717A" }} tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`} />
                 <Tooltip formatter={(v) => `₹${Number(v).toLocaleString()}`} />
                 <Legend wrapperStyle={{ fontSize: 10, paddingTop: 10 }} />
                 <Bar dataKey="revenue" name="Sales Revenue" fill="#8B5CF6" radius={[3, 3, 0, 0]} />
@@ -302,7 +305,7 @@ function InventoryDashboard({
                     #
                   </th>
                 )}
-                {["Product", "Unit Cost", "Sale Rate", "Office Stock", "Godown Stock", "Total Stock", "Stock Cost Value", "Stock Sale Value", "Potential Margin"].map((h) => (
+                {["Product", "Unit Cost", "Sale Rate (Gross)", "Office Stock", "Godown Stock", "Total Stock", "Stock Cost Value", "Stock Sale Value", "Potential Margin"].map((h) => (
                   <th key={h} className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-zinc-400">{h}</th>
                 ))}
                 {isAdmin && (
@@ -329,13 +332,12 @@ function InventoryDashboard({
                       setDraggedIdx(null);
                       setDragOverIdx(null);
                     }}
-                    className={`transition-all ${
-                      isDragging
+                    className={`transition-all ${isDragging
                         ? "opacity-30 bg-blue-50/70"
                         : isOver
-                        ? "border-t-2 border-blue-500 bg-blue-50/20"
-                        : "hover:bg-zinc-50/80"
-                    }`}
+                          ? "border-t-2 border-blue-500 bg-blue-50/20"
+                          : "hover:bg-zinc-50/80"
+                      }`}
                   >
                     {isAdmin && (
                       <td className="px-3 py-3 text-center cursor-grab active:cursor-grabbing text-zinc-400 hover:text-blue-600 transition-colors">
@@ -347,7 +349,7 @@ function InventoryDashboard({
                     )}
                     <td className="px-4 py-3 font-semibold text-zinc-850">{sv.productName}</td>
                     <td className="px-4 py-3 text-zinc-500">{formatCurrency(sv.unitCost)}</td>
-                    <td className="px-4 py-3 text-zinc-900 font-medium">{formatCurrency(sv.saleRate)}</td>
+                    <td className="px-4 py-3 text-emerald-700 font-bold">{formatCurrency(sv.saleRate)}</td>
                     <td className="px-4 py-3 font-medium text-emerald-600">{sv.officeStock}</td>
                     <td className="px-4 py-3 font-medium text-orange-600">{sv.godownStock}</td>
                     <td className="px-4 py-3 font-bold text-zinc-900">{sv.totalStock}</td>
@@ -578,6 +580,52 @@ export function InventoryClient({ initialProducts, initialDeletedProducts = EMPT
   const [unlinkingId, setUnlinkingId] = useState<string | null>(null);
   const [isUnlinkingAll, setIsUnlinkingAll] = useState(false);
 
+  // Product price & update history states
+  const [historyModalOpen, setHistoryModalOpen] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [selectedHistoryProduct, setSelectedHistoryProduct] = useState<Product | null>(null);
+  const [productHistoryData, setProductHistoryData] = useState<{
+    product?: Product | null;
+    history: Array<{
+      id: string;
+      changedAt: string;
+      changedBy: string;
+      changedByName: string;
+      changes: HistoryDiff[];
+      snapshot: {
+        unitCost: number;
+        saleRate: number;
+        margin: number;
+        gstRate: number;
+        hsnCode: string | null;
+        name: string;
+      };
+      changeNote: string | null;
+    }>;
+  }>({ history: [] });
+
+  async function openProductHistory(p: Product) {
+    setSelectedHistoryProduct(p);
+    setHistoryModalOpen(true);
+    setHistoryLoading(true);
+    try {
+      const res = await getProductUpdateHistory(p.id);
+      if (res && !res.error) {
+        setProductHistoryData({
+          product: (res.product as unknown as Product) || p,
+          history: (res.history || []) as any,
+        });
+      } else {
+        setProductHistoryData({ product: p, history: [] });
+      }
+    } catch (err) {
+      console.error("Failed to load product update history", err);
+      setProductHistoryData({ product: p, history: [] });
+    } finally {
+      setHistoryLoading(false);
+    }
+  }
+
   useEffect(() => {
     setProducts(initialProducts);
   }, [initialProducts]);
@@ -608,25 +656,106 @@ export function InventoryClient({ initialProducts, initialDeletedProducts = EMPT
     };
   }, [selectedDeletedId]);
 
-  useEffect(() => {
-    const cost = parseFloat(form.unitCost) || 0;
-    const rate = parseFloat(form.saleRate) || 0;
-    const computed = rate - cost;
-    const computedStr = computed > 0 ? String(Number(computed.toFixed(2))) : "0";
-    if (form.margin !== computedStr) {
-      setForm((prev) => ({ ...prev, margin: computedStr }));
-    }
-  }, [form.unitCost, form.saleRate]);
+  // Smart synchronization: Unit Cost, GST, Sale Rate (Gross), and Margin
+  function handleFormCostChange(val: string) {
+    const cost = parseFloat(val) || 0;
+    const gst = Math.max(0, parseFloat(form.gstRate) || 0);
+    const autoSale = cost > 0 ? Number((cost * (1 + gst / 100)).toFixed(2)) : 0;
+    const autoMargin = autoSale > cost ? Number((autoSale - cost).toFixed(2)) : 0;
+    setForm((prev) => ({
+      ...prev,
+      unitCost: val,
+      saleRate: autoSale > 0 ? String(autoSale) : "",
+      margin: autoMargin > 0 ? String(autoMargin) : "0",
+    }));
+  }
 
-  useEffect(() => {
+  function handleFormGstChange(val: string) {
+    const cost = parseFloat(form.unitCost) || 0;
+    const gst = Math.max(0, parseFloat(val) || 0);
+    const autoSale = cost > 0 ? Number((cost * (1 + gst / 100)).toFixed(2)) : 0;
+    const autoMargin = autoSale > cost ? Number((autoSale - cost).toFixed(2)) : 0;
+    setForm((prev) => ({
+      ...prev,
+      gstRate: val,
+      saleRate: autoSale > 0 ? String(autoSale) : prev.saleRate,
+      margin: autoMargin > 0 ? String(autoMargin) : prev.margin,
+    }));
+  }
+
+  function handleFormSaleRateChange(val: string) {
+    const cost = parseFloat(form.unitCost) || 0;
+    const rate = parseFloat(val) || 0;
+    const diff = rate - cost;
+    const computedMargin = diff > 0 ? String(Number(diff.toFixed(2))) : "0";
+    setForm((prev) => ({
+      ...prev,
+      saleRate: val,
+      margin: computedMargin,
+    }));
+  }
+
+  function handleFormMarginChange(val: string) {
+    const cost = parseFloat(form.unitCost) || 0;
+    const m = parseFloat(val) || 0;
+    const computedRate = cost + m;
+    const computedRateStr = computedRate > 0 ? String(Number(computedRate.toFixed(2))) : "";
+    setForm((prev) => ({
+      ...prev,
+      margin: val,
+      saleRate: computedRateStr,
+    }));
+  }
+
+  function handleRecoverCostChange(val: string) {
+    const cost = parseFloat(val) || 0;
+    const gst = Math.max(0, parseFloat(recoverForm.gstRate) || 0);
+    const autoSale = cost > 0 ? Number((cost * (1 + gst / 100)).toFixed(2)) : 0;
+    const autoMargin = autoSale > cost ? Number((autoSale - cost).toFixed(2)) : 0;
+    setRecoverForm((prev) => ({
+      ...prev,
+      unitCost: val,
+      saleRate: autoSale > 0 ? String(autoSale) : "",
+      margin: autoMargin > 0 ? String(autoMargin) : "0",
+    }));
+  }
+
+  function handleRecoverGstChange(val: string) {
     const cost = parseFloat(recoverForm.unitCost) || 0;
-    const rate = parseFloat(recoverForm.saleRate) || 0;
-    const computed = rate - cost;
-    const computedStr = computed > 0 ? String(Number(computed.toFixed(2))) : "0";
-    if (recoverForm.margin !== computedStr) {
-      setRecoverForm((prev) => ({ ...prev, margin: computedStr }));
-    }
-  }, [recoverForm.unitCost, recoverForm.saleRate]);
+    const gst = Math.max(0, parseFloat(val) || 0);
+    const autoSale = cost > 0 ? Number((cost * (1 + gst / 100)).toFixed(2)) : 0;
+    const autoMargin = autoSale > cost ? Number((autoSale - cost).toFixed(2)) : 0;
+    setRecoverForm((prev) => ({
+      ...prev,
+      gstRate: val,
+      saleRate: autoSale > 0 ? String(autoSale) : prev.saleRate,
+      margin: autoMargin > 0 ? String(autoMargin) : prev.margin,
+    }));
+  }
+
+  function handleRecoverSaleRateChange(val: string) {
+    const cost = parseFloat(recoverForm.unitCost) || 0;
+    const rate = parseFloat(val) || 0;
+    const diff = rate - cost;
+    const computedMargin = diff > 0 ? String(Number(diff.toFixed(2))) : "0";
+    setRecoverForm((prev) => ({
+      ...prev,
+      saleRate: val,
+      margin: computedMargin,
+    }));
+  }
+
+  function handleRecoverMarginChange(val: string) {
+    const cost = parseFloat(recoverForm.unitCost) || 0;
+    const m = parseFloat(val) || 0;
+    const computedRate = cost + m;
+    const computedRateStr = computedRate > 0 ? String(Number(computedRate.toFixed(2))) : "";
+    setRecoverForm((prev) => ({
+      ...prev,
+      margin: val,
+      saleRate: computedRateStr,
+    }));
+  }
 
   const filteredProducts = activeTab === "dashboard" || activeTab === "deleted"
     ? []
@@ -959,47 +1088,42 @@ export function InventoryClient({ initialProducts, initialDeletedProducts = EMPT
       <div className="flex border-b border-gray-200 mb-6 overflow-x-auto">
         <button
           onClick={() => { setActiveTab("dashboard"); setSelected(new Set()); }}
-          className={`py-2 px-4 text-[13px] font-semibold border-b-2 whitespace-nowrap transition-all ${
-            activeTab === "dashboard"
+          className={`py-2 px-4 text-[13px] font-semibold border-b-2 whitespace-nowrap transition-all ${activeTab === "dashboard"
               ? "border-blue-600 text-blue-600"
               : "border-transparent text-gray-500 hover:text-gray-700"
-          }`}
+            }`}
         >
           📊 Inventory Analysis
         </button>
         <button
           onClick={() => { setActiveTab("cylinders"); setSelected(new Set()); }}
-          className={`py-2 px-4 text-[13px] font-semibold border-b-2 whitespace-nowrap transition-all ${
-            activeTab === "cylinders"
+          className={`py-2 px-4 text-[13px] font-semibold border-b-2 whitespace-nowrap transition-all ${activeTab === "cylinders"
               ? "border-blue-600 text-blue-600"
               : "border-transparent text-gray-500 hover:text-gray-700"
-          }`}
+            }`}
         >
           🔥 Gas Cylinders
         </button>
         <button
           onClick={() => { setActiveTab("external"); setSelected(new Set()); }}
-          className={`py-2 px-4 text-[13px] font-semibold border-b-2 whitespace-nowrap transition-all ${
-            activeTab === "external"
+          className={`py-2 px-4 text-[13px] font-semibold border-b-2 whitespace-nowrap transition-all ${activeTab === "external"
               ? "border-blue-600 text-blue-600"
               : "border-transparent text-gray-500 hover:text-gray-700"
-          }`}
+            }`}
         >
           📦 External Accessories
         </button>
         <button
           onClick={() => { setActiveTab("deleted"); setSelected(new Set()); }}
-          className={`py-2 px-4 text-[13px] font-semibold border-b-2 whitespace-nowrap transition-all flex items-center gap-1.5 ${
-            activeTab === "deleted"
+          className={`py-2 px-4 text-[13px] font-semibold border-b-2 whitespace-nowrap transition-all flex items-center gap-1.5 ${activeTab === "deleted"
               ? "border-red-600 text-red-600"
               : "border-transparent text-gray-500 hover:text-gray-700"
-          }`}
+            }`}
         >
           🗑️ Deleted Items
           {deletedProducts.length > 0 && (
-            <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
-              activeTab === "deleted" ? "bg-red-100 text-red-700" : "bg-zinc-200 text-zinc-600"
-            }`}>
+            <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${activeTab === "deleted" ? "bg-red-100 text-red-700" : "bg-zinc-200 text-zinc-600"
+              }`}>
               {deletedProducts.length}
             </span>
           )}
@@ -1131,11 +1255,11 @@ export function InventoryClient({ initialProducts, initialDeletedProducts = EMPT
                         linkedHistory.length > 0
                           ? linkedHistory.length
                           : (selectedDeletedProduct._count?.deliveryRecords ?? 0) +
-                            (selectedDeletedProduct._count?.godownInventory ?? 0) +
-                            (selectedDeletedProduct._count?.commercialSales ?? 0) +
-                            (selectedDeletedProduct._count?.stockRecords ?? 0) +
-                            (selectedDeletedProduct._count?.officeTransactions ?? 0) +
-                            (selectedDeletedProduct._count?.companyPayments ?? 0);
+                          (selectedDeletedProduct._count?.godownInventory ?? 0) +
+                          (selectedDeletedProduct._count?.commercialSales ?? 0) +
+                          (selectedDeletedProduct._count?.stockRecords ?? 0) +
+                          (selectedDeletedProduct._count?.officeTransactions ?? 0) +
+                          (selectedDeletedProduct._count?.companyPayments ?? 0);
 
                       return (
                         <div className="space-y-3 pt-2">
@@ -1197,14 +1321,13 @@ export function InventoryClient({ initialProducts, initialDeletedProducts = EMPT
                                       {linkedHistory.map((rec) => (
                                         <tr key={rec.id} className="hover:bg-amber-50/40 transition-colors">
                                           <td className="px-3 py-2 font-medium">
-                                            <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded ${
-                                              rec.type === "delivery" ? "bg-blue-100 text-blue-800" :
-                                              rec.type === "godown" ? "bg-purple-100 text-purple-800" :
-                                              rec.type === "commercial" ? "bg-emerald-100 text-emerald-800" :
-                                              rec.type === "stock" ? "bg-orange-100 text-orange-800" :
-                                              rec.type === "office" ? "bg-sky-100 text-sky-800" :
-                                              "bg-zinc-100 text-zinc-800"
-                                            }`}>
+                                            <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded ${rec.type === "delivery" ? "bg-blue-100 text-blue-800" :
+                                                rec.type === "godown" ? "bg-purple-100 text-purple-800" :
+                                                  rec.type === "commercial" ? "bg-emerald-100 text-emerald-800" :
+                                                    rec.type === "stock" ? "bg-orange-100 text-orange-800" :
+                                                      rec.type === "office" ? "bg-sky-100 text-sky-800" :
+                                                        "bg-zinc-100 text-zinc-800"
+                                              }`}>
                                               {rec.typeName}
                                             </span>
                                           </td>
@@ -1305,7 +1428,7 @@ export function InventoryClient({ initialProducts, initialDeletedProducts = EMPT
                     <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-zinc-400">Product Name</th>
                     <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-zinc-400">Category</th>
                     <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-zinc-400 text-right">Cost</th>
-                    <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-zinc-400 text-right">Sale Rate</th>
+                    <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-zinc-400 text-right">Sale Rate <span className="text-emerald-400 normal-case font-normal">(Gross)</span></th>
                     <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-zinc-400 text-right">Margin</th>
                     <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-zinc-400">HSN</th>
                     <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-zinc-400 text-center">Linked Records</th>
@@ -1352,7 +1475,7 @@ export function InventoryClient({ initialProducts, initialDeletedProducts = EMPT
                             {p.isCylinder ? "🔥 Gas Cylinder" : "📦 Accessory"}
                           </td>
                           <td className="px-4 py-3 text-right text-zinc-600">{formatCurrency(p.unitCost)}</td>
-                          <td className="px-4 py-3 text-right font-medium text-zinc-900">{formatCurrency(p.saleRate)}</td>
+                          <td className="px-4 py-3 text-right font-medium text-emerald-700">{formatCurrency(p.saleRate)}</td>
                           <td className="px-4 py-3 text-right font-medium text-emerald-600">{formatCurrency(p.margin)}</td>
                           <td className="px-4 py-3 text-zinc-500 text-[12px]">{p.hsnCode || "—"}</td>
                           <td className="px-4 py-3 text-center">
@@ -1464,7 +1587,7 @@ export function InventoryClient({ initialProducts, initialDeletedProducts = EMPT
 
           {/* Product Cards (Mobile <768px) and Table (Desktop >=768px) */}
           <div className="rounded-xl overflow-hidden" style={{ background: "#fff", border: "1px solid #E4E4E7", boxShadow: "0 1px 2px 0 rgba(0,0,0,0.04)" }}>
-            
+
             {/* MOBILE CARDS VIEW (<768px) */}
             <div className="block md:hidden divide-y divide-zinc-100">
               {filteredProducts.length === 0 ? (
@@ -1507,8 +1630,8 @@ export function InventoryClient({ initialProducts, initialDeletedProducts = EMPT
                         <span className="font-semibold text-zinc-600">{formatCurrency(p.unitCost)}</span>
                       </div>
                       <div>
-                        <span className="text-[9px] text-zinc-400 uppercase font-bold block">Sale Rate</span>
-                        <span className="font-bold text-zinc-900">{formatCurrency(p.saleRate)}</span>
+                        <span className="text-[9px] text-zinc-400 uppercase font-bold block">Sale Rate <span className="text-emerald-500 normal-case">(Gross)</span></span>
+                        <span className="font-bold text-emerald-700">{formatCurrency(p.saleRate)}</span>
                       </div>
                       <div>
                         <span className="text-[9px] text-zinc-400 uppercase font-bold block">Margin</span>
@@ -1518,6 +1641,14 @@ export function InventoryClient({ initialProducts, initialDeletedProducts = EMPT
 
                     {isAdmin && (
                       <div className="flex items-center justify-end gap-2 pt-1 border-t border-zinc-100">
+                        <button
+                          onClick={() => openProductHistory(p)}
+                          className="px-2.5 py-1 text-xs font-bold text-amber-700 bg-amber-50 rounded-lg hover:bg-amber-100 transition inline-flex items-center gap-1"
+                          title="View price & update history"
+                        >
+                          <History className="w-3 h-3" />
+                          History
+                        </button>
                         <button
                           onClick={() => openEdit(p)}
                           className="px-3 py-1 text-xs font-bold text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition"
@@ -1559,7 +1690,7 @@ export function InventoryClient({ initialProducts, initialDeletedProducts = EMPT
                     <th>HSN Code</th>
                     <th className="text-center">GST Rate</th>
                     <th className="text-right">Unit cost</th>
-                    <th className="text-right">Sale rate</th>
+                    <th className="text-right">Sale rate <span className="text-[9px] text-emerald-500 font-normal">(Gross)</span></th>
                     <th className="text-right">Margin</th>
                     <th className="text-center">Status</th>
                     {isAdmin && <th className="text-center">Actions</th>}
@@ -1585,13 +1716,12 @@ export function InventoryClient({ initialProducts, initialDeletedProducts = EMPT
                         setCatalogDraggedId(null);
                         setCatalogDragOverId(null);
                       }}
-                      className={`transition-all ${
-                        catalogDraggedId === p.id
+                      className={`transition-all ${catalogDraggedId === p.id
                           ? "opacity-30 bg-blue-50/70"
                           : catalogDragOverId === p.id
-                          ? "border-t-2 border-blue-500 bg-blue-50/20"
-                          : ""
-                      }`}
+                            ? "border-t-2 border-blue-500 bg-blue-50/20"
+                            : ""
+                        }`}
                     >
                       {isAdmin && (
                         <td className="text-center cursor-grab active:cursor-grabbing text-zinc-400 hover:text-blue-600">
@@ -1619,7 +1749,9 @@ export function InventoryClient({ initialProducts, initialDeletedProducts = EMPT
                         </span>
                       </td>
                       <td className="text-right text-[13px]" style={{ color: "#52525B" }}>{formatCurrency(p.unitCost)}</td>
-                      <td className="text-right text-[13px] font-medium" style={{ color: "#18181B" }}>{formatCurrency(p.saleRate)}</td>
+                      <td className="text-right text-[13px] font-medium" style={{ color: "#18181B" }}>
+                        <span className="font-bold text-emerald-700">{formatCurrency(p.saleRate)}</span>
+                      </td>
                       <td className="text-right text-[13px] font-medium" style={{ color: "#16A34A" }}>{formatCurrency(p.margin)}</td>
                       <td className="text-center">
                         <span className={`badge ${p.isActive ? "badge-approved" : "badge-neutral"}`}>
@@ -1629,6 +1761,13 @@ export function InventoryClient({ initialProducts, initialDeletedProducts = EMPT
                       {isAdmin && (
                         <td className="text-center">
                           <div className="flex items-center justify-center gap-1.5">
+                            <button
+                              onClick={() => openProductHistory(p)}
+                              title="Price & Update History"
+                              className="btn-action bg-amber-50 text-amber-700 hover:bg-amber-100 hover:text-amber-800"
+                            >
+                              <History className="w-3.5 h-3.5" />
+                            </button>
                             <button
                               onClick={() => openEdit(p)}
                               title="Edit product"
@@ -1693,7 +1832,7 @@ export function InventoryClient({ initialProducts, initialDeletedProducts = EMPT
                     max="100"
                     step="0.1"
                     value={form.gstRate}
-                    onChange={(e) => setForm({ ...form, gstRate: e.target.value })}
+                    onChange={(e) => handleFormGstChange(e.target.value)}
                     placeholder="5"
                     className="input pr-8 font-bold text-blue-900"
                   />
@@ -1704,12 +1843,11 @@ export function InventoryClient({ initialProducts, initialDeletedProducts = EMPT
                     <button
                       key={rate}
                       type="button"
-                      onClick={() => setForm({ ...form, gstRate: String(rate) })}
-                      className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
-                        Number(form.gstRate) === rate
+                      onClick={() => handleFormGstChange(String(rate))}
+                      className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${Number(form.gstRate) === rate
                           ? "bg-blue-600 text-white shadow-xs"
                           : "bg-zinc-100 hover:bg-zinc-200 text-zinc-600"
-                      }`}
+                        }`}
                     >
                       {rate}%
                     </button>
@@ -1719,14 +1857,15 @@ export function InventoryClient({ initialProducts, initialDeletedProducts = EMPT
             </div>
           </div>
 
-          {/* Tax Breakdown Preview */}
+          {/* Tax Breakdown Preview — GST calculated on Unit Cost */}
           {(() => {
+            const unitCostNum = parseFloat(form.unitCost) || 0;
             const saleRateNum = parseFloat(form.saleRate) || 0;
             const gstNum = Math.max(0, parseFloat(form.gstRate) || 0);
             const cgstPct = gstNum / 2;
             const sgstPct = gstNum / 2;
-            const taxPerUnit = saleRateNum * (gstNum / 100);
-            const grossTotal = saleRateNum + taxPerUnit;
+            const gstOnCost = unitCostNum * (gstNum / 100);
+            const costWithGst = unitCostNum + gstOnCost;
             return (
               <div className="bg-blue-50/60 border border-blue-200/80 rounded-xl p-3 text-xs space-y-1.5">
                 <div className="flex items-center justify-between text-blue-950 font-semibold">
@@ -1737,42 +1876,71 @@ export function InventoryClient({ initialProducts, initialDeletedProducts = EMPT
                 </div>
                 <div className="grid grid-cols-3 gap-2 text-center pt-1 border-t border-blue-200/60 text-[11px]">
                   <div>
-                    <span className="text-zinc-500 block text-[10px]">Taxable Unit Rate</span>
-                    <span className="font-bold text-zinc-800">{formatCurrency(saleRateNum)}</span>
+                    <span className="text-zinc-500 block text-[10px]">Taxable Unit Cost</span>
+                    <span className="font-bold text-zinc-800">{formatCurrency(unitCostNum)}</span>
                   </div>
                   <div>
-                    <span className="text-zinc-500 block text-[10px]">GST Tax ({gstNum}%)</span>
-                    <span className="font-bold text-orange-600">+{formatCurrency(taxPerUnit)}</span>
+                    <span className="text-zinc-500 block text-[10px]">GST on Cost ({gstNum}%)</span>
+                    <span className="font-bold text-orange-600">+{formatCurrency(gstOnCost)}</span>
                   </div>
                   <div>
-                    <span className="text-zinc-500 block text-[10px]">Gross Selling Price</span>
-                    <span className="font-bold text-emerald-700">{formatCurrency(grossTotal)}</span>
+                    <span className="text-zinc-500 block text-[10px]">Cost + GST</span>
+                    <span className="font-bold text-blue-700">{formatCurrency(costWithGst)}</span>
                   </div>
                 </div>
+                {saleRateNum > 0 && (
+                  <div className="flex items-center justify-between pt-1.5 border-t border-blue-200/60 text-[11px]">
+                    <span className="text-emerald-800 font-semibold">Gross Selling Price (incl. GST):</span>
+                    <span className="font-bold text-emerald-700 font-mono text-[13px]">{formatCurrency(saleRateNum)}</span>
+                  </div>
+                )}
               </div>
             );
           })()}
           <div className="grid grid-cols-3 gap-3">
-            {[
-              { label: "Unit cost (₹)", key: "unitCost" },
-              { label: "Sale rate (₹)", key: "saleRate" },
-              { label: "Margin (₹)", key: "margin" },
-            ].map((f) => (
-              <div key={f.key}>
-                <label className="block text-[12px] font-medium mb-1.5" style={{ color: "#52525B" }}>{f.label}</label>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  inputMode="decimal"
-                  value={form[f.key as keyof typeof form]}
-                  onChange={(e) => setForm({ ...form, [f.key]: e.target.value })}
-                  placeholder="0"
-                  className={`input ${f.key === "margin" ? "bg-slate-50 cursor-not-allowed opacity-75 font-semibold text-slate-500" : ""}`}
-                  readOnly={f.key === "margin"}
-                />
-              </div>
-            ))}
+            <div>
+              <label className="block text-[12px] font-medium mb-1.5" style={{ color: "#52525B" }}>Base Rate (₹)</label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                inputMode="decimal"
+                value={form.unitCost}
+                onChange={(e) => handleFormCostChange(e.target.value)}
+                placeholder="0"
+                className="input"
+              />
+            </div>
+            <div>
+              <label className="block text-[12px] font-medium mb-1.5" style={{ color: "#52525B" }}>
+                Sale rate (₹) <span className="text-[10px] text-emerald-600 font-normal">Gross (incl. GST)</span>
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                inputMode="decimal"
+                value={form.saleRate}
+                onChange={(e) => handleFormSaleRateChange(e.target.value)}
+                placeholder="0"
+                className="input font-medium text-zinc-900 focus:border-emerald-500"
+              />
+            </div>
+            <div>
+              <label className="block text-[12px] font-medium mb-1.5" style={{ color: "#52525B" }}>
+                Margin (₹) <span className="text-[10px] text-zinc-400 font-normal">Editable</span>
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                inputMode="decimal"
+                value={form.margin}
+                onChange={(e) => handleFormMarginChange(e.target.value)}
+                placeholder="0"
+                className="input font-medium text-emerald-600 focus:border-emerald-500"
+              />
+            </div>
           </div>
           <div className="flex justify-end gap-2 pt-1">
             <button type="button" onClick={() => setModalOpen(false)} className="btn btn-secondary">Cancel</button>
@@ -1838,7 +2006,7 @@ export function InventoryClient({ initialProducts, initialDeletedProducts = EMPT
                 min="0"
                 step="0.1"
                 value={recoverForm.gstRate}
-                onChange={(e) => setRecoverForm({ ...recoverForm, gstRate: e.target.value })}
+                onChange={(e) => handleRecoverGstChange(e.target.value)}
                 placeholder="5"
                 className="input"
               />
@@ -1847,38 +2015,42 @@ export function InventoryClient({ initialProducts, initialDeletedProducts = EMPT
 
           <div className="grid grid-cols-3 gap-3">
             <div>
-              <label className="block text-[12px] font-medium mb-1.5 text-zinc-700">Unit Cost (₹)</label>
+              <label className="block text-[12px] font-medium mb-1.5 text-zinc-700">Base Rate (₹)</label>
               <input
                 type="number"
                 min="0"
                 step="0.01"
                 value={recoverForm.unitCost}
-                onChange={(e) => setRecoverForm({ ...recoverForm, unitCost: e.target.value })}
+                onChange={(e) => handleRecoverCostChange(e.target.value)}
                 placeholder="0"
                 className="input"
               />
             </div>
             <div>
-              <label className="block text-[12px] font-medium mb-1.5 text-zinc-700">Sale Rate (₹)</label>
+              <label className="block text-[12px] font-medium mb-1.5 text-zinc-700">
+                Sale Rate (₹) <span className="text-[10px] text-emerald-600 font-normal">Gross (incl. GST)</span>
+              </label>
               <input
                 type="number"
                 min="0"
                 step="0.01"
                 value={recoverForm.saleRate}
-                onChange={(e) => setRecoverForm({ ...recoverForm, saleRate: e.target.value })}
+                onChange={(e) => handleRecoverSaleRateChange(e.target.value)}
                 placeholder="0"
-                className="input"
+                className="input font-medium text-zinc-900 focus:border-emerald-500"
               />
             </div>
             <div>
-              <label className="block text-[12px] font-medium mb-1.5 text-zinc-700">Margin (₹)</label>
+              <label className="block text-[12px] font-medium mb-1.5 text-zinc-700">
+                Margin (₹) <span className="text-[10px] text-zinc-400 font-normal">Editable</span>
+              </label>
               <input
                 type="number"
                 step="0.01"
                 value={recoverForm.margin}
-                onChange={(e) => setRecoverForm({ ...recoverForm, margin: e.target.value })}
+                onChange={(e) => handleRecoverMarginChange(e.target.value)}
                 placeholder="0"
-                className="input bg-slate-50 font-semibold text-emerald-600"
+                className="input font-medium text-emerald-600 focus:border-emerald-500"
               />
             </div>
           </div>
@@ -2082,6 +2254,189 @@ export function InventoryClient({ initialProducts, initialDeletedProducts = EMPT
             </div>
           </div>
         </form>
+      </Modal>
+
+      {/* Product Price & Update History Modal */}
+      <Modal
+        open={historyModalOpen}
+        onClose={() => setHistoryModalOpen(false)}
+        title="Product Price & Update History"
+        subtitle={
+          selectedHistoryProduct
+            ? `${selectedHistoryProduct.name} (${selectedHistoryProduct.isCylinder ? "Gas Cylinder" : "General / ARB"})`
+            : "Track price changes over time"
+        }
+        size="lg"
+      >
+        <div className="space-y-4">
+          {/* Active Pricing Header Bar */}
+          {selectedHistoryProduct && (
+            <div className="bg-gradient-to-r from-blue-50/70 via-indigo-50/50 to-emerald-50/60 border border-blue-200/70 rounded-xl p-3.5">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider">Current Active Pricing</span>
+                <span className="text-[11px] font-semibold text-blue-700 bg-blue-100/60 px-2 py-0.5 rounded-md">
+                  GST {selectedHistoryProduct.gstRate ?? 5}% {selectedHistoryProduct.hsnCode ? `· HSN ${selectedHistoryProduct.hsnCode}` : ""}
+                </span>
+              </div>
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <div className="bg-white/80 rounded-lg p-2 border border-zinc-200/60 shadow-xs">
+                  <span className="text-[10px] text-zinc-500 block uppercase font-medium">Unit Cost</span>
+                  <span className="text-[13px] font-bold text-zinc-800">{formatCurrency(selectedHistoryProduct.unitCost)}</span>
+                </div>
+                <div className="bg-white/80 rounded-lg p-2 border border-emerald-200/60 shadow-xs">
+                  <span className="text-[10px] text-emerald-700 block uppercase font-bold">Sale Rate (Gross)</span>
+                  <span className="text-[14px] font-extrabold text-emerald-700">{formatCurrency(selectedHistoryProduct.saleRate)}</span>
+                </div>
+                <div className="bg-white/80 rounded-lg p-2 border border-zinc-200/60 shadow-xs">
+                  <span className="text-[10px] text-zinc-500 block uppercase font-medium">Margin</span>
+                  <span className="text-[13px] font-bold text-emerald-600">{formatCurrency(selectedHistoryProduct.margin)}</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Timeline of Price Changes */}
+          {historyLoading ? (
+            <div className="py-12 flex flex-col items-center justify-center gap-2 text-zinc-400">
+              <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
+              <p className="text-xs font-medium">Loading pricing history...</p>
+            </div>
+          ) : (
+            <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
+              {productHistoryData.history && productHistoryData.history.length > 0 ? (
+                <div className="relative pl-6 border-l-2 border-blue-200 space-y-6 my-2">
+                  {productHistoryData.history.map((item, idx) => (
+                    <div key={item.id || idx} className="relative group">
+                      {/* Timeline dot */}
+                      <div className="absolute -left-[31px] top-1 w-3.5 h-3.5 rounded-full border-2 border-white bg-blue-600 shadow-xs ring-2 ring-blue-100" />
+
+                      <div className="bg-white border border-zinc-200/80 rounded-xl p-3.5 shadow-xs hover:border-blue-300 transition-colors space-y-2.5">
+                        {/* Header: Date + Admin + Optional Note */}
+                        <div className="flex flex-wrap items-center justify-between gap-1.5 text-xs">
+                          <div className="flex items-center gap-1.5">
+                            <Calendar className="w-3.5 h-3.5 text-zinc-400" />
+                            <span className="font-bold text-zinc-800">
+                              {new Date(item.changedAt).toLocaleString("en-IN", {
+                                day: "2-digit",
+                                month: "short",
+                                year: "numeric",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                                hour12: true,
+                              })}
+                            </span>
+                          </div>
+                          <span className="text-[11px] font-medium bg-zinc-100 text-zinc-600 px-2 py-0.5 rounded-md">
+                            by {item.changedByName || "Admin"}
+                          </span>
+                        </div>
+
+                        {item.changeNote && (
+                          <div className="bg-amber-50/80 border border-amber-200/60 rounded-md px-2.5 py-1 text-[11px] text-amber-800 font-medium">
+                            {item.changeNote}
+                          </div>
+                        )}
+
+                        {/* List of field changes */}
+                        <div className="space-y-1.5 pt-1">
+                          {item.changes && item.changes.map((ch, chIdx) => {
+                            const isNumeric = typeof ch.oldValue === "number" || (!isNaN(Number(ch.oldValue)) && ch.oldValue !== "" && !isNaN(Number(ch.newValue)));
+                            const oldNum = Number(ch.oldValue);
+                            const newNum = Number(ch.newValue);
+                            const diff = isNumeric ? newNum - oldNum : 0;
+                            const isCurrencyField = ["unitCost", "saleRate", "margin"].includes(ch.field);
+
+                            return (
+                              <div
+                                key={chIdx}
+                                className="flex items-center justify-between text-xs bg-zinc-50/70 hover:bg-zinc-100/60 px-2.5 py-1.5 rounded-lg border border-zinc-200/40"
+                              >
+                                <span className="font-semibold text-zinc-700 text-[11px]">
+                                  {ch.label || ch.field}
+                                </span>
+                                <div className="flex items-center gap-2 font-mono text-[11px]">
+                                  <span className="text-zinc-400 line-through">
+                                    {isCurrencyField ? formatCurrency(oldNum) : String(ch.oldValue ?? "—")}
+                                  </span>
+                                  <ArrowRight className="w-3 h-3 text-zinc-400" />
+                                  <span className="font-bold text-zinc-900">
+                                    {isCurrencyField ? formatCurrency(newNum) : String(ch.newValue ?? "—")}
+                                  </span>
+                                  {isNumeric && Math.abs(diff) > 0.001 && (
+                                    <span
+                                      className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${diff > 0
+                                          ? "bg-emerald-100 text-emerald-800"
+                                          : "bg-rose-100 text-rose-800"
+                                        }`}
+                                    >
+                                      {diff > 0 ? `+${isCurrencyField ? formatCurrency(diff) : diff}` : isCurrencyField ? `-${formatCurrency(Math.abs(diff))}` : diff}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {/* Snapshot bar */}
+                        {item.snapshot && (
+                          <div className="pt-2 border-t border-zinc-100 text-[10px] text-zinc-400 flex items-center justify-between">
+                            <span>Snapshot:</span>
+                            <div className="flex items-center gap-2 font-mono">
+                              <span>Cost: {formatCurrency(item.snapshot.unitCost)}</span>
+                              <span>·</span>
+                              <span className="text-emerald-600 font-semibold">Gross: {formatCurrency(item.snapshot.saleRate)}</span>
+                              <span>·</span>
+                              <span>GST: {item.snapshot.gstRate}%</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+
+                  {/* Initial creation point */}
+                  <div className="relative group">
+                    <div className="absolute -left-[31px] top-1 w-3.5 h-3.5 rounded-full border-2 border-white bg-zinc-300 shadow-xs" />
+                    <div className="bg-zinc-50 border border-zinc-200 rounded-xl p-3 text-xs text-zinc-500 flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <Package className="w-3.5 h-3.5 text-zinc-400" />
+                        <span>Product created</span>
+                      </div>
+                      <span className="font-mono text-[11px]">
+                        {productHistoryData.product?.createdAt
+                          ? new Date(productHistoryData.product.createdAt).toLocaleDateString("en-IN", {
+                            day: "2-digit",
+                            month: "short",
+                            year: "numeric",
+                          })
+                          : "Initial record"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-8 px-4 bg-zinc-50/70 rounded-xl border border-dashed border-zinc-200">
+                  <History className="w-8 h-8 text-zinc-300 mx-auto mb-2" />
+                  <p className="text-xs font-semibold text-zinc-700">No price updates recorded yet</p>
+                  <p className="text-[11px] text-zinc-400 max-w-sm mx-auto mt-1">
+                    When this product&apos;s Unit Cost, Gross Sale Rate, Margin, or GST is edited and saved, each change will be tracked here with dates and previous values.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="flex justify-end pt-3 border-t border-zinc-100">
+            <button
+              type="button"
+              onClick={() => setHistoryModalOpen(false)}
+              className="btn btn-secondary text-xs"
+            >
+              Close
+            </button>
+          </div>
+        </div>
       </Modal>
     </>
   );

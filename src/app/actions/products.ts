@@ -2,8 +2,16 @@
 
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
-import { type Product } from "@/generated/prisma";
+import { type Product, type Prisma } from "@/generated/prisma";
 import { revalidatePath } from "next/cache";
+
+export type HistoryValue = string | number | boolean | null;
+export interface HistoryDiff {
+  field: string;
+  label: string;
+  oldValue: HistoryValue;
+  newValue: HistoryValue;
+}
 
 export async function createProduct(formData: FormData): Promise<{ product?: Product; error?: string }> {
   const session = await getSession();
@@ -37,6 +45,8 @@ export async function updateProduct(formData: FormData): Promise<{ product?: Pro
   if (!session || session.role !== "ADMIN" || !session.agencyId) return { error: "Unauthorized" };
 
   const id = formData.get("id") as string;
+  if (!id) return { error: "Product ID is required" };
+
   const name = (formData.get("name") as string)?.trim();
   if (!name) return { error: "Product name is required" };
 
@@ -44,20 +54,104 @@ export async function updateProduct(formData: FormData): Promise<{ product?: Pro
   const hsnCode = (formData.get("hsnCode") as string)?.trim() || null;
   const rawGst = formData.get("gstRate");
   const gstRate = rawGst !== null && rawGst !== "" ? Math.max(0, Number(rawGst)) : 5;
+  const unitCost = Number(formData.get("unitCost")) || 0;
+  const saleRate = Number(formData.get("saleRate")) || 0;
+  const margin = Number(formData.get("margin")) || 0;
+  const changeNote = (formData.get("changeNote") as string)?.trim() || null;
 
-  const product = await prisma.product.update({
-    where: { id, agencyId: session.agencyId },
-    data: {
-      name,
-      unitCost: Number(formData.get("unitCost")) || 0,
-      saleRate: Number(formData.get("saleRate")) || 0,
-      margin: Number(formData.get("margin")) || 0,
-      isCylinder,
-      hsnCode,
-      gstRate,
-    },
-  });
-  return { product };
+  try {
+    const current = await prisma.product.findUnique({
+      where: { id, agencyId: session.agencyId },
+    });
+
+    if (!current) return { error: "Product not found" };
+
+    // Detect field-level diffs
+    const changes: HistoryDiff[] = [];
+
+    if (current.name !== name) {
+      changes.push({ field: "name", label: "Product Name", oldValue: current.name, newValue: name });
+    }
+    if (Math.abs(Number(current.unitCost) - unitCost) > 0.001) {
+      changes.push({ field: "unitCost", label: "Unit Cost", oldValue: current.unitCost, newValue: unitCost });
+    }
+    if (Math.abs(Number(current.saleRate) - saleRate) > 0.001) {
+      changes.push({ field: "saleRate", label: "Sale Rate (Gross)", oldValue: current.saleRate, newValue: saleRate });
+    }
+    if (Math.abs(Number(current.margin) - margin) > 0.001) {
+      changes.push({ field: "margin", label: "Margin", oldValue: current.margin, newValue: margin });
+    }
+    if (Math.abs(Number(current.gstRate) - gstRate) > 0.001) {
+      changes.push({ field: "gstRate", label: "GST Rate (%)", oldValue: current.gstRate, newValue: gstRate });
+    }
+    if ((current.hsnCode || null) !== hsnCode) {
+      changes.push({ field: "hsnCode", label: "HSN / SAC Code", oldValue: current.hsnCode || "—", newValue: hsnCode || "—" });
+    }
+    if (current.isCylinder !== isCylinder) {
+      changes.push({
+        field: "isCylinder",
+        label: "Category",
+        oldValue: current.isCylinder ? "Gas Cylinder" : "General / ARB",
+        newValue: isCylinder ? "Gas Cylinder" : "General / ARB",
+      });
+    }
+
+    if (changes.length > 0) {
+      const [updatedProduct] = await prisma.$transaction([
+        prisma.product.update({
+          where: { id, agencyId: session.agencyId },
+          data: {
+            name,
+            unitCost,
+            saleRate,
+            margin,
+            isCylinder,
+            hsnCode,
+            gstRate,
+          },
+        }),
+        prisma.productUpdateHistory.create({
+          data: {
+            productId: id,
+            agencyId: session.agencyId,
+            changedBy: session.userId,
+            changedByName: session.name || "Admin",
+            changes: changes as unknown as Prisma.InputJsonValue,
+            snapshotUnitCost: unitCost,
+            snapshotSaleRate: saleRate,
+            snapshotMargin: margin,
+            snapshotGstRate: gstRate,
+            snapshotHsnCode: hsnCode,
+            snapshotName: name,
+            changeNote,
+          },
+        }),
+      ]);
+
+      revalidatePath("/admin/inventory");
+      return { product: updatedProduct };
+    }
+
+    // No field values changed, simple update
+    const product = await prisma.product.update({
+      where: { id, agencyId: session.agencyId },
+      data: {
+        name,
+        unitCost,
+        saleRate,
+        margin,
+        isCylinder,
+        hsnCode,
+        gstRate,
+      },
+    });
+
+    revalidatePath("/admin/inventory");
+    return { product };
+  } catch (err: any) {
+    console.error("updateProduct error:", err);
+    return { error: err?.message || "Failed to update product." };
+  }
 }
 
 export async function deleteProducts(formData: FormData): Promise<{ success: boolean; error?: string }> {
@@ -126,26 +220,135 @@ export async function recoverProduct(formData: FormData): Promise<{ product?: Pr
     });
     if (!existing) return { error: "Product not found" };
 
-    const product = await prisma.product.update({
-      where: { id, agencyId: session.agencyId },
-      data: {
-        name,
-        unitCost,
-        saleRate,
-        margin,
-        isCylinder,
-        hsnCode,
-        gstRate,
-        isActive: true,
-        isDeleted: false,
-        deletedAt: null,
-      },
+    const changes: HistoryDiff[] = [];
+    changes.push({
+      field: "status",
+      label: "Status",
+      oldValue: "Deleted",
+      newValue: "Active (Recovered)",
     });
 
+    if (existing.name.replace(/\s*\(Deleted\)$/i, "").trim() !== name) {
+      changes.push({ field: "name", label: "Product Name", oldValue: existing.name, newValue: name });
+    }
+    if (Math.abs(Number(existing.unitCost) - unitCost) > 0.001) {
+      changes.push({ field: "unitCost", label: "Unit Cost", oldValue: existing.unitCost, newValue: unitCost });
+    }
+    if (Math.abs(Number(existing.saleRate) - saleRate) > 0.001) {
+      changes.push({ field: "saleRate", label: "Sale Rate (Gross)", oldValue: existing.saleRate, newValue: saleRate });
+    }
+    if (Math.abs(Number(existing.margin) - margin) > 0.001) {
+      changes.push({ field: "margin", label: "Margin", oldValue: existing.margin, newValue: margin });
+    }
+    if (Math.abs(Number(existing.gstRate) - gstRate) > 0.001) {
+      changes.push({ field: "gstRate", label: "GST Rate (%)", oldValue: existing.gstRate, newValue: gstRate });
+    }
+
+    const [product] = await prisma.$transaction([
+      prisma.product.update({
+        where: { id, agencyId: session.agencyId },
+        data: {
+          name,
+          unitCost,
+          saleRate,
+          margin,
+          isCylinder,
+          hsnCode,
+          gstRate,
+          isActive: true,
+          isDeleted: false,
+          deletedAt: null,
+        },
+      }),
+      prisma.productUpdateHistory.create({
+        data: {
+          productId: id,
+          agencyId: session.agencyId,
+          changedBy: session.userId,
+          changedByName: session.name || "Admin",
+          changes: changes as unknown as Prisma.InputJsonValue,
+          snapshotUnitCost: unitCost,
+          snapshotSaleRate: saleRate,
+          snapshotMargin: margin,
+          snapshotGstRate: gstRate,
+          snapshotHsnCode: hsnCode,
+          snapshotName: name,
+          changeNote: "Product recovered from Deleted Items",
+        },
+      }),
+    ]);
+
+    revalidatePath("/admin/inventory");
     return { product };
   } catch (err: any) {
     console.error("recoverProduct error:", err);
     return { error: err?.message || "Failed to recover product." };
+  }
+}
+
+export async function getProductUpdateHistory(productId: string) {
+  const session = await getSession();
+  if (!session || !session.agencyId) return { error: "Unauthorized", history: [] };
+  if (!productId) return { error: "Product ID is required", history: [] };
+
+  try {
+    const product = await prisma.product.findUnique({
+      where: { id: productId, agencyId: session.agencyId },
+      select: {
+        id: true,
+        name: true,
+        createdAt: true,
+        unitCost: true,
+        saleRate: true,
+        margin: true,
+        gstRate: true,
+        hsnCode: true,
+        isCylinder: true,
+      },
+    });
+
+    if (!product) return { error: "Product not found", history: [] };
+
+    const records = await prisma.productUpdateHistory.findMany({
+      where: { productId, agencyId: session.agencyId },
+      orderBy: { changedAt: "desc" },
+      take: 100,
+    });
+
+    const history = records.map((r) => ({
+      id: r.id,
+      changedAt: r.changedAt.toISOString(),
+      changedBy: r.changedBy,
+      changedByName: r.changedByName || "Admin",
+      changes: (Array.isArray(r.changes) ? r.changes : []) as unknown as HistoryDiff[],
+      snapshot: {
+        unitCost: r.snapshotUnitCost,
+        saleRate: r.snapshotSaleRate,
+        margin: r.snapshotMargin,
+        gstRate: r.snapshotGstRate,
+        hsnCode: r.snapshotHsnCode,
+        name: r.snapshotName,
+      },
+      changeNote: r.changeNote,
+    }));
+
+    return {
+      product: {
+        id: product.id,
+        name: product.name,
+        createdAt: product.createdAt.toISOString(),
+        unitCost: product.unitCost,
+        saleRate: product.saleRate,
+        margin: product.margin,
+        gstRate: product.gstRate,
+        hsnCode: product.hsnCode,
+        isCylinder: product.isCylinder,
+      },
+      history,
+    };
+  } catch (err: any) {
+    console.error("getProductUpdateHistory error:", err);
+    return { error: err?.message || "Failed to load update history", history: [] };
   }
 }
 

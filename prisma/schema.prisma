@@ -157,6 +157,7 @@ model Agency {
 
   users              User[]
   products           Product[]
+  productUpdateHistories ProductUpdateHistory[]
   customers          Customer[]
   godownRecords      GodownRecord[]
   godownInventory    GodownInventory[]
@@ -381,6 +382,35 @@ model Product {
   officeTransactions OfficeTransaction[]
   godownInventory    GodownInventory[]
   companyPayments    CompanyPayment[]
+  updateHistory      ProductUpdateHistory[]
+}
+
+/// Records every product field change with old → new values and a full pricing snapshot
+model ProductUpdateHistory {
+  id                String   @id @default(cuid())
+  productId         String
+  product           Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  agencyId          String
+  agency            Agency   @relation(fields: [agencyId], references: [id])
+  changedBy         String
+  changedByName     String?
+  changedAt         DateTime @default(now())
+
+  // ── What changed (JSON array of field-level diffs) ──────────
+  changes           Json
+
+  // ── Full pricing snapshot at time of change ─────────────────
+  snapshotUnitCost  Float
+  snapshotSaleRate  Float
+  snapshotMargin    Float
+  snapshotGstRate   Float
+  snapshotHsnCode   String?
+  snapshotName      String
+
+  changeNote        String?
+
+  @@index([productId, changedAt])
+  @@index([agencyId, changedAt])
 }
 
 /// Tracks product movements in the godown — received from company or dispatched to agency office

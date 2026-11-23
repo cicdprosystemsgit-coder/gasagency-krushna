@@ -236,11 +236,11 @@ export function GstInvoicingClient({
     setItems((prev) => prev.filter((_, i) => i !== index));
   }
 
-  const subtotal  = Number(items.reduce((a, i) => a + (i.amount || 0), 0).toFixed(2));
+  const subtotal = Number(items.reduce((a, i) => a + (i.amount || 0), 0).toFixed(2));
   const totalCgst = Number(items.reduce((a, i) => a + (i.cgstAmount ?? (i.amount * (i.gstRate || 0) / 200)), 0).toFixed(2));
   const totalSgst = Number(items.reduce((a, i) => a + (i.sgstAmount ?? (i.amount * (i.gstRate || 0) / 200)), 0).toFixed(2));
   const gstAmount = Number((totalCgst + totalSgst).toFixed(2));
-  const total     = Number((subtotal + gstAmount).toFixed(2));
+  const total = Number((subtotal + gstAmount).toFixed(2));
 
   // Check if any item exceeds available office stock
   const hasStockError = items.some((item) => {
@@ -303,31 +303,31 @@ export function GstInvoicingClient({
       }
 
       await generateGstInvoicePDF({
-        invoiceNo:       inv.invoiceNo,
-        invoiceDate:     formatDate(inv.date),
-        agencyName:      agencyInfo.name,
-        agencyAddress:   agencyInfo.address,
-        agencyCity:      agencyInfo.city,
-        agencyState:     agencyInfo.state,
-        agencyPhone:     agencyInfo.phone,
-        agencyGstin:     agencyInfo.gstin,
-        customerName:    customer?.name ?? "—",
-        customerPhone:   customer?.phone ?? "",
+        invoiceNo: inv.invoiceNo,
+        invoiceDate: formatDate(inv.date),
+        agencyName: agencyInfo.name,
+        agencyAddress: agencyInfo.address,
+        agencyCity: agencyInfo.city,
+        agencyState: agencyInfo.state,
+        agencyPhone: agencyInfo.phone,
+        agencyGstin: agencyInfo.gstin,
+        customerName: customer?.name ?? "—",
+        customerPhone: customer?.phone ?? "",
         customerAddress: customer?.address ?? "",
-        customerCode:    customer?.customerCode ?? "",
-        items:           invItems.map((it) => ({
+        customerCode: customer?.customerCode ?? "",
+        items: invItems.map((it) => ({
           productName: it.productName,
-          hsnCode:     it.hsnCode || "",
-          gstRate:     it.gstRate ?? 5,
-          qty:         it.qty,
-          rate:        it.rate,
-          amount:      it.amount,
+          hsnCode: it.hsnCode || "",
+          gstRate: it.gstRate ?? 5,
+          qty: it.qty,
+          rate: it.rate,
+          amount: it.amount,
         })),
-        subtotal:    inv.subtotal,
-        cgst:        Number(cgst.toFixed(2)),
-        sgst:        Number(sgst.toFixed(2)),
-        totalTax:    Number((cgst + sgst).toFixed(2)),
-        grandTotal:  inv.total,
+        subtotal: inv.subtotal,
+        cgst: Number(cgst.toFixed(2)),
+        sgst: Number(sgst.toFixed(2)),
+        totalTax: Number((cgst + sgst).toFixed(2)),
+        grandTotal: inv.total,
       });
     } finally {
       setIsDownloading(false);
@@ -471,7 +471,7 @@ export function GstInvoicingClient({
                             onChange={(e) => {
                               setCustomerSearch(e.target.value);
                               setIsSearchDropdownOpen(true);
-                              
+
                               const query = e.target.value.toLowerCase().trim();
                               if (query) {
                                 const exactMatches = localCustomers.filter(
@@ -539,11 +539,11 @@ export function GstInvoicingClient({
                           (c.customerCode ?? "").toLowerCase().includes(q)
                         );
                       }).length === 0 && (
-                        <div className="mt-2 text-xs text-red-600 flex items-center gap-1.5 bg-red-50 border border-red-100 p-2.5 rounded-lg">
-                          <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
-                          <span>No customer matches this search query. Please check Consumer Number, Name, or Mobile.</span>
-                        </div>
-                      )}
+                          <div className="mt-2 text-xs text-red-600 flex items-center gap-1.5 bg-red-50 border border-red-100 p-2.5 rounded-lg">
+                            <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
+                            <span>No customer matches this search query. Please check Consumer Number, Name, or Mobile.</span>
+                          </div>
+                        )}
 
                       {isSearchDropdownOpen && (
                         <div className="absolute left-0 right-0 mt-1.5 max-h-60 overflow-y-auto bg-white border border-slate-200 rounded-xl shadow-xl z-20 divide-y divide-slate-100">
@@ -636,9 +636,8 @@ export function GstInvoicingClient({
                                 <select
                                   value={item.productId}
                                   onChange={(e) => updateItem(i, "productId", e.target.value)}
-                                  className={`flex-1 px-2 py-1.5 border rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white ${
-                                    isOverStock ? "border-red-400" : "border-slate-200"
-                                  }`}
+                                  className={`flex-1 px-2 py-1.5 border rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white ${isOverStock ? "border-red-400" : "border-slate-200"
+                                    }`}
                                 >
                                   <option value="">Select product...</option>
                                   {localProducts.map((p) => {
@@ -669,13 +668,12 @@ export function GstInvoicingClient({
                               {item.productId && (
                                 <div className="flex items-center gap-1.5 flex-wrap">
                                   {officeStock !== null && (
-                                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
-                                      officeStock === 0
+                                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${officeStock === 0
                                         ? "bg-red-100 text-red-700"
                                         : isOverStock
-                                        ? "bg-orange-100 text-orange-700"
-                                        : "bg-emerald-100 text-emerald-700"
-                                    }`}>
+                                          ? "bg-orange-100 text-orange-700"
+                                          : "bg-emerald-100 text-emerald-700"
+                                      }`}>
                                       🏪 Office: {officeStock}
                                     </span>
                                   )}
@@ -706,11 +704,10 @@ export function GstInvoicingClient({
                             <input
                               type="number" min="1" value={item.qty}
                               onChange={(e) => updateItem(i, "qty", Number(e.target.value))}
-                              className={`w-full px-1.5 py-1.5 border rounded-lg text-xs text-center focus:outline-none focus:ring-1 ${
-                                isOverStock
+                              className={`w-full px-1.5 py-1.5 border rounded-lg text-xs text-center focus:outline-none focus:ring-1 ${isOverStock
                                   ? "border-red-400 bg-red-50 focus:ring-red-400 text-red-700 font-bold"
                                   : "border-slate-200 focus:ring-blue-500"
-                              }`}
+                                }`}
                             />
                           </td>
                           <td className="px-2 py-2">
@@ -1085,7 +1082,7 @@ export function GstInvoicingClient({
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-1.5">Unit Cost (₹)</label>
+              <label className="block text-sm font-semibold text-slate-700 mb-1.5">Base Rate (₹)</label>
               <input
                 type="number"
                 min="0"
