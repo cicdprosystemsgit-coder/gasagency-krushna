@@ -459,13 +459,13 @@ export function InventoryClient({ initialProducts, initialDeletedProducts = EMPT
   const [startingStockOpen, setStartingStockOpen] = useState(false);
   const [startingStockDate, setStartingStockDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [startingStockNotes, setStartingStockNotes] = useState("Initial physical inventory setup");
-  const [startingStockValues, setStartingStockValues] = useState<Record<string, { godownQty: string; officeQty: string }>>({});
+  const [startingStockValues, setStartingStockValues] = useState<Record<string, { filledQty: string; emptyQty: string }>>({});
   const [startingStockError, setStartingStockError] = useState("");
 
   function openStartingStock() {
-    const initialMap: Record<string, { godownQty: string; officeQty: string }> = {};
+    const initialMap: Record<string, { filledQty: string; emptyQty: string }> = {};
     products.forEach((p) => {
-      initialMap[p.id] = { godownQty: "", officeQty: "" };
+      initialMap[p.id] = { filledQty: "", emptyQty: "" };
     });
     setStartingStockValues(initialMap);
     setStartingStockDate(new Date().toISOString().slice(0, 10));
@@ -478,17 +478,17 @@ export function InventoryClient({ initialProducts, initialDeletedProducts = EMPT
     e.preventDefault();
     setStartingStockError("");
 
-    const itemsToSubmit: Array<{ productId: string; godownQty: number; officeQty: number }> = [];
+    const itemsToSubmit: Array<{ productId: string; filledQty: number; emptyQty: number }> = [];
     Object.entries(startingStockValues).forEach(([productId, val]) => {
-      const gQty = parseInt(val.godownQty || "0", 10);
-      const oQty = parseInt(val.officeQty || "0", 10);
-      if (gQty > 0 || oQty > 0) {
-        itemsToSubmit.push({ productId, godownQty: Math.max(0, gQty), officeQty: Math.max(0, oQty) });
+      const fQty = parseInt(val.filledQty || "0", 10);
+      const eQty = parseInt(val.emptyQty || "0", 10);
+      if (fQty > 0 || eQty > 0) {
+        itemsToSubmit.push({ productId, filledQty: Math.max(0, fQty), emptyQty: Math.max(0, eQty) });
       }
     });
 
     if (itemsToSubmit.length === 0) {
-      setStartingStockError("Please enter a starting stock quantity (Godown or Office) for at least one product.");
+      setStartingStockError("Please enter a starting stock quantity (Filled or Empty) for at least one product.");
       return;
     }
 
@@ -2079,7 +2079,7 @@ export function InventoryClient({ initialProducts, initialDeletedProducts = EMPT
         open={startingStockOpen}
         onClose={() => setStartingStockOpen(false)}
         title="Initialize Starting Stock"
-        subtitle="Set the opening quantity of products physically present in your Office and Godown to start using the app."
+        subtitle="Enter the physical cylinder count present in your location to set the opening stock."
         size="lg"
       >
         <form onSubmit={handleStartingStockSubmit} className="space-y-4">
@@ -2094,8 +2094,8 @@ export function InventoryClient({ initialProducts, initialDeletedProducts = EMPT
             <div>
               <p className="font-semibold text-blue-950">How Starting Stock Works:</p>
               <ul className="list-disc list-inside mt-1 space-y-0.5 text-blue-800">
-                <li><span className="font-medium text-blue-950">Godown Stock:</span> Physical stock stored at your main godown (stored as initial inward stock).</li>
-                <li><span className="font-medium text-blue-950">Office Stock:</span> Stock ready at your agency counter/office for direct OTC customer sales.</li>
+                <li><span className="font-medium text-blue-950">Filled Cylinders:</span> Full cylinders physically present — saved as opening stock (StockRecord).</li>
+                <li><span className="font-medium text-blue-950">Empty Cylinders:</span> Empty cylinders at your location — saved as an inward godown movement (for tracking empties).</li>
                 <li>Leave inputs blank or 0 for products that are currently out of stock.</li>
               </ul>
             </div>
@@ -2135,7 +2135,7 @@ export function InventoryClient({ initialProducts, initialDeletedProducts = EMPT
                 Product Stock Quantities ({products.length})
               </label>
               <span className="text-[11px] text-zinc-500">
-                Enter initial units for Godown &amp; Office
+                Enter initial cylinder count per product
               </span>
             </div>
 
@@ -2150,15 +2150,15 @@ export function InventoryClient({ initialProducts, initialDeletedProducts = EMPT
                 <div className="sticky top-0 bg-zinc-100/90 backdrop-blur-xs z-10 px-3 py-2 grid grid-cols-12 text-[11px] font-bold text-zinc-600 uppercase tracking-wider">
                   <div className="col-span-6 sm:col-span-6">Product</div>
                   <div className="col-span-3 sm:col-span-3 text-center flex items-center justify-center gap-1">
-                    <Warehouse className="w-3 h-3 text-orange-600" /> Godown Qty
+                    🟢 Filled Cylinders
                   </div>
                   <div className="col-span-3 sm:col-span-3 text-center flex items-center justify-center gap-1">
-                    <Building2 className="w-3 h-3 text-emerald-600" /> Office Qty
+                    ⚪ Empty Cylinders
                   </div>
                 </div>
 
                 {products.map((p) => {
-                  const val = startingStockValues[p.id] || { godownQty: "", officeQty: "" };
+                  const val = startingStockValues[p.id] || { filledQty: "", emptyQty: "" };
                   return (
                     <div
                       key={`starting-stock-${p.id}`}
@@ -2178,15 +2178,15 @@ export function InventoryClient({ initialProducts, initialDeletedProducts = EMPT
                           min="0"
                           step="1"
                           placeholder="0"
-                          value={val.godownQty}
+                          value={val.filledQty}
                           onChange={(e) => {
                             const newQty = e.target.value;
                             setStartingStockValues((prev) => ({
                               ...prev,
-                              [p.id]: { ...(prev[p.id] || { officeQty: "" }), godownQty: newQty },
+                              [p.id]: { ...(prev[p.id] || { emptyQty: "" }), filledQty: newQty },
                             }));
                           }}
-                          className="w-full text-center px-2 py-1.5 text-[13px] font-bold border border-orange-200 focus:border-orange-500 rounded-lg bg-orange-50/40 text-orange-950 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                          className="w-full text-center px-2 py-1.5 text-[13px] font-bold border border-emerald-200 focus:border-emerald-500 rounded-lg bg-emerald-50/40 text-emerald-950 focus:outline-none focus:ring-1 focus:ring-emerald-500"
                         />
                       </div>
                       <div className="col-span-3 sm:col-span-3">
@@ -2195,15 +2195,15 @@ export function InventoryClient({ initialProducts, initialDeletedProducts = EMPT
                           min="0"
                           step="1"
                           placeholder="0"
-                          value={val.officeQty}
+                          value={val.emptyQty}
                           onChange={(e) => {
                             const newQty = e.target.value;
                             setStartingStockValues((prev) => ({
                               ...prev,
-                              [p.id]: { ...(prev[p.id] || { godownQty: "" }), officeQty: newQty },
+                              [p.id]: { ...(prev[p.id] || { filledQty: "" }), emptyQty: newQty },
                             }));
                           }}
-                          className="w-full text-center px-2 py-1.5 text-[13px] font-bold border border-emerald-200 focus:border-emerald-500 rounded-lg bg-emerald-50/40 text-emerald-950 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                          className="w-full text-center px-2 py-1.5 text-[13px] font-bold border border-zinc-200 focus:border-zinc-400 rounded-lg bg-zinc-50/40 text-zinc-700 focus:outline-none focus:ring-1 focus:ring-zinc-400"
                         />
                       </div>
                     </div>
@@ -2218,8 +2218,8 @@ export function InventoryClient({ initialProducts, initialDeletedProducts = EMPT
               type="button"
               onClick={() => {
                 // Quick reset all
-                const resetMap: Record<string, { godownQty: string; officeQty: string }> = {};
-                products.forEach((p) => { resetMap[p.id] = { godownQty: "", officeQty: "" }; });
+                const resetMap: Record<string, { filledQty: string; emptyQty: string }> = {};
+                products.forEach((p) => { resetMap[p.id] = { filledQty: "", emptyQty: "" }; });
                 setStartingStockValues(resetMap);
               }}
               className="text-[12px] text-zinc-500 hover:text-zinc-800 font-semibold"

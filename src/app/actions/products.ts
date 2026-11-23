@@ -740,8 +740,8 @@ export async function setInitialStartingStock(formData: FormData): Promise<{
 
   let items: Array<{
     productId: string;
-    officeQty?: number;
-    godownQty?: number;
+    filledQty?: number;
+    emptyQty?: number;
   }> = [];
 
   try {
@@ -771,57 +771,43 @@ export async function setInitialStartingStock(formData: FormData): Promise<{
     const prodName = validMap.get(item.productId);
     if (!prodName) continue;
 
-    const godownQty = Math.max(0, Math.round(Number(item.godownQty) || 0));
-    const officeQty = Math.max(0, Math.round(Number(item.officeQty) || 0));
+    const filledQty = Math.max(0, Math.round(Number(item.filledQty) || 0));
+    const emptyQty = Math.max(0, Math.round(Number(item.emptyQty) || 0));
 
-    if (godownQty === 0 && officeQty === 0) continue;
+    if (filledQty === 0 && emptyQty === 0) continue;
 
-    // 1. If godown quantity > 0: Record godown movement of type RECEIVED
-    if (godownQty > 0) {
+    // 1. Filled cylinders → GodownInventory RECEIVED with batchNo "FILLED_STARTING"
+    if (filledQty > 0) {
       await prisma.godownInventory.create({
         data: {
           date,
           moveType: "RECEIVED",
           productId: item.productId,
           productName: prodName,
-          qty: godownQty,
-          batchNo: "STARTING_STOCK",
-          notes: notes,
+          qty: filledQty,
+          batchNo: "FILLED_STARTING",
+          notes: `${notes} — Filled cylinders initial count`,
           recordedById: session.userId,
           agencyId,
         },
       });
     }
 
-    // 2. If office quantity > 0: Update or create StockRecord
-    if (officeQty > 0) {
-      const existingStock = await prisma.stockRecord.findFirst({
-        where: { agencyId, productId: item.productId, date: { gte: dayStart } },
+    // 2. Empty cylinders → GodownInventory RECEIVED with batchNo "EMPTY_STARTING"
+    if (emptyQty > 0) {
+      await prisma.godownInventory.create({
+        data: {
+          date,
+          moveType: "RECEIVED",
+          productId: item.productId,
+          productName: prodName,
+          qty: emptyQty,
+          batchNo: "EMPTY_STARTING",
+          notes: `${notes} — Empty cylinders initial count`,
+          recordedById: session.userId,
+          agencyId,
+        },
       });
-
-      if (existingStock) {
-        await prisma.stockRecord.update({
-          where: { id: existingStock.id },
-          data: {
-            openingStock: { increment: officeQty },
-            closingStock: { increment: officeQty },
-          },
-        });
-      } else {
-        await prisma.stockRecord.create({
-          data: {
-            date: dayStart,
-            productId: item.productId,
-            productName: prodName,
-            agencyId,
-            openingStock: officeQty,
-            loadingIn: 0,
-            salesQty: 0,
-            returned: 0,
-            closingStock: officeQty,
-          },
-        });
-      }
     }
 
     affectedCount++;

@@ -1,6 +1,9 @@
 "use client";
 
-import { useState, useTransition, useEffect } from "react";
+import { useState, useTransition, useEffect, useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
+
+const emptySubscribe = () => () => {};
 import {
   Shield,
   ShieldCheck,
@@ -49,6 +52,7 @@ export function TwoFactorToggle({ variant = "card", onStatusChange }: TwoFactorT
   // Error handling
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const isMounted = useSyncExternalStore(emptySubscribe, () => true, () => false);
 
   const loadStatus = () => {
     get2FAStatus().then((s) => {
@@ -162,38 +166,38 @@ export function TwoFactorToggle({ variant = "card", onStatusChange }: TwoFactorT
     <>
       {/* ── CARD VARIANT ── */}
       {variant === "card" ? (
-        <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5 shadow-sm transition-all">
+        <div className="rounded-xl border border-zinc-700 bg-zinc-800 p-5 shadow-sm transition-all">
           <div className="flex items-start justify-between gap-4">
             <div className="flex items-start gap-3.5">
               <div
                 className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors ${
                   status.enabled
-                    ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800"
-                    : "bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400"
+                    ? "bg-emerald-900/40 text-emerald-400 border border-emerald-700"
+                    : "bg-zinc-700 text-zinc-400"
                 }`}
               >
                 {status.enabled ? <ShieldCheck className="w-5 h-5" /> : <Shield className="w-5 h-5" />}
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">
+                  <h3 className="text-sm font-semibold text-white">
                     Two-Step Verification (Google Authenticator)
                   </h3>
                   <span
                     className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
                       status.enabled
-                        ? "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300"
-                        : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400"
+                        ? "bg-emerald-900/40 text-emerald-300"
+                        : "bg-zinc-700 text-zinc-400"
                     }`}
                   >
                     {status.enabled ? "Active" : "Disabled"}
                   </span>
                 </div>
-                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1 max-w-md">
+                <p className="text-xs text-zinc-400 mt-1 max-w-md">
                   Protect your account by requiring a 6-digit code from Google Authenticator or Microsoft Authenticator whenever you sign in.
                 </p>
                 {status.enabled && status.backupCodesRemaining > 0 && (
-                  <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-1.5 flex items-center gap-1.5">
+                  <p className="text-[11px] text-zinc-500 mt-1.5 flex items-center gap-1.5">
                     <Key className="w-3 h-3" />
                     {status.backupCodesRemaining} backup codes remaining
                   </p>
@@ -217,8 +221,8 @@ export function TwoFactorToggle({ variant = "card", onStatusChange }: TwoFactorT
                     handleStartSetup();
                   }
                 }}
-                className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-600 focus:ring-offset-2 ${
-                  status.enabled ? "bg-emerald-600" : "bg-zinc-300 dark:bg-zinc-700"
+                className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-zinc-800 ${
+                  status.enabled ? "bg-emerald-600" : "bg-zinc-600"
                 } ${isPending ? "opacity-60 cursor-not-allowed" : ""}`}
               >
                 <span className="sr-only">Toggle Two-Step Verification</span>
@@ -228,7 +232,7 @@ export function TwoFactorToggle({ variant = "card", onStatusChange }: TwoFactorT
                   }`}
                 />
               </button>
-              <span className="text-[11px] font-medium text-zinc-400 dark:text-zinc-500">
+              <span className="text-[11px] font-medium text-zinc-400">
                 {status.enabled ? "Turn OFF" : "Turn ON"}
               </span>
             </div>
@@ -273,11 +277,11 @@ export function TwoFactorToggle({ variant = "card", onStatusChange }: TwoFactorT
       )}
 
       {/* ── MODAL: SETUP 2FA (QR Code Scanner) ──────────────────────────────── */}
-      {showSetupModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="relative w-full max-w-md bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
+      {showSetupModal && isMounted && createPortal(
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="relative w-full max-w-md bg-zinc-900 rounded-2xl shadow-2xl border border-zinc-700 overflow-hidden">
             {/* Modal Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-100 dark:border-zinc-800">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800">
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center">
                   <QrCode className="w-4.5 h-4.5" />
@@ -439,29 +443,30 @@ export function TwoFactorToggle({ variant = "card", onStatusChange }: TwoFactorT
               </div>
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* ── MODAL: DISABLE 2FA ──────────────────────────────────────────────── */}
-      {showDisableModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="relative w-full max-w-sm bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl border border-zinc-200 dark:border-zinc-800 p-6 space-y-4">
+      {showDisableModal && isMounted && createPortal(
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="relative w-full max-w-sm bg-zinc-900 rounded-2xl shadow-2xl border border-zinc-700 p-6 space-y-4">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-red-50 dark:bg-red-950/60 text-red-600 dark:text-red-400 flex items-center justify-center flex-shrink-0">
+              <div className="w-10 h-10 rounded-xl bg-red-950/60 text-red-400 flex items-center justify-center flex-shrink-0">
                 <ShieldAlert className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">Turn Off 2-Step Verification?</h3>
+                <h3 className="text-sm font-semibold text-white">Turn Off 2-Step Verification?</h3>
                 <p className="text-[11px] text-zinc-400">Your account will only be protected by password.</p>
               </div>
             </div>
 
-            <p className="text-xs text-zinc-600 dark:text-zinc-300 leading-relaxed">
+            <p className="text-xs text-zinc-300 leading-relaxed">
               To verify that you own this account, enter the active 6-digit code from Google Authenticator to confirm deactivation:
             </p>
 
             {errorMessage && (
-              <div className="flex items-start gap-2 p-2.5 rounded-lg bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/60 text-red-700 dark:text-red-300 text-xs">
+              <div className="flex items-start gap-2 p-2.5 rounded-lg bg-red-950/40 border border-red-900/60 text-red-300 text-xs">
                 <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
                 <span>{errorMessage}</span>
               </div>
@@ -476,7 +481,7 @@ export function TwoFactorToggle({ variant = "card", onStatusChange }: TwoFactorT
                 autoFocus
                 value={disableCode}
                 onChange={(e) => setDisableCode(e.target.value.replace(/\D/g, ""))}
-                className="w-full text-center text-xl font-bold tracking-[0.25em] h-11 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-red-600"
+                className="w-full text-center text-xl font-bold tracking-[0.25em] h-11 rounded-lg border border-zinc-600 bg-zinc-950 text-white placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
               />
             </div>
 
@@ -484,7 +489,7 @@ export function TwoFactorToggle({ variant = "card", onStatusChange }: TwoFactorT
               <button
                 type="button"
                 onClick={() => setShowDisableModal(false)}
-                className="flex-1 px-4 py-2 text-xs font-medium text-zinc-600 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded-lg transition-colors"
+                className="flex-1 px-4 py-2 text-xs font-medium text-zinc-300 bg-zinc-800 hover:bg-zinc-700 rounded-lg transition-colors"
               >
                 Cancel
               </button>
@@ -499,7 +504,8 @@ export function TwoFactorToggle({ variant = "card", onStatusChange }: TwoFactorT
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );
