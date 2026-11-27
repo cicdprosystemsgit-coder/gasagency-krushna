@@ -49,3 +49,6 @@ android/local.properties
 *.keystore
 *.jks
 release-key.jks
+
+# Keystore base64 export - NEVER commit
+keystore-base64.txt
