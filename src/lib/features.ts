@@ -14,6 +14,7 @@ export const ALL_FEATURES: FeatureDef[] = [
   { key: "godown",              label: "Godown Management",        description: "Manage godown stock and cylinder in/out movements",               category: "Operations"    },
   { key: "vehicle_management",  label: "Vehicle Management",       description: "Track delivery vehicles, trips, and fleet status",                category: "Operations"    },
   { key: "delivery_plan",       label: "Delivery Plan",            description: "Plan and schedule customer deliveries",                           category: "Operations"    },
+  { key: "delivery_ledger",     label: "Delivery Boy Ledger",      description: "Per-delivery-boy dispatch log and cash collection ledger",        category: "Operations"    },
   // Accounts
   { key: "customer_management", label: "Customer Management",      description: "Manage domestic and commercial customer records",                 category: "Accounts"      },
   { key: "office_transactions", label: "Office Transactions",      description: "Record new connections, regulators, pipe sales",                 category: "Accounts"      },
@@ -42,10 +43,17 @@ export const ALL_FEATURES: FeatureDef[] = [
   { key: "analytics",           label: "Analytics & Reports",      description: "Business insights, charts, and performance reports",             category: "Intelligence"  },
   { key: "payment_receipts",    label: "Payment Receipts",         description: "Formal receipts for customer cash/UPI payments",                 category: "Intelligence"  },
   { key: "documents",           label: "Documents",                description: "KYC, vehicle, and agency document storage",                      category: "Intelligence"  },
-  { key: "complaints",          label: "Customer Complaints",      description: "Log and resolve customer complaints",                            category: "Intelligence"  },
-  { key: "export",              label: "Data Export",              description: "Export reports to Excel/PDF for offline use",                    category: "Intelligence"  },
+  { key: "complaints",                 label: "Customer Complaints",            description: "Log and resolve customer complaints",                                     category: "Intelligence"  },
+  { key: "export",                     label: "Data Export",                    description: "Export reports to Excel/PDF for offline use",                             category: "Intelligence"  },
+  { key: "customer_portal",            label: "Customer Self-Service Portal",   description: "Public portal for customers to view deliveries, payments and complaints", category: "Intelligence"  },
+  { key: "customer_portal_complaints", label: "Customer Complaint Submission",  description: "Allow customers to raise complaints via self-service portal",              category: "Intelligence"  },
+  { key: "customer_portal_receipts",   label: "Customer Receipt Viewing",       description: "Allow customers to view payment receipts in the portal",                  category: "Intelligence"  },
+  { key: "customer_portal_credit",     label: "Customer Credit Balance View",   description: "Allow customers to see outstanding credit/dues in the portal",            category: "Intelligence"  },
   // Enterprise
   { key: "branches",            label: "Branch Management",        description: "Multi-branch setup for larger distributors",                     category: "Enterprise"    },
+  { key: "billing",             label: "Subscription & Billing",   description: "Agency subscription tier, billing history and plan management",  category: "Enterprise"    },
+  { key: "branding",            label: "Branding & Theme Config",  description: "Agency logo, colors, receipt branding and UI customization",      category: "Enterprise"    },
+  { key: "access_management",   label: "Access & Role Management", description: "RBAC permission matrix and custom role definitions",             category: "Enterprise"    },
   { key: "api_gateway",         label: "API Gateway",              description: "API keys for third-party integrations",                          category: "Enterprise"    },
   { key: "security",            label: "Security & 2FA",           description: "Two-factor authentication and security settings",                category: "Enterprise"    },
 ];

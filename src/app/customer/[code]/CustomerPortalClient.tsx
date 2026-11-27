@@ -2,9 +2,11 @@
 
 import { useState, useTransition } from "react";
 import { raiseComplaintFromPortal } from "@/app/actions/customer-portal";
+import { isFeatureEnabled } from "@/lib/features";
 import { Package, CreditCard, MessageSquare, Receipt, Phone, MapPin, Building2, Plus, X, CheckCircle2 } from "lucide-react";
 
 type PortalData = {
+  enabledFeatures?: string[];
   customer: { name: string; phone: string; address: string | null; type: string; customerCode: string | null; agency: { name: string; phone: string; address: string; city: string } };
   deliveries: Array<{ date: string; product: string; qty: number; status: string }>;
   creditEntries: Array<{ date: string; type: string; amount: number; description: string | null }>;
@@ -64,19 +66,30 @@ export function CustomerPortalClient({ data, customerCode }: { data: PortalData;
 
       <div className="max-w-lg mx-auto px-4 -mt-8">
         {/* Balance card */}
-        <div className="rounded-xl p-5 mb-4 shadow-lg" style={{ background: data.outstandingBalance > 0 ? "#DC2626" : "#16A34A" }}>
-          <p className="text-[12px] text-white/70 mb-1">Outstanding Balance</p>
-          <p className="text-[28px] font-bold text-white">{fmtCur(data.outstandingBalance)}</p>
-          <p className="text-[12px] text-white/60 mt-1">{data.outstandingBalance > 0 ? "Amount due to agency" : "No dues — account clear ✓"}</p>
-        </div>
+        {isFeatureEnabled(data.enabledFeatures ?? [], "customer_portal_credit") && (
+          <div className="rounded-xl p-5 mb-4 shadow-lg" style={{ background: data.outstandingBalance > 0 ? "#DC2626" : "#16A34A" }}>
+            <p className="text-[12px] text-white/70 mb-1">Outstanding Balance</p>
+            <p className="text-[28px] font-bold text-white">{fmtCur(data.outstandingBalance)}</p>
+            <p className="text-[12px] text-white/60 mt-1">{data.outstandingBalance > 0 ? "Amount due to agency" : "No dues — account clear ✓"}</p>
+          </div>
+        )}
 
         {/* Tabs */}
         <div className="flex gap-1 mb-4 p-1 rounded-xl overflow-x-auto" style={{ background: "#FFFFFF", border: "1px solid #E4E4E7" }}>
-          {([["deliveries", "📦 Deliveries"], ["payments", "💳 Credit"], ["complaints", "⚠️ Complaints"], ["receipts", "🧾 Receipts"]] as const).map(([id, label]) => (
-            <button key={id} onClick={() => setTab(id)} className="flex-1 py-2 px-2 rounded-lg text-[12px] font-medium transition-all whitespace-nowrap" style={{ background: tab === id ? "#18181B" : "transparent", color: tab === id ? "#FFFFFF" : "#71717A" }}>
-              {label}
-            </button>
-          ))}
+          {(
+            [
+              ["deliveries", "📦 Deliveries", true],
+              ["payments", "💳 Credit", isFeatureEnabled(data.enabledFeatures ?? [], "customer_portal_credit")],
+              ["complaints", "⚠️ Complaints", isFeatureEnabled(data.enabledFeatures ?? [], "customer_portal_complaints")],
+              ["receipts", "🧾 Receipts", isFeatureEnabled(data.enabledFeatures ?? [], "customer_portal_receipts")],
+            ] as const
+          )
+            .filter(([, , enabled]) => enabled)
+            .map(([id, label]) => (
+              <button key={id} onClick={() => setTab(id)} className="flex-1 py-2 px-2 rounded-lg text-[12px] font-medium transition-all whitespace-nowrap" style={{ background: tab === id ? "#18181B" : "transparent", color: tab === id ? "#FFFFFF" : "#71717A" }}>
+                {label}
+              </button>
+            ))}
         </div>
 
         {/* Tab content */}

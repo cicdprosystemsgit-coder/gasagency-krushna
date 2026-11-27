@@ -4,6 +4,7 @@
 // NO authentication required — access via unique customer code
 
 import { prisma } from "@/lib/prisma";
+import { isFeatureEnabled } from "@/lib/features";
 
 // ── Look up customer by code ──────────────────────────────────────────────────
 export async function getCustomerPortalData(code: string, agencyId?: string) {
@@ -16,11 +17,14 @@ export async function getCustomerPortalData(code: string, agencyId?: string) {
       ...(agencyId ? { agencyId } : {}),
     },
     include: {
-      agency: { select: { name: true, phone: true, address: true, city: true } },
+      agency: { select: { name: true, phone: true, address: true, city: true, enabledFeatures: true } },
     },
   });
 
   if (!customer) return { error: "Customer not found. Please check your code." };
+  if (!isFeatureEnabled(customer.agency.enabledFeatures, "customer_portal")) {
+    return { error: "Customer self-service portal is currently disabled by your agency." };
+  }
 
   // Last 10 deliveries for this customer within their agency
   const deliveries = await prisma.deliveryRecord.findMany({
@@ -61,13 +65,19 @@ export async function getCustomerPortalData(code: string, agencyId?: string) {
   });
 
   return {
+    enabledFeatures: customer.agency.enabledFeatures,
     customer: {
       name: customer.name,
       phone: customer.phone,
       address: customer.address,
       type: customer.type,
       customerCode: customer.customerCode,
-      agency: customer.agency,
+      agency: {
+        name: customer.agency.name,
+        phone: customer.agency.phone,
+        address: customer.agency.address,
+        city: customer.agency.city,
+      },
     },
     deliveries: deliveries.map((d) => ({
       date: d.date.toISOString(),
@@ -110,10 +120,13 @@ export async function raiseComplaintFromPortal(data: {
       isActive: true,
       ...(data.agencyId ? { agencyId: data.agencyId } : {}),
     },
-    select: { id: true, agencyId: true },
+    select: { id: true, agencyId: true, agency: { select: { enabledFeatures: true } } },
   });
 
   if (!customer) return { error: "Customer not found" };
+  if (!isFeatureEnabled(customer.agency.enabledFeatures, "customer_portal_complaints")) {
+    return { error: "Complaint submission via portal is currently disabled by your agency." };
+  }
 
   const complaint = await prisma.customerComplaint.create({
     data: {

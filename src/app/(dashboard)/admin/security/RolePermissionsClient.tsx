@@ -8,7 +8,7 @@ import {
   ShieldCheck, FileText, Wallet, BarChart3, CalendarDays, BookOpen,
   TrendingUp, FileDown, FolderOpen, MessageSquarePlus, Building2,
   KeyRound, Car, PieChart, Clock, LayoutDashboard, X, Sparkles,
-  Calculator, FileSpreadsheet
+  Calculator, FileSpreadsheet, Banknote, BadgeDollarSign, Palette, UserCheck, Globe, Settings
 } from "lucide-react";
 import { getRolePermissions, savePermissionsBatch } from "@/app/actions/rbac";
 import { deleteCustomRole } from "@/app/actions/staff";
@@ -21,14 +21,16 @@ export type ModuleCategory =
   | "Finance"
   | "People"
   | "Intelligence"
-  | "Enterprise";
+  | "Customer Portal"
+  | "Enterprise"
+  | "SuperAdmin";
 
 export interface ResourceItem {
   key: string;
   label: string;
   category: ModuleCategory;
   description: string;
-  icon: any;
+  icon: React.ComponentType<{ className?: string }>;
 }
 
 const ROLES: { key: string; label: string; baseRole?: string }[] = [
@@ -50,6 +52,7 @@ export const RESOURCES: ResourceItem[] = [
   { key: "vehicles", label: "Delivery Fleet Management", category: "Operations", description: "Internal trucks, three-wheelers, odometer & fuel tracking records", icon: Car },
   { key: "deliveries", label: "Cylinder Delivery Records", category: "Operations", description: "Daily customer delivery execution, SV/TV dispatches & cylinder handovers", icon: Truck },
   { key: "deliveryPlan", label: "Delivery Route Planning", category: "Operations", description: "Route assignments, trip planning and delivery schedules", icon: Truck },
+  { key: "deliveryLedger", label: "Delivery Boy Ledger", category: "Operations", description: "Per-delivery boy cylinder dispatch log, cash collection and payment ledger", icon: BookOpen },
 
   // Accounts & Sales
   { key: "customers", label: "Customer Account Profiles", category: "Accounts", description: "Customer master records, addresses, connection numbers & KYC", icon: Users },
@@ -63,7 +66,10 @@ export const RESOURCES: ResourceItem[] = [
   // Finance & Banking
   { key: "accounts", label: "Finance & Bank Accounts", category: "Finance", description: "Agency bank accounts, personal ledgers, fund transfers & tax summary", icon: LayoutDashboard },
   { key: "salaries", label: "Employee Salary & Drawings", category: "Finance", description: "Monthly payroll profiles, salary slips, advances and partner drawings", icon: Wallet },
+  { key: "mySalary", label: "My Salary & Pay Slips", category: "Finance", description: "Personal salary view, pay slips, advances and drawing history", icon: Banknote },
   { key: "expenses", label: "Expenses & Vehicle Fuel Costs", category: "Finance", description: "Office petty cash, vehicle maintenance, fuel bills and operational expenses", icon: BarChart3 },
+  { key: "myExpenses", label: "My Expense Claims", category: "Finance", description: "Personal expense submissions, vehicle bills and reimbursement claims", icon: Receipt },
+  { key: "expenseCategories", label: "Expense Category Configuration", category: "Finance", description: "Manage expense categories, monthly budgets and category-wise tracking", icon: FolderOpen },
   { key: "companyPayments", label: "Oil Company Payments", category: "Finance", description: "Indane/Bharat/HPCL purchase payments, bank drafts and company ledgers", icon: Building2 },
   { key: "assets", label: "Agency Assets Management", category: "Finance", description: "Physical machinery, furniture, computers and asset depreciation", icon: PieChart },
   { key: "dailyClosings", label: "EOD Summary Cash Closings", category: "Finance", description: "End-of-day cash reconciliation, cashier handovers and closing balances", icon: BookOpen },
@@ -71,6 +77,7 @@ export const RESOURCES: ResourceItem[] = [
   // People & Workforce
   { key: "staff", label: "Staff KYC & Logins", category: "People", description: "Staff accounts, passwords, Aadhaar/PAN documents and role assignments", icon: Users },
   { key: "attendance", label: "Staff Attendance & GPS Map", category: "People", description: "Daily selfie punch-in, geo-fenced coordinates and live tracking map", icon: Clock },
+  { key: "myAttendance", label: "My Attendance & Punch-In", category: "People", description: "Personal punch-in/out logs, selfie attendance and GPS tracking", icon: Clock },
   { key: "leaves", label: "Leave Approval Workflow", category: "People", description: "Staff leave applications, vacation approvals and attendance adjustments", icon: CalendarDays },
   { key: "approvals", label: "Daily Summary & Request Approvals", category: "People", description: "Managerial and administrative approvals for daily sheets and requests", icon: BookOpen },
 
@@ -81,10 +88,24 @@ export const RESOURCES: ResourceItem[] = [
   { key: "documents", label: "KYC & Document Vault", category: "Intelligence", description: "Archived customer and staff KYC proof documents and ID scans", icon: FolderOpen },
   { key: "complaints", label: "Customer Complaint Logs", category: "Intelligence", description: "Leakage emergencies, delivery complaints and resolution ticketing", icon: MessageSquarePlus },
 
+  // Customer Portal
+  { key: "customerPortal", label: "Customer Self-Service Portal", category: "Customer Portal", description: "Customer-facing portal access — delivery history, credit balance, complaints and receipts", icon: Globe },
+
   // Enterprise & Security
   { key: "branches", label: "Multi-Branch Support", category: "Enterprise", description: "Branch switches, multi-location godown tracking and agency partitions", icon: Building2 },
+  { key: "billing", label: "Subscription & Billing Plans", category: "Enterprise", description: "Agency subscription tier, payment history and plan upgrades", icon: BadgeDollarSign },
+  { key: "branding", label: "Branding & Theme Configuration", category: "Enterprise", description: "Agency logo, color scheme, receipt branding and UI customization", icon: Palette },
+  { key: "accessManagement", label: "Access & Role Management", category: "Enterprise", description: "RBAC permission matrix, custom roles and staff access control", icon: UserCheck },
   { key: "apiKeys", label: "External Developer API Gateway", category: "Enterprise", description: "API keys, webhook configurations and third-party ERP integrations", icon: KeyRound },
   { key: "security", label: "2FA & Security Audits", category: "Enterprise", description: "Two-factor authentication, login session audit logs and access alerts", icon: ShieldCheck },
+
+  // SuperAdmin Platform Controls
+  { key: "agency", label: "Platform Agencies", category: "SuperAdmin", description: "Create, configure and manage tenant gas agencies on the platform", icon: Building2 },
+  { key: "user", label: "Platform All Users", category: "SuperAdmin", description: "Manage all platform-wide user accounts across agencies", icon: Users },
+  { key: "subscription", label: "Platform Subscriptions", category: "SuperAdmin", description: "Manage agency subscription plans, renewals and feature tiers", icon: BadgeDollarSign },
+  { key: "demoRequests", label: "Platform Demo Requests", category: "SuperAdmin", description: "View and follow up on incoming agency demo requests", icon: MessageSquarePlus },
+  { key: "systemSettings", label: "Platform System Settings", category: "SuperAdmin", description: "Global platform configuration and maintenance controls", icon: Settings },
+  { key: "impersonation", label: "Agency Impersonation", category: "SuperAdmin", description: "Switch into an agency workspace for support and diagnostics", icon: ShieldAlert },
 ];
 
 const CATEGORIES: { key: "ALL" | ModuleCategory; label: string }[] = [
@@ -94,7 +115,9 @@ const CATEGORIES: { key: "ALL" | ModuleCategory; label: string }[] = [
   { key: "Finance", label: "Finance & Banking" },
   { key: "People", label: "People & HR" },
   { key: "Intelligence", label: "Intelligence & Reports" },
+  { key: "Customer Portal", label: "Customer Portal" },
   { key: "Enterprise", label: "Enterprise & Security" },
+  { key: "SuperAdmin", label: "SuperAdmin" },
 ];
 
 const ACTIONS = [
@@ -106,6 +129,8 @@ const ACTIONS = [
 
 const DEFAULT_PERMISSIONS_STATIC: Record<string, Record<string, string[]>> = {
   MANAGER: {
+    dailySheet: ["create", "read", "update"],
+    monthlyRecords: ["create", "read", "update"],
     stock: ["create", "read", "update"],
     inventory: ["create", "read", "update"],
     godown: ["create", "read", "update"],
@@ -113,6 +138,7 @@ const DEFAULT_PERMISSIONS_STATIC: Record<string, Record<string, string[]>> = {
     vehicles: ["create", "read", "update"],
     deliveries: ["create", "read", "update"],
     deliveryPlan: ["create", "read", "update"],
+    deliveryLedger: ["read"],
     customers: ["create", "read", "update"],
     transactions: ["create", "read", "update"],
     commercialSales: ["create", "read", "update"],
@@ -122,12 +148,16 @@ const DEFAULT_PERMISSIONS_STATIC: Record<string, Record<string, string[]>> = {
     products: ["read"],
     accounts: ["read"],
     salaries: ["read"],
+    mySalary: ["read"],
     expenses: ["create", "read"],
+    myExpenses: ["create", "read"],
+    expenseCategories: ["create", "read", "update"],
     companyPayments: ["create", "read", "update"],
     assets: ["create", "read", "update"],
     dailyClosings: ["create", "read", "update"],
     staff: ["read"],
     attendance: ["create", "read", "update"],
+    myAttendance: ["create", "read"],
     leaves: ["create", "read", "update"],
     approvals: ["create", "read", "update"],
     analytics: ["read"],
@@ -135,9 +165,15 @@ const DEFAULT_PERMISSIONS_STATIC: Record<string, Record<string, string[]>> = {
     paymentReceipts: ["create", "read"],
     documents: ["create", "read"],
     complaints: ["create", "read", "update"],
+    customerPortal: ["create", "read", "update"],
     branches: ["read"],
+    billing: ["read"],
+    branding: ["read"],
+    accessManagement: ["read"],
   },
   GODOWN_KEEPER: {
+    dailySheet: ["create", "read", "update"],
+    monthlyRecords: ["create", "read", "update"],
     godown: ["create", "read", "update"],
     stock: ["create", "read", "update"],
     deliveryRequests: ["create", "read", "update"],
@@ -148,8 +184,11 @@ const DEFAULT_PERMISSIONS_STATIC: Record<string, Record<string, string[]>> = {
     approvals: ["read", "update"],
     leaves: ["create", "read"],
     attendance: ["create", "read"],
+    myAttendance: ["create", "read"],
     expenses: ["create", "read"],
+    myExpenses: ["create", "read"],
     salaries: ["read"],
+    mySalary: ["read"],
   },
   CASHIER: {
     customers: ["create", "read", "update"],
@@ -162,12 +201,18 @@ const DEFAULT_PERMISSIONS_STATIC: Record<string, Record<string, string[]>> = {
     stock: ["read"],
     dailyClosings: ["create", "read"],
     expenses: ["create", "read"],
+    myExpenses: ["create", "read"],
     salaries: ["read"],
+    mySalary: ["read"],
     paymentReceipts: ["create", "read"],
+    customerPortal: ["read"],
     attendance: ["create", "read"],
+    myAttendance: ["create", "read"],
     leaves: ["create", "read"],
   },
   STAFF: {
+    dailySheet: ["create", "read", "update"],
+    monthlyRecords: ["create", "read", "update"],
     customers: ["create", "read", "update"],
     transactions: ["create", "read"],
     commercialSales: ["create", "read"],
@@ -177,17 +222,25 @@ const DEFAULT_PERMISSIONS_STATIC: Record<string, Record<string, string[]>> = {
     inventory: ["read"],
     stock: ["create", "read", "update"],
     attendance: ["create", "read"],
+    myAttendance: ["create", "read"],
     leaves: ["create", "read"],
     salaries: ["read"],
+    mySalary: ["read"],
+    myExpenses: ["create", "read"],
     paymentReceipts: ["create", "read"],
+    customerPortal: ["create", "read"],
   },
   DELIVERY_BOY: {
     deliveries: ["read", "update"],
     deliveryRequests: ["create", "read"],
     deliveryPlan: ["read"],
+    deliveryLedger: ["create", "read", "update"],
     attendance: ["create", "read"],
+    myAttendance: ["create", "read"],
+    myExpenses: ["create", "read"],
     leaves: ["create", "read"],
     salaries: ["read"],
+    mySalary: ["read"],
   },
 };
 
@@ -195,7 +248,7 @@ export function RolePermissionsClient() {
   const confirm = useConfirm();
   const [allRoles, setAllRoles] = useState<{ key: string; label: string; baseRole?: string }[]>(ROLES);
   const [activeRole, setActiveRole] = useState<string>("MANAGER");
-  const [dbOverrides, setDbOverrides] = useState<any[]>([]);
+  const [dbOverrides, setDbOverrides] = useState<{ role: string; resource: string; action: string; isAllowed: boolean }[]>([]);
   const [matrixState, setMatrixState] = useState<Record<string, Record<string, Record<string, boolean>>>>({});
   const [isPending, startTransition] = useTransition();
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -208,11 +261,6 @@ export function RolePermissionsClient() {
 
   // Preview Mode State
   const [previewModalOpen, setPreviewModalOpen] = useState(false);
-
-  // Initialize and load overrides
-  useEffect(() => {
-    loadPermissions();
-  }, []);
 
   const loadPermissions = async () => {
     setIsLoading(true);
@@ -227,7 +275,7 @@ export function RolePermissionsClient() {
     setDbOverrides(overrides);
 
     const customRoles = result.customRoles || [];
-    const mappedCustom = customRoles.map((cr: any) => ({
+    const mappedCustom = customRoles.map((cr: { id: string; name: string; baseRole: string }) => ({
       key: cr.id,
       label: cr.name,
       baseRole: cr.baseRole,
@@ -236,7 +284,7 @@ export function RolePermissionsClient() {
     setAllRoles(updatedRoles);
 
     // Build the grid state: Role -> Resource -> Action -> boolean
-    const initialMatrix: any = {};
+    const initialMatrix: Record<string, Record<string, Record<string, boolean>>> = {};
 
     updatedRoles.forEach((r) => {
       initialMatrix[r.key] = {};
@@ -264,6 +312,12 @@ export function RolePermissionsClient() {
     setMatrixState(initialMatrix);
     setIsLoading(false);
   };
+
+  // Initialize and load overrides
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    loadPermissions();
+  }, []);
 
   const handleToggle = (role: string, resource: string, action: string) => {
     setMatrixState((prev) => {
@@ -515,7 +569,7 @@ export function RolePermissionsClient() {
             </div>
             <h2 className="text-xl font-extrabold tracking-tight">Role Access & Permission Management</h2>
             <p className="text-xs text-slate-300 max-w-2xl leading-relaxed">
-              Fine-tune operational access for all system and custom staff roles. Toggle capabilities across all 31 system modules or inspect the live role preview.
+              Fine-tune operational access for all system and custom staff roles. Toggle capabilities across all {RESOURCES.length} system modules or inspect the live role preview.
             </p>
           </div>
 
