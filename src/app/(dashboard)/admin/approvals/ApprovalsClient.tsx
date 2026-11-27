@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useSearchParams } from "next/navigation";
 import { Modal } from "@/components/ui/Modal";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { StatusBadge } from "@/components/ui/StatusBadge";
@@ -160,7 +161,22 @@ export function ApprovalsClient({
   role: string;
   userId: string;
 }) {
-  const [activeTab, setActiveTab] = useState<"daily" | "salary" | "leave" | "expense" | "delivery">("daily");
+  const searchParams = useSearchParams();
+  const validTabs = ["daily", "salary", "leave", "expense", "delivery"] as const;
+  type ApprovalTab = (typeof validTabs)[number];
+  const paramTab = searchParams.get("tab") as ApprovalTab | null;
+  const resolvedParamTab: ApprovalTab | null =
+    paramTab && validTabs.includes(paramTab) ? paramTab : null;
+
+  const [activeTab, setActiveTab] = useState<ApprovalTab>(resolvedParamTab ?? "daily");
+  const [prevParamTab, setPrevParamTab] = useState<ApprovalTab | null>(resolvedParamTab);
+
+  if (resolvedParamTab !== prevParamTab) {
+    setPrevParamTab(resolvedParamTab);
+    if (resolvedParamTab) {
+      setActiveTab(resolvedParamTab);
+    }
+  }
 
   const [summaries, setSummaries]           = useState(initialSummaries);
   const [salaryRequests, setSalaryRequests] = useState(initialSalaryRequests);

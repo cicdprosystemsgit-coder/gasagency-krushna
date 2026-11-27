@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSession, verifySession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { LeaveType } from "@/generated/prisma";
+import { notifyLeaveSubmitted } from "@/app/actions/notifications";
 
 export const dynamic = "force-dynamic";
 
@@ -104,6 +105,14 @@ export async function POST(req: NextRequest) {
       totalDays: days,
       reason: reason.trim(),
     },
+  });
+
+  await notifyLeaveSubmitted({
+    agencyId: session.agencyId,
+    employeeName: session.name || "An employee",
+    leaveType,
+    startDate: start,
+    totalDays: days,
   });
 
   return NextResponse.json({ success: true, data: leave });

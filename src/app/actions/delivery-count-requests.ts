@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import { DeliveryRequestStatus } from "@/generated/prisma";
+import { notifyRolesWithLink, notifyUserWithRoleLink } from "@/app/actions/notifications";
 
 export interface DeliveryCountItemInput {
   productId: string;
@@ -71,6 +72,28 @@ export async function submitDeliveryCountRequest(data: {
     revalidatePath("/manager/godown");
     revalidatePath("/godown-keeper/godown");
 
+    const requesterName = request.requestedBy?.name || session.name || "Delivery Boy";
+    await Promise.all([
+      notifyRolesWithLink({
+        agencyId: session.agencyId,
+        roles: ["ADMIN", "MANAGER"],
+        type: "DELIVERY_REQUEST",
+        title: "New Delivery Load Request",
+        body: `${requesterName} requested ${totalRequested} cylinder(s) for delivery.`,
+        subPath: "/approvals?tab=delivery",
+        excludeUserId: session.userId,
+      }),
+      notifyRolesWithLink({
+        agencyId: session.agencyId,
+        roles: ["GODOWN_KEEPER"],
+        type: "DELIVERY_REQUEST",
+        title: "New Delivery Load Request",
+        body: `${requesterName} requested ${totalRequested} cylinder(s) for delivery.`,
+        subPath: "/delivery-requests",
+        excludeUserId: session.userId,
+      }),
+    ]);
+
     return { success: true, request };
   } catch (error) {
     console.error("[submitDeliveryCountRequest]", error);
@@ -137,7 +160,7 @@ export async function reviewDeliveryCountRequest(
         reviewedAt: new Date(),
       },
       include: {
-        requestedBy: { select: { id: true, name: true, phone: true } },
+        requestedBy: { select: { id: true, name: true, phone: true, role: true } },
         reviewedBy: { select: { id: true, name: true } },
       },
     });
@@ -154,6 +177,17 @@ export async function reviewDeliveryCountRequest(
     revalidatePath("/delivery-boy/delivery-count");
     revalidatePath("/delivery-boy/monthly-report");
     revalidatePath("/delivery-boy");
+
+    const isApproved = action === "APPROVED";
+    await notifyUserWithRoleLink({
+      agencyId: session.agencyId,
+      userId: updated.requestedBy.id,
+      userRole: updated.requestedBy.role,
+      type: isApproved ? "DELIVERY_APPROVED" : "DELIVERY_REJECTED",
+      title: isApproved ? "Delivery Request Approved" : "Delivery Request Rejected",
+      body: `Your request for ${updated.totalRequested} cylinder(s) was ${action.toLowerCase()} by ${session.name || "Manager"}.${!isApproved && reviewNote ? ` Reason: ${reviewNote.trim()}` : ""}`,
+      subPath: "/delivery-count",
+    });
 
     return { success: true, request: updated };
   } catch (error) {
@@ -173,6 +207,18 @@ export async function bulkReviewDeliveryCountRequests(
   }
 
   try {
+    const targets = await prisma.deliveryCountRequest.findMany({
+      where: {
+        id: { in: ids },
+        agencyId: session.agencyId,
+        status: DeliveryRequestStatus.PENDING,
+      },
+      select: {
+        totalRequested: true,
+        requestedBy: { select: { id: true, role: true } },
+      },
+    });
+
     await prisma.deliveryCountRequest.updateMany({
       where: {
         id: { in: ids },
@@ -199,6 +245,21 @@ export async function bulkReviewDeliveryCountRequests(
     revalidatePath("/delivery-boy/delivery-count");
     revalidatePath("/delivery-boy/monthly-report");
     revalidatePath("/delivery-boy");
+
+    const isApproved = action === "APPROVED";
+    await Promise.all(
+      targets.map((t) =>
+        notifyUserWithRoleLink({
+          agencyId: session.agencyId!,
+          userId: t.requestedBy.id,
+          userRole: t.requestedBy.role,
+          type: isApproved ? "DELIVERY_APPROVED" : "DELIVERY_REJECTED",
+          title: isApproved ? "Delivery Request Approved" : "Delivery Request Rejected",
+          body: `Your request for ${t.totalRequested} cylinder(s) was ${action.toLowerCase()} by ${session.name || "Manager"}.${!isApproved && reviewNote ? ` Reason: ${reviewNote.trim()}` : ""}`,
+          subPath: "/delivery-count",
+        })
+      )
+    );
 
     return { success: true, count: ids.length };
   } catch (error) {
@@ -299,7 +360,7 @@ export async function fulfillDeliveryCountRequest(
           fulfilledAt: new Date(),
         },
         include: {
-          requestedBy: { select: { id: true, name: true, phone: true } },
+          requestedBy: { select: { id: true, name: true, phone: true, role: true } },
           fulfilledBy: { select: { id: true, name: true } },
         },
       });
@@ -396,6 +457,16 @@ export async function fulfillDeliveryCountRequest(
     revalidatePath("/delivery-boy/monthly-report");
     revalidatePath("/delivery-boy");
     revalidatePath("/delivery-boy/my-deliveries");
+
+    await notifyUserWithRoleLink({
+      agencyId: session.agencyId,
+      userId: result.requestedBy.id,
+      userRole: result.requestedBy.role,
+      type: "DELIVERY_FULFILLED",
+      title: "Vehicle Loaded & Dispatched",
+      body: `${totalLoaded} cylinder(s) have been loaded into your vehicle by ${session.name || "Godown Keeper"}.`,
+      subPath: "/delivery-count",
+    });
 
     return { success: true, request: result };
   } catch (error) {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession, verifySession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { notifyRolesWithLink } from "@/app/actions/notifications";
 
 export const dynamic = "force-dynamic";
 
@@ -166,6 +167,17 @@ export async function POST(req: NextRequest) {
         submittedAt: new Date().toISOString(),
       },
     },
+  });
+
+  const dateStr = summaryDate.toISOString().split("T")[0];
+  await notifyRolesWithLink({
+    agencyId: session.agencyId,
+    roles: ["ADMIN", "MANAGER"],
+    type: "DAILY_SUMMARY",
+    title: "Daily Closing Submitted",
+    body: `${session.name || "An employee"} submitted daily closing for ${dateStr} (${deliveries.length} deliveries, ₹${totalCash} cash).`,
+    subPath: "/approvals?tab=daily",
+    excludeUserId: session.userId,
   });
 
   return NextResponse.json({ success: true, summary });

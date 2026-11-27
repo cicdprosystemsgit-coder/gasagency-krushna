@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { syncExpenseToPersonalAccount } from "./agency-account-sync";
 import { revalidatePath } from "next/cache";
+import { notifyRolesWithLink, notifyUserWithRoleLink } from "@/app/actions/notifications";
 
 export async function createExpense(formData: FormData) {
   const session = await getSession();
@@ -143,6 +144,18 @@ export async function submitEmployeeExpense(data: {
     revalidatePath("/admin/expense-categories");
     revalidatePath("/admin/approvals");
 
+    if (!isAdmin) {
+      await notifyRolesWithLink({
+        agencyId: session.agencyId,
+        roles: ["ADMIN", "MANAGER"],
+        type: "EXPENSE_REQUEST",
+        title: "New Expense Claim",
+        body: `${expense.submittedBy?.name || session.name || "An employee"} submitted a ₹${data.amount} expense claim (${data.categoryLabel.trim()}).`,
+        subPath: "/approvals?tab=expense",
+        excludeUserId: session.userId,
+      });
+    }
+
     return { expense };
   } catch (err: any) {
     console.error("submitEmployeeExpense error:", err);
@@ -251,6 +264,31 @@ export async function managerReviewEmployeeExpense(
   revalidatePath("/delivery-boy/expenses");
   revalidatePath("/godown-keeper/expenses");
 
+  const isApproved = action === "APPROVE";
+  await notifyUserWithRoleLink({
+    agencyId: session.agencyId,
+    userId: target.submittedById,
+    userRole: updated.submittedBy.role,
+    type: isApproved ? "EXPENSE_APPROVED" : "EXPENSE_REJECTED",
+    title: isApproved ? "Expense Approved by Manager" : "Expense Rejected by Manager",
+    body: isApproved
+      ? `Your ₹${target.amount} expense claim (${target.categoryLabel}) was approved by Manager and sent to Admin.`
+      : `Your ₹${target.amount} expense claim (${target.categoryLabel}) was rejected by Manager.${managerNote?.trim() ? ` Reason: ${managerNote.trim()}` : ""}`,
+    subPath: "/expenses",
+  });
+
+  if (isApproved) {
+    await notifyRolesWithLink({
+      agencyId: session.agencyId,
+      roles: ["ADMIN"],
+      type: "EXPENSE_REQUEST",
+      title: "Expense Ready for Admin Approval",
+      body: `Manager ${session.name || ""} approved ${updated.submittedBy.name}'s ₹${target.amount} expense claim (${target.categoryLabel}).`,
+      subPath: "/approvals?tab=expense",
+      excludeUserId: session.userId,
+    });
+  }
+
   return { expense: updated };
 }
 
@@ -312,6 +350,19 @@ export async function adminReviewEmployeeExpense(
   revalidatePath("/staff/expenses");
   revalidatePath("/delivery-boy/expenses");
   revalidatePath("/godown-keeper/expenses");
+
+  const isApproved = action === "APPROVE";
+  await notifyUserWithRoleLink({
+    agencyId: session.agencyId,
+    userId: target.submittedById,
+    userRole: updated.submittedBy.role,
+    type: isApproved ? "EXPENSE_APPROVED" : "EXPENSE_REJECTED",
+    title: isApproved ? "Expense Claim Approved" : "Expense Claim Rejected",
+    body: isApproved
+      ? `Your ₹${target.amount} expense claim (${target.categoryLabel}) has been approved by Admin.`
+      : `Your ₹${target.amount} expense claim (${target.categoryLabel}) was rejected by Admin.${adminNote?.trim() ? ` Reason: ${adminNote.trim()}` : ""}`,
+    subPath: "/expenses",
+  });
 
   return { expense: updated };
 }

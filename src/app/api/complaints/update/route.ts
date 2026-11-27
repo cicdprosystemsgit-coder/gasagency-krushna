@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { notifyRolesWithLink } from "@/app/actions/notifications";
 
 export async function POST(req: NextRequest) {
   const session = await getSession();
@@ -28,6 +29,19 @@ export async function POST(req: NextRequest) {
       resolvedAt: status === "RESOLVED" ? new Date() : null,
       resolvedById: status === "RESOLVED" ? session.userId : null,
     },
+    include: {
+      customer: { select: { name: true } },
+    },
+  });
+
+  await notifyRolesWithLink({
+    agencyId: session.agencyId,
+    roles: ["ADMIN", "MANAGER"],
+    type: status === "RESOLVED" ? "COMPLAINT_RESOLVED" : "COMPLAINT_RAISED",
+    title: `Complaint ${status.replace(/_/g, " ")}`,
+    body: `Complaint from ${complaint.customer?.name || "Customer"} was marked ${status.replace(/_/g, " ").toLowerCase()} by ${session.name || session.role}.`,
+    subPath: "/complaints",
+    excludeUserId: session.userId,
   });
 
   return NextResponse.json({ complaint });

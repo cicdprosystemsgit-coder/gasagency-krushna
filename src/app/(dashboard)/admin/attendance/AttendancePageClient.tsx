@@ -33,7 +33,7 @@ import {
 } from "@/app/actions/attendance";
 import { generateAttendanceCompliancePDF } from "@/lib/generateAttendanceCompliancePDF";
 import { formatDate } from "@/lib/utils";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { DateNavigationHeader } from "@/components/ui/DateNavigationHeader";
 import { TeamHeatmap } from "@/components/attendance/TeamHeatmap";
 import { AttendanceCalendarAdmin } from "@/components/attendance/AttendanceCalendarAdmin";
@@ -123,7 +123,28 @@ export function AttendancePageClient({
   monthAttendance
 }: Props) {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<"summary" | "map" | "heatmap" | "shifts" | "reports">("summary");
+  const searchParams = useSearchParams();
+
+  type AttendanceTab = "summary" | "map" | "heatmap" | "shifts" | "reports";
+  const resolveTab = (t: string | null): AttendanceTab | null => {
+    if (!t) return null;
+    if (t === "regularization") return "shifts";
+    if (["summary", "map", "heatmap", "shifts", "reports"].includes(t)) {
+      return t as AttendanceTab;
+    }
+    return null;
+  };
+
+  const resolvedParamTab = resolveTab(searchParams.get("tab"));
+  const [activeTab, setActiveTab] = useState<AttendanceTab>(resolvedParamTab ?? "summary");
+  const [prevParamTab, setPrevParamTab] = useState<AttendanceTab | null>(resolvedParamTab);
+
+  if (resolvedParamTab !== prevParamTab) {
+    setPrevParamTab(resolvedParamTab);
+    if (resolvedParamTab) {
+      setActiveTab(resolvedParamTab);
+    }
+  }
 
   // Reports state
   const [reportStartDate, setReportStartDate] = useState(

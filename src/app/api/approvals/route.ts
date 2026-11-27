@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession, verifySession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { notifyLeaveReviewed, notifyUserWithRoleLink } from "@/app/actions/notifications";
 
 export const dynamic = "force-dynamic";
 
@@ -87,16 +88,20 @@ export async function POST(req: NextRequest) {
         reviewedById: session.userId,
         reviewedAt: new Date(),
       },
+      include: {
+        employee: { select: { id: true, role: true } },
+      },
     });
 
-    await prisma.notification.create({
-      data: {
-        agencyId: session.agencyId,
-        userId: updated.employeeId,
-        type: "LEAVE_STATUS",
-        title: `Leave ${status}`,
-        body: `Your leave request for ${updated.startDate.toISOString().split("T")[0]} was ${status.toLowerCase()}.`,
-      },
+    await notifyLeaveReviewed({
+      agencyId: session.agencyId,
+      employeeId: updated.employee.id,
+      employeeRole: updated.employee.role,
+      action: status,
+      startDate: updated.startDate,
+      totalDays: updated.totalDays,
+      reviewNote: note,
+      reviewerName: session.name,
     });
 
     return NextResponse.json({ success: true, updated });
@@ -106,6 +111,7 @@ export async function POST(req: NextRequest) {
     const status = action === "APPROVE" ? "APPROVED" : "REJECTED";
     const reqRecord = await prisma.attendanceRegularization.findUnique({
       where: { id, agencyId: session.agencyId },
+      include: { employee: { select: { role: true } } },
     });
 
     if (!reqRecord) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -145,6 +151,16 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    await notifyUserWithRoleLink({
+      agencyId: session.agencyId,
+      userId: reqRecord.employeeId,
+      userRole: reqRecord.employee.role,
+      type: "ATTENDANCE_REGULARIZATION_STATUS",
+      title: `Regularization Request ${status}`,
+      body: `Your attendance regularization request for ${reqRecord.date.toISOString().split("T")[0]} has been ${status.toLowerCase()}.${note ? ` Note: ${note}` : ""}`,
+      subPath: "/my-attendance",
+    });
+
     return NextResponse.json({ success: true, updated });
   }
 
@@ -157,6 +173,20 @@ export async function POST(req: NextRequest) {
         reviewNote: note || null,
         reviewedById: session.userId,
       },
+      include: {
+        employee: { select: { id: true, role: true } },
+      },
+    });
+
+    const isApproved = status === "APPROVED";
+    await notifyUserWithRoleLink({
+      agencyId: session.agencyId,
+      userId: updated.employee.id,
+      userRole: updated.employee.role,
+      type: isApproved ? "SALARY_APPROVED" : "SALARY_REJECTED",
+      title: isApproved ? "Salary Request Approved" : "Salary Request Rejected",
+      body: `Your ${updated.type.toLowerCase()} request of ₹${updated.amount} was ${status.toLowerCase()}.${note ? ` Note: ${note}` : ""}`,
+      subPath: "/my-salary",
     });
 
     return NextResponse.json({ success: true, updated });

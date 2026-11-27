@@ -1,4 +1,5 @@
-﻿import { getSessionWithFeatures, requireFeature } from "@/lib/feature-gate";
+﻿import { Suspense } from "react";
+import { getSessionWithFeatures, requireFeature } from "@/lib/feature-gate";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getTodayAttendanceSummary } from "@/app/actions/attendance";
@@ -61,13 +62,15 @@ export default async function AttendancePage({ searchParams }: PageProps) {
   });
 
   return (
-    <AttendancePageClient
-      todayData={today.data ?? []}
-      employees={employees}
-      selectedDate={selectedDate}
-      regularizations={JSON.parse(JSON.stringify(regularizations))}
-      shifts={JSON.parse(JSON.stringify(shifts))}
-      monthAttendance={JSON.parse(JSON.stringify(monthAttendance))}
-    />
+    <Suspense fallback={null}>
+      <AttendancePageClient
+        todayData={today.data ?? []}
+        employees={employees}
+        selectedDate={selectedDate}
+        regularizations={JSON.parse(JSON.stringify(regularizations))}
+        shifts={JSON.parse(JSON.stringify(shifts))}
+        monthAttendance={JSON.parse(JSON.stringify(monthAttendance))}
+      />
+    </Suspense>
   );
 }

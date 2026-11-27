@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import { LeaveType, LeaveStatus } from "@/generated/prisma";
+import { notifyLeaveSubmitted, notifyLeaveReviewed } from "@/app/actions/notifications";
 
 export async function applyForLeave(data: {
   leaveType: string;
@@ -48,6 +49,14 @@ export async function applyForLeave(data: {
     include: {
       reviewedBy: { select: { name: true } },
     },
+  });
+
+  await notifyLeaveSubmitted({
+    agencyId: session.agencyId,
+    employeeName: session.name || "An employee",
+    leaveType: data.leaveType,
+    startDate: start,
+    totalDays: data.totalDays,
   });
 
   revalidatePath("/admin/leave-management");
@@ -98,6 +107,17 @@ export async function reviewLeave(
     },
   });
 
+  await notifyLeaveReviewed({
+    agencyId: session.agencyId,
+    employeeId: leave.employee.id,
+    employeeRole: leave.employee.role,
+    action,
+    startDate: leave.startDate,
+    totalDays: leave.totalDays,
+    reviewNote: note,
+    reviewerName: leave.reviewedBy?.name ?? session.name,
+  });
+
   revalidatePath("/admin/leave-management");
   revalidatePath("/manager/leave-management");
   return { leave };
@@ -113,6 +133,15 @@ export async function bulkReviewLeaves(
     return { error: "Unauthorized" };
   }
 
+  const pendingLeaves = await prisma.leaveRequest.findMany({
+    where: { id: { in: ids }, agencyId: session.agencyId, status: "PENDING" },
+    select: {
+      startDate: true,
+      totalDays: true,
+      employee: { select: { id: true, role: true } },
+    },
+  });
+
   await prisma.leaveRequest.updateMany({
     where: { id: { in: ids }, agencyId: session.agencyId, status: "PENDING" },
     data: {
@@ -122,6 +151,21 @@ export async function bulkReviewLeaves(
       reviewedAt: new Date(),
     },
   });
+
+  await Promise.all(
+    pendingLeaves.map((l) =>
+      notifyLeaveReviewed({
+        agencyId: session.agencyId!,
+        employeeId: l.employee.id,
+        employeeRole: l.employee.role,
+        action,
+        startDate: l.startDate,
+        totalDays: l.totalDays,
+        reviewNote: note,
+        reviewerName: session.name,
+      })
+    )
+  );
 
   revalidatePath("/admin/leave-management");
   revalidatePath("/manager/leave-management");

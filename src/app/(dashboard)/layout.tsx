@@ -8,6 +8,8 @@ import { SessionGuard } from "@/components/layout/SessionGuard";
 import { MobileBottomNav } from "@/components/layout/MobileBottomNav";
 import { CylinderLoader } from "@/components/ui/CylinderLoader";
 import { Footer } from "@/components/layout/Footer";
+import { NotificationToast } from "@/components/layout/NotificationToast";
+import { NotificationFab } from "@/components/layout/NotificationFab";
 
 interface SessionData {
   name: string;
@@ -93,6 +95,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* 6-hour inactivity session guard — invisible, purely behavioral */}
       <SessionGuard />
 
+      {/* WhatsApp-style live in-app notification popups + sound */}
+      <NotificationToast />
+
+      {/* Floating chatbot-style notification button with unread badge & arrival highlight */}
+      <NotificationFab />
+
       <Sidebar
         role={session.role}
         userName={session.name}
@@ -116,13 +124,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <main
         className={`transition-all duration-200 ${collapsed ? "ml-0 md:ml-[52px]" : "ml-0 md:ml-[220px]"} min-h-screen flex flex-col justify-between`}
         style={{
-          paddingTop: "var(--app-header-height, 56px)",
+          paddingTop: "var(--app-header-height, 52px)",
         }}
       >
-        <div className="p-3 sm:p-5 lg:p-6 pb-[calc(var(--app-bottom-nav-height,76px)+16px)] md:pb-6 animate-fade-up flex-1">
+        <div className="p-2.5 sm:p-5 lg:p-6 animate-fade-up flex-1">
           {children}
         </div>
-        <Footer className="pb-[calc(var(--app-bottom-nav-height,76px)+8px)] md:pb-4" />
+        <Footer className="pb-[calc(var(--app-bottom-nav-height,60px)+8px)] md:pb-4" />
       </main>
 
       {/* Touch-Friendly Mobile Bottom Navigation Bar */}

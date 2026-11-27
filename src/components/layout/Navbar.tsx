@@ -35,25 +35,25 @@ export function Navbar({ userName, role, renewalAlerts = 0, sidebarCollapsed, on
         borderBottom: "1px solid var(--color-border)",
       }}
     >
-      <div className="flex items-center w-full h-14 md:h-[52px] px-2.5 sm:px-3">
+      <div className="flex items-center w-full h-[52px] px-2 sm:px-3 gap-1">
         {/* Mobile Menu Trigger */}
         {onOpenMobileMenu && (
           <button
             onClick={onOpenMobileMenu}
             type="button"
             aria-label="Open mobile menu"
-            className="md:hidden flex items-center justify-center w-8 h-8 mr-2 rounded-md text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 shrink-0 cursor-pointer active:scale-95 transition-transform"
+            className="md:hidden flex items-center justify-center w-9 h-9 rounded-md text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 shrink-0 cursor-pointer active:scale-95 transition-transform touch-manipulation"
           >
             <Menu className="w-5 h-5" />
           </button>
         )}
 
         {/* Live Global Search */}
-        <div className="flex-1 max-w-md min-w-0 mr-1 sm:mr-0">
+        <div className="flex-1 max-w-md min-w-0">
           <GlobalSearch />
         </div>
 
-        <div className="ml-auto flex items-center gap-1 sm:gap-1.5 shrink-0">
+        <div className="ml-auto flex items-center gap-0.5 sm:gap-1.5 shrink-0">
           {/* Renewal alert chip */}
           {renewalAlerts > 0 && (
             <Link
@@ -105,11 +105,12 @@ export function Navbar({ userName, role, renewalAlerts = 0, sidebarCollapsed, on
                     </p>
                   </div>
                 </Link>
-                <form action={logoutAction} className="hidden sm:block">
+                <form action={logoutAction}>
                   <button
                     type="submit"
                     title="Sign out"
-                    className="flex items-center justify-center w-8 h-8 rounded-md transition-colors hover:bg-red-50 dark:hover:bg-red-950/20 text-zinc-400 hover:text-red-600 cursor-pointer"
+                    aria-label="Sign out"
+                    className="flex items-center justify-center w-8 h-8 rounded-md transition-colors hover:bg-red-50 dark:hover:bg-red-950/20 text-zinc-500 dark:text-zinc-400 hover:text-red-600 cursor-pointer touch-manipulation active:scale-95"
                   >
                     <LogOut className="w-4 h-4" />
                   </button>

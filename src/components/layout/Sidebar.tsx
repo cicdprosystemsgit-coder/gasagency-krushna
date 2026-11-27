@@ -527,7 +527,8 @@ export function Sidebar({
             <button
               onClick={onCloseMobile}
               type="button"
-              className="md:hidden p-1.5 rounded-md text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+              aria-label="Close navigation menu"
+              className="md:hidden flex items-center justify-center min-w-[40px] min-h-[40px] rounded-md text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800 touch-manipulation active:scale-95 transition-transform cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
@@ -601,15 +602,25 @@ export function Sidebar({
             </div>
           )}
           <button
-            onClick={onToggle}
-            className={cn("hidden md:flex nav-item w-full", collapsed && "justify-center px-0")}
-            style={{ height: 30 }}
-            title={collapsed ? t("nav.collapse") : undefined}
+            onClick={() => {
+              if (mobileOpen && onCloseMobile) {
+                onCloseMobile();
+              } else {
+                onToggle();
+              }
+            }}
+            type="button"
+            className={cn("flex nav-item w-full touch-manipulation cursor-pointer", collapsed && !mobileOpen && "justify-center px-0")}
+            style={{ height: 34 }}
+            title={collapsed && !mobileOpen ? t("nav.collapse") : undefined}
           >
-            {collapsed
-              ? <PanelLeft className="w-4 h-4 flex-shrink-0" />
-              : <><PanelLeftClose className="w-4 h-4 flex-shrink-0 nav-icon" /><span className="text-[12px]">{t("nav.collapse")}</span></>
-            }
+            {mobileOpen ? (
+              <><PanelLeftClose className="w-4 h-4 flex-shrink-0 nav-icon" /><span className="text-[12px]">{t("nav.collapse")}</span></>
+            ) : collapsed ? (
+              <PanelLeft className="w-4 h-4 flex-shrink-0" />
+            ) : (
+              <><PanelLeftClose className="w-4 h-4 flex-shrink-0 nav-icon" /><span className="text-[12px]">{t("nav.collapse")}</span></>
+            )}
           </button>
           {(!collapsed || mobileOpen) && (
             <div className="pt-2 text-[10px] text-zinc-400 dark:text-zinc-500 text-center truncate">

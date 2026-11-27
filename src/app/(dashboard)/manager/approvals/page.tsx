@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { getSessionWithFeatures, requireFeature } from "@/lib/feature-gate";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
@@ -77,15 +78,17 @@ export default async function ManagerApprovalsPage() {
         subtitle="Review daily summaries, delivery count loads, salary requests, leave applications & employee expense claims"
         icon={<BookOpen className="w-5 h-5" />}
       />
-      <ApprovalsClient
-        initialSummaries={summaries as any}
-        initialSalaryRequests={salaryRequests as any}
-        initialLeaveRequests={leaveRequests as any}
-        initialEmployeeExpenses={employeeExpenses as any}
-        initialDeliveryRequests={deliveryRequests as any}
-        role={session.role}
-        userId={session.userId}
-      />
+      <Suspense fallback={null}>
+        <ApprovalsClient
+          initialSummaries={summaries as any}
+          initialSalaryRequests={salaryRequests as any}
+          initialLeaveRequests={leaveRequests as any}
+          initialEmployeeExpenses={employeeExpenses as any}
+          initialDeliveryRequests={deliveryRequests as any}
+          role={session.role}
+          userId={session.userId}
+        />
+      </Suspense>
     </div>
   );
 }

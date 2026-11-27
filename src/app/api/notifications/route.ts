@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession, verifySession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { sanitizeNotificationLink } from "@/lib/notification-link";
 
 export const dynamic = "force-dynamic";
 
@@ -25,7 +26,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const [notifications, unreadCount] = await Promise.all([
+  const [rawNotifications, unreadCount] = await Promise.all([
     prisma.notification.findMany({
       where: {
         agencyId: session.agencyId,
@@ -42,6 +43,13 @@ export async function GET(req: NextRequest) {
       },
     }),
   ]);
+
+  const notifications = await Promise.all(
+    rawNotifications.map(async (n) => ({
+      ...n,
+      link: await sanitizeNotificationLink(n.link, session.userId, session.role),
+    }))
+  );
 
   return NextResponse.json({ data: notifications, unreadCount });
 }

@@ -3,6 +3,8 @@
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
+import { notifyRolesWithLink } from "@/app/actions/notifications";
+import { getRoleDashboardPrefix } from "@/lib/notification-link";
 
 // ── Punch In ─────────────────────────────────────────────────────────────────
 export async function punchIn(lat?: number, lng?: number) {
@@ -306,24 +308,16 @@ export async function submitRegularizationRequest(data: {
     },
   });
 
-  // Create notifications for admins
-  const admins = await prisma.user.findMany({
-    where: { agencyId: session.agencyId, role: "ADMIN" },
-    select: { id: true },
+  // Create notifications for admins & managers
+  await notifyRolesWithLink({
+    agencyId: session.agencyId,
+    roles: ["ADMIN", "MANAGER"],
+    type: "ATTENDANCE_REGULARIZATION",
+    title: "New Regularization Request",
+    body: `${session.name || "An employee"} requested regularization for ${data.date}.`,
+    subPath: "/attendance?tab=regularization",
+    excludeUserId: session.userId,
   });
-
-  for (const admin of admins) {
-    await prisma.notification.create({
-      data: {
-        agencyId: session.agencyId,
-        userId: admin.id,
-        type: "ATTENDANCE_REGULARIZATION",
-        title: "New Regularization Request",
-        body: `${session.name || "An employee"} requested regularization for ${data.date}.`,
-        link: "/admin/attendance?tab=regularization",
-      },
-    });
-  }
 
   return { request };
 }
@@ -357,6 +351,7 @@ export async function reviewRegularizationRequest(
 
   const request = await prisma.attendanceRegularization.findUnique({
     where: { id, agencyId: session.agencyId },
+    include: { employee: { select: { role: true } } },
   });
 
   if (!request) return { error: "Request not found" };
@@ -398,6 +393,7 @@ export async function reviewRegularizationRequest(
     }
 
     // Notify employee
+    const empPrefix = getRoleDashboardPrefix(request.employee.role);
     await tx.notification.create({
       data: {
         agencyId: request.agencyId,
@@ -405,7 +401,7 @@ export async function reviewRegularizationRequest(
         type: "ATTENDANCE_REGULARIZATION_STATUS",
         title: `Regularization Request ${status}`,
         body: `Your attendance regularization request for ${request.date.toISOString().split("T")[0]} has been ${status.toLowerCase()}.`,
-        link: "/staff/my-attendance",
+        link: empPrefix ? `${empPrefix}/my-attendance` : null,
       },
     });
 

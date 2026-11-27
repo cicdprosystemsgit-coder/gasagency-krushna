@@ -2,6 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
+import { getRoleDashboardPrefix } from "@/lib/notification-link";
 
 // ─── Create a payment request ────────────────
 
@@ -84,7 +85,7 @@ export async function createSalaryRequest(formData: FormData) {
             type: "SALARY_REQUEST",
             title: "New Salary Request",
             body: `${employee.name} requested a ${type.toLowerCase()} of ₹${amount}`,
-            link: "/manager/approvals",
+            link: "/manager/approvals?tab=salary",
           },
         });
       }
@@ -102,7 +103,7 @@ export async function createSalaryRequest(formData: FormData) {
             type: "SALARY_REQUEST",
             title: "New Salary Request",
             body: `${session.name} requested a ${type.toLowerCase()} of ₹${amount} for ${employee.name}`,
-            link: "/admin/approvals",
+            link: "/admin/approvals?tab=salary",
           },
         });
       }
@@ -157,7 +158,7 @@ export async function managerApproveSalaryRequest(requestId: string, reviewNote?
           type: "SALARY_REQUEST",
           title: "Request Approved by Manager",
           body: `Manager ${session.name} approved ${updated.employee.name}'s request for ${updated.type.toLowerCase()} of ₹${updated.amount}`,
-          link: "/admin/approvals",
+          link: "/admin/approvals?tab=salary",
         },
       });
     }
@@ -169,7 +170,7 @@ export async function managerApproveSalaryRequest(requestId: string, reviewNote?
         type: "SALARY_REQUEST",
         title: "Salary Request Update",
         body: `Your request for ${updated.type.toLowerCase()} of ₹${updated.amount} was approved by Manager and sent to Admin.`,
-        link: "/my-salary",
+        link: `${getRoleDashboardPrefix(updated.employee.role) || "/staff"}/my-salary`,
       },
     });
   } catch (err) {
@@ -216,7 +217,7 @@ export async function managerRejectSalaryRequest(requestId: string, reviewNote: 
         type: "SALARY_REQUEST",
         title: "Salary Request Rejected",
         body: `Your request for ${updated.type.toLowerCase()} of ₹${updated.amount} was rejected by Manager. Reason: ${reviewNote}`,
-        link: "/my-salary",
+        link: `${getRoleDashboardPrefix(updated.employee.role) || "/staff"}/my-salary`,
       },
     });
   } catch (err) {
@@ -416,7 +417,7 @@ export async function approveSalaryRequest(requestId: string) {
         type: "SALARY_REQUEST",
         title: "Salary Request Approved",
         body: `Your request for ${req.type.toLowerCase()} of ₹${req.amount} has been approved and processed.`,
-        link: "/my-salary",
+        link: `${getRoleDashboardPrefix(updated.employee.role) || "/staff"}/my-salary`,
       },
     });
     if (req.managerReviewedById) {
@@ -427,7 +428,7 @@ export async function approveSalaryRequest(requestId: string) {
           type: "SALARY_REQUEST",
           title: "Salary Request Approved",
           body: `${updated.employee.name}'s request for ${updated.type.toLowerCase()} of ₹${updated.amount} has been approved and processed.`,
-          link: "/manager/approvals",
+          link: "/manager/approvals?tab=salary",
         },
       });
     }
@@ -474,7 +475,7 @@ export async function rejectSalaryRequest(requestId: string, reviewNote: string)
         type: "SALARY_REQUEST",
         title: "Salary Request Rejected",
         body: `Your request for ${updated.type.toLowerCase()} of ₹${updated.amount} was rejected by Admin. Reason: ${reviewNote}`,
-        link: "/my-salary",
+        link: `${getRoleDashboardPrefix(updated.employee.role) || "/staff"}/my-salary`,
       },
     });
     if (req.managerReviewedById) {
@@ -485,7 +486,7 @@ export async function rejectSalaryRequest(requestId: string, reviewNote: string)
           type: "SALARY_REQUEST",
           title: "Salary Request Rejected",
           body: `${updated.employee.name}'s request for ${updated.type.toLowerCase()} of ₹${updated.amount} was rejected by Admin. Reason: ${reviewNote}`,
-          link: "/manager/approvals",
+          link: "/manager/approvals?tab=salary",
         },
       });
     }
