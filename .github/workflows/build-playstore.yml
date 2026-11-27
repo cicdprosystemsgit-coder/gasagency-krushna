@@ -43,7 +43,15 @@ jobs:
       - name: Accept Android SDK Licenses & Install Android 36 SDK
         run: |
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
-          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-36" "build-tools;36.0.0" || true
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager \
+            "platforms;android-36" \
+            "build-tools;36.0.0" \
+            "platform-tools" \
+            "ndk-bundle" || true
+          echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
+          echo "SDK installed:"
+          ls $ANDROID_HOME/platforms/ || true
+          ls $ANDROID_HOME/build-tools/ || true
 
       # ─────────────────────────────────────────────
       # AUTO VERSIONING SYSTEM
@@ -91,12 +99,12 @@ jobs:
       - name: Build Debug APK (For Local Phone Testing)
         run: |
           cd android
-          ./gradlew assembleDebug --no-daemon
+          ./gradlew assembleDebug --no-daemon --stacktrace --info 2>&1 | tail -100
 
       - name: Build Release Bundle (AAB for Google Play Store)
         run: |
           cd android
-          ./gradlew bundleRelease --no-daemon
+          ./gradlew bundleRelease --no-daemon --stacktrace --info 2>&1 | tail -150
 
       # ─────────────────────────────────────────────
       # SIGNING — Uses GitHub Secrets
