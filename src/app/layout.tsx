@@ -61,12 +61,6 @@ export default async function RootLayout({
                   document.documentElement.classList.remove('dark');
                 }
               } catch (e) {}
-              try {
-                var isApp = !!(window.Capacitor || /Android.+wv|Version\\/.*Chrome/i.test(navigator.userAgent) || window.matchMedia('(display-mode: standalone)').matches);
-                if (isApp) {
-                  document.documentElement.classList.add('is-capacitor');
-                }
-              } catch (e) {}
             `,
           }}
         />

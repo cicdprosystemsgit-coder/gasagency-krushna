@@ -8,9 +8,9 @@
 :root {
   /* Header & Navigation Sizing */
   --safe-area-top: env(safe-area-inset-top, 0px);
-  --safe-area-bottom: max(14px, env(safe-area-inset-bottom, 14px));
-  --app-header-height: calc(56px + var(--safe-area-top));
-  --app-bottom-nav-height: calc(58px + var(--safe-area-bottom));
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  --app-header-height: calc(52px + var(--safe-area-top));
+  --app-bottom-nav-height: calc(60px + var(--safe-area-bottom));
 
   /* Surface */
   --color-bg:          #F8FAFC; /* Clean, modern Slate 50 background */
@@ -939,15 +939,8 @@ html body { top: 0 !important; }
   min-width: 44px;
 }
 
-html.is-capacitor {
-  --safe-area-top: max(38px, env(safe-area-inset-top, 38px));
-  --safe-area-bottom: max(24px, env(safe-area-inset-bottom, 24px));
-  --app-header-height: calc(56px + var(--safe-area-top));
-  --app-bottom-nav-height: calc(58px + var(--safe-area-bottom));
-}
-
 @media (min-width: 768px) {
-  :root, html.is-capacitor {
+  :root {
     --safe-area-top: 0px;
     --safe-area-bottom: 0px;
     --app-header-height: 52px;
