@@ -4,15 +4,30 @@ on:
   push:
     branches: [ "**" ]
   workflow_dispatch:
+    inputs:
+      version_bump:
+        description: 'Version bump type'
+        required: false
+        default: 'patch'
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
 
 jobs:
   build:
     name: Build Android Hybrid App
     runs-on: ubuntu-latest
+    permissions:
+      contents: write  # Required to push version bump commits and tags
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0       # Full history needed for version calculation
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Node.js 22 (Required by Capacitor 8 CLI)
         uses: actions/setup-node@v4
@@ -30,6 +45,37 @@ jobs:
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
           $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-36" "build-tools;36.0.0" || true
 
+      # ─────────────────────────────────────────────
+      # AUTO VERSIONING SYSTEM
+      # versionCode  = auto-increments on every build
+      # versionName  = reads from package.json
+      # ─────────────────────────────────────────────
+      - name: Calculate Version Numbers
+        id: version
+        run: |
+          # Read current versionCode from build.gradle
+          CURRENT_CODE=$(grep "versionCode " android/app/build.gradle | tr -dc '0-9')
+          NEW_CODE=$((CURRENT_CODE + 1))
+
+          # Read versionName from package.json
+          VERSION_NAME=$(node -p "require('./package.json').version")
+
+          echo "version_code=$NEW_CODE" >> $GITHUB_OUTPUT
+          echo "version_name=$VERSION_NAME" >> $GITHUB_OUTPUT
+          echo "old_code=$CURRENT_CODE" >> $GITHUB_OUTPUT
+
+          echo "📦 versionCode: $CURRENT_CODE → $NEW_CODE"
+          echo "🏷️  versionName: $VERSION_NAME"
+
+      - name: Bump versionCode in build.gradle
+        run: |
+          # Replace versionCode in build.gradle
+          sed -i "s/versionCode ${{ steps.version.outputs.old_code }}/versionCode ${{ steps.version.outputs.version_code }}/" android/app/build.gradle
+          sed -i "s/versionName \".*\"/versionName \"${{ steps.version.outputs.version_name }}\"/" android/app/build.gradle
+
+          echo "✅ Updated build.gradle:"
+          grep -E "versionCode|versionName" android/app/build.gradle
+
       - name: Install Dependencies
         run: |
           npm install --legacy-peer-deps
@@ -45,42 +91,64 @@ jobs:
       - name: Build Debug APK (For Local Phone Testing)
         run: |
           cd android
-          ./gradlew assembleDebug --no-daemon --stacktrace
+          ./gradlew assembleDebug --no-daemon
 
       - name: Build Release Bundle (AAB for Google Play Store)
         run: |
           cd android
-          ./gradlew bundleRelease --no-daemon --stacktrace
+          ./gradlew bundleRelease --no-daemon
 
-      - name: Sign Release AAB (if Keystore Secret is configured)
+      # ─────────────────────────────────────────────
+      # SIGNING — Uses GitHub Secrets
+      # Add KEYSTORE_BASE64, KEYSTORE_PASSWORD,
+      # KEY_ALIAS, KEY_PASSWORD to repo secrets
+      # ─────────────────────────────────────────────
+      - name: Sign Release AAB
         id: sign_aab
         run: |
           AAB_PATH="android/app/build/outputs/bundle/release/app-release.aab"
           if [ -n "${{ secrets.KEYSTORE_BASE64 }}" ]; then
-            echo "Decoding keystore from GitHub Secrets..."
+            echo "🔐 Signing AAB with keystore secret..."
             echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > release-key.jks
             jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 \
               -keystore release-key.jks \
               -storepass "${{ secrets.KEYSTORE_PASSWORD }}" \
               -keypass "${{ secrets.KEY_PASSWORD }}" \
               $AAB_PATH "${{ secrets.KEY_ALIAS }}"
-            echo "AAB signed successfully with repository secret key."
+            echo "signed=true" >> $GITHUB_OUTPUT
+            echo "✅ AAB signed successfully!"
           else
-            echo "Checking for repo release-key.jks..."
-            if [ -f "release-key.jks" ]; then
-              jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 \
-                -keystore release-key.jks \
-                -storepass "gasagency123" \
-                $AAB_PATH "gasagency" || true
-            fi
+            echo "⚠️  No keystore secret found. AAB is unsigned."
+            echo "signed=false" >> $GITHUB_OUTPUT
           fi
+
+      # ─────────────────────────────────────────────
+      # RENAME ARTIFACTS with version in filename
+      # ─────────────────────────────────────────────
+      - name: Rename Artifacts with Version
+        run: |
+          VERSION="${{ steps.version.outputs.version_name }}"
+          CODE="${{ steps.version.outputs.version_code }}"
+
+          # Rename APK
+          APK_SRC="android/app/build/outputs/apk/debug/app-debug.apk"
+          APK_DST="android/app/build/outputs/apk/debug/GasAgency-v${VERSION}-debug.apk"
+          [ -f "$APK_SRC" ] && mv "$APK_SRC" "$APK_DST"
+
+          # Rename AAB
+          AAB_SRC="android/app/build/outputs/bundle/release/app-release.aab"
+          AAB_DST="android/app/build/outputs/bundle/release/GasAgency-v${VERSION}-code${CODE}.aab"
+          [ -f "$AAB_SRC" ] && mv "$AAB_SRC" "$AAB_DST"
+
+          echo "📱 APK: GasAgency-v${VERSION}-debug.apk"
+          echo "📦 AAB: GasAgency-v${VERSION}-code${CODE}.aab"
 
       - name: Upload Debug APK (Test on Phone)
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: GasAgency-Debug-APK
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: GasAgency-v${{ steps.version.outputs.version_name }}-Debug-APK
+          path: android/app/build/outputs/apk/debug/*.apk
           if-no-files-found: ignore
           retention-days: 14
 
@@ -88,7 +156,51 @@ jobs:
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: GasAgency-PlayStore-AAB
-          path: android/app/build/outputs/bundle/release/app-release.aab
+          name: GasAgency-v${{ steps.version.outputs.version_name }}-PlayStore-AAB
+          path: android/app/build/outputs/bundle/release/*.aab
           if-no-files-found: ignore
           retention-days: 30
+
+      # ─────────────────────────────────────────────
+      # COMMIT VERSION BUMP BACK TO REPO
+      # So versionCode stays in sync with git history
+      # ─────────────────────────────────────────────
+      - name: Commit Version Bump
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add android/app/build.gradle
+          git diff --staged --quiet || git commit -m "chore(version): bump versionCode to ${{ steps.version.outputs.version_code }} [skip ci]"
+          git push
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # ─────────────────────────────────────────────
+      # GIT TAG — creates v1.0.0 tag on each release
+      # ─────────────────────────────────────────────
+      - name: Create Git Tag for Release
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/new-full-mearge'
+        run: |
+          VERSION="${{ steps.version.outputs.version_name }}"
+          CODE="${{ steps.version.outputs.version_code }}"
+          TAG="v${VERSION}-build${CODE}"
+
+          git tag -a "$TAG" -m "Release $TAG - Auto build from GitHub Actions"
+          git push origin "$TAG"
+          echo "🏷️  Tagged: $TAG"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build Summary
+        run: |
+          echo "## 🚀 GasAgency Android Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Version Name** | ${{ steps.version.outputs.version_name }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Version Code** | ${{ steps.version.outputs.version_code }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **AAB Signed** | ${{ steps.sign_aab.outputs.signed }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Branch** | ${{ github.ref_name }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Commit** | ${{ github.sha }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Download artifacts above to get your APK and AAB files." >> $GITHUB_STEP_SUMMARY
