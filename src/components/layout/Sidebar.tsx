@@ -581,8 +581,10 @@ export function Sidebar({
           className="flex-shrink-0"
           style={{
             borderTop: "1px solid var(--color-sidebar-border)",
-            padding: collapsed && !mobileOpen ? "8px 6px" : "8px",
-            paddingBottom: mobileOpen ? "max(16px, env(safe-area-inset-bottom, 16px))" : undefined,
+            paddingTop: 8,
+            paddingRight: collapsed && !mobileOpen ? 6 : 8,
+            paddingBottom: mobileOpen ? "max(16px, env(safe-area-inset-bottom, 16px))" : 8,
+            paddingLeft: collapsed && !mobileOpen ? 6 : 8,
           }}
         >
           {(!collapsed || mobileOpen) && (
