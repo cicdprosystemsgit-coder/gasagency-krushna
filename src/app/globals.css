@@ -7,10 +7,10 @@
 /* ─── Design Tokens ─────────────────────────────────────────── */
 :root {
   /* Header & Navigation Sizing */
-  --safe-area-top: env(safe-area-inset-top, 0px);
-  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
-  --app-header-height: calc(52px + var(--safe-area-top));
-  --app-bottom-nav-height: calc(60px + var(--safe-area-bottom));
+  --safe-area-top: 0px;
+  --safe-area-bottom: 0px;
+  --app-header-height: 52px;
+  --app-bottom-nav-height: 60px;
 
   /* Surface */
   --color-bg:          #F8FAFC; /* Clean, modern Slate 50 background */
@@ -937,6 +937,22 @@ html body { top: 0 !important; }
 .touch-target-lg {
   min-height: 44px;
   min-width: 44px;
+}
+
+/* Safe-area insets for both iOS (env()) and Android (JS-injected via MainActivity).
+   --safe-area-top / --safe-area-bottom are set either by JS (Android) or via @supports (iOS).
+   --app-header-height always derives from --safe-area-top so both paths work. */
+@supports (-webkit-touch-callout: none) {
+  /* iOS Safari / WKWebView: use env() */
+  :root {
+    --safe-area-top: env(safe-area-inset-top, 0px);
+    --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  }
+}
+/* Recalculate header/nav heights whenever --safe-area-* change (applies on BOTH iOS and Android) */
+:root {
+  --app-header-height: calc(52px + var(--safe-area-top));
+  --app-bottom-nav-height: calc(60px + var(--safe-area-bottom));
 }
 
 @media (min-width: 768px) {
