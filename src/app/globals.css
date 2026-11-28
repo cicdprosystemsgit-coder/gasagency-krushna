@@ -204,6 +204,80 @@ html {
   overscroll-behavior-x: contain;
 }
 
+/* ─── Mobile Table & Filter Scroll Fixes ──────────────────── */
+/* On mobile: all overflow-x-auto containers get momentum scroll */
+@media (max-width: 767px) {
+  /* Tables: smooth momentum horizontal scroll */
+  .overflow-x-auto,
+  [class*="overflow-x-auto"] {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: none;
+  }
+
+  /* Show thin scrollbar indicator on mobile tables */
+  .overflow-x-auto::-webkit-scrollbar {
+    height: 3px;
+  }
+  .overflow-x-auto::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .overflow-x-auto::-webkit-scrollbar-thumb {
+    background: var(--color-border-2);
+    border-radius: 99px;
+  }
+
+  /* Table cells: prevent text wrapping so columns stay full-width */
+  .table thead th {
+    white-space: nowrap;
+    padding: 8px 12px;
+  }
+  .table tbody td {
+    white-space: nowrap;
+    padding: 8px 12px;
+  }
+
+  /* Filter chip rows: scroll horizontally instead of wrapping */
+  .filter-scroll-row {
+    display: flex;
+    flex-wrap: nowrap !important;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+    gap: 6px;
+    padding-bottom: 4px;
+    scrollbar-width: none; /* hide scrollbar Firefox */
+  }
+  .filter-scroll-row::-webkit-scrollbar {
+    display: none; /* hide scrollbar Chrome/Safari */
+  }
+  .filter-scroll-row > * {
+    flex-shrink: 0; /* prevent chips from squishing */
+  }
+
+  /* Auto-convert any flex-wrap filter rows to scroll rows on mobile */
+  .flex.flex-wrap.gap-1,
+  .flex.flex-wrap.gap-1\.5,
+  .flex.flex-wrap.gap-2 {
+    flex-wrap: nowrap !important;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    padding-bottom: 2px;
+  }
+  .flex.flex-wrap.gap-1::-webkit-scrollbar,
+  .flex.flex-wrap.gap-1\.5::-webkit-scrollbar,
+  .flex.flex-wrap.gap-2::-webkit-scrollbar {
+    display: none;
+  }
+  .flex.flex-wrap.gap-1 > *,
+  .flex.flex-wrap.gap-1\.5 > *,
+  .flex.flex-wrap.gap-2 > * {
+    flex-shrink: 0;
+  }
+}
+
 body {
   background: var(--color-bg);
   color: var(--color-text-primary);
