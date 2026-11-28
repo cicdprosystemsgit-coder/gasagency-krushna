@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "256485996185",
+    "project_id": "gasagency-50daa",
+    "storage_bucket": "gasagency-50daa.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:256485996185:android:5a94335f80aa2847ab6a08",
+        "android_client_info": {
+          "package_name": "com.gasagency.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD96XjOMxcdK4Z2Qh2p1BTdB4TJH-vS2kE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

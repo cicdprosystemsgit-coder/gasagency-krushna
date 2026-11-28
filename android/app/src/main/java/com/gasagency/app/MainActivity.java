@@ -1,5 +1,8 @@
 package com.gasagency.app;
 
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.os.Build;
 import android.os.Bundle;
 import android.view.WindowManager;
 import androidx.core.view.ViewCompat;
@@ -11,6 +14,21 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        // Create Android 8+ notification channel for FCM push notifications
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationChannel channel = new NotificationChannel(
+                "gasagency_alerts",
+                "GasAgency Alerts",
+                NotificationManager.IMPORTANCE_HIGH
+            );
+            channel.setDescription("Delivery, attendance, and agency notifications");
+            channel.enableVibration(true);
+            NotificationManager nm = getSystemService(NotificationManager.class);
+            if (nm != null) {
+                nm.createNotificationChannel(channel);
+            }
+        }
 
         // Let the WebView draw edge-to-edge behind the status bar.
         // We pass the actual inset values to CSS as custom properties instead

@@ -5,6 +5,33 @@ import { getSession } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import { Role } from "@/generated/prisma";
 import { sanitizeNotificationLink, getRoleDashboardPrefix } from "@/lib/notification-link";
+import { sendPushToTokens } from "@/lib/fcm";
+
+/** Fetch all registered FCM tokens for the given user IDs and dispatch push notifications. */
+async function sendPushToUsers(
+  userIds: string[],
+  title: string,
+  body: string,
+  data?: Record<string, string>
+) {
+  if (!userIds.length) return;
+  try {
+    const records = await prisma.userFcmToken.findMany({
+      where: { userId: { in: userIds } },
+      select: { token: true },
+    });
+    if (records.length > 0) {
+      await sendPushToTokens({
+        tokens: records.map((r) => r.token),
+        title,
+        body,
+        data,
+      });
+    }
+  } catch {
+    // Non-critical — never break main notification flow
+  }
+}
 
 // ── Types ────────────────────────────────────────────────────────────────────
 export type NotificationType =
@@ -52,6 +79,7 @@ export async function createNotification({
     await prisma.notification.create({
       data: { agencyId, userId, type, title, body, link: link ?? null },
     });
+    await sendPushToUsers([userId], title, body, { link: link ?? "", type });
   } catch {
     // Silently fail — notifications are non-critical
   }
@@ -138,6 +166,13 @@ export async function notifyAdmins({
       link: link ?? null,
     })),
   });
+
+  await sendPushToUsers(
+    admins.map((a) => a.id),
+    title,
+    body,
+    { link: link ?? "", type }
+  );
 }
 
 // ── Notify Admins & Managers when an employee applies for leave ─────────────
@@ -164,6 +199,9 @@ export async function notifyLeaveSubmitted({
     const dateStr = startDate.toISOString().split("T")[0];
     const readableType = leaveType.replace(/_/g, " ").toLowerCase();
 
+    const title = "New Leave Request";
+    const body = `${employeeName} applied for ${totalDays} day(s) of ${readableType} starting ${dateStr}.`;
+
     await prisma.notification.createMany({
       data: reviewers.map((r) => {
         const prefix = getRoleDashboardPrefix(r.role);
@@ -171,12 +209,19 @@ export async function notifyLeaveSubmitted({
           agencyId,
           userId: r.id,
           type: "LEAVE_REQUEST",
-          title: "New Leave Request",
-          body: `${employeeName} applied for ${totalDays} day(s) of ${readableType} starting ${dateStr}.`,
+          title,
+          body,
           link: prefix ? `${prefix}/approvals?tab=leave` : null,
         };
       }),
     });
+
+    await sendPushToUsers(
+      reviewers.map((r) => r.id),
+      title,
+      body,
+      { link: "/admin/approvals?tab=leave", type: "LEAVE_REQUEST" }
+    );
   } catch {
     // Non-critical
   }
@@ -210,15 +255,24 @@ export async function notifyLeaveReviewed({
     const reasonText =
       !isApproved && reviewNote?.trim() ? ` Reason: ${reviewNote.trim()}` : "";
 
+    const title = isApproved ? "Leave Request Approved" : "Leave Request Rejected";
+    const body = `Your ${totalDays} day(s) leave request from ${dateStr} was ${action.toLowerCase()}${byText}.${reasonText}`;
+    const link = prefix ? `${prefix}/leave-management` : null;
+
     await prisma.notification.create({
       data: {
         agencyId,
         userId: employeeId,
         type: isApproved ? "LEAVE_APPROVED" : "LEAVE_REJECTED",
-        title: isApproved ? "Leave Request Approved" : "Leave Request Rejected",
-        body: `Your ${totalDays} day(s) leave request from ${dateStr} was ${action.toLowerCase()}${byText}.${reasonText}`,
-        link: prefix ? `${prefix}/leave-management` : null,
+        title,
+        body,
+        link,
       },
+    });
+
+    await sendPushToUsers([employeeId], title, body, {
+      link: link ?? "",
+      type: isApproved ? "LEAVE_APPROVED" : "LEAVE_REJECTED",
     });
   } catch {
     // Non-critical
@@ -268,6 +322,13 @@ export async function notifyRolesWithLink({
         };
       }),
     });
+
+    await sendPushToUsers(
+      users.map((u) => u.id),
+      title,
+      body,
+      { link: subPath, type }
+    );
   } catch {
     // Non-critical
   }
@@ -293,6 +354,7 @@ export async function notifyUserWithRoleLink({
 }) {
   try {
     const prefix = getRoleDashboardPrefix(userRole);
+    const link = prefix ? `${prefix}${subPath}` : null;
     await prisma.notification.create({
       data: {
         agencyId,
@@ -300,9 +362,11 @@ export async function notifyUserWithRoleLink({
         type,
         title,
         body,
-        link: prefix ? `${prefix}${subPath}` : null,
+        link,
       },
     });
+
+    await sendPushToUsers([userId], title, body, { link: link ?? "", type });
   } catch {
     // Non-critical
   }

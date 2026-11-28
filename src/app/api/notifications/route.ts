@@ -90,7 +90,7 @@ export async function PATCH(req: NextRequest) {
 /**
  * POST /api/notifications
  * Body: { pushToken: string }
- * Register an Expo push notification token
+ * Register an FCM push notification token for the current user's device
  */
 export async function POST(req: NextRequest) {
   const session = await getAuth(req);
@@ -105,7 +105,22 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "pushToken is required" }, { status: 400 });
   }
 
-  // Create an initial welcome notification if none exists
+  // Upsert FCM token — one token per unique token string per user
+  await prisma.userFcmToken.upsert({
+    where: { token: pushToken },
+    update: {
+      userId: session.userId,
+      agencyId: session.agencyId,
+      updatedAt: new Date(),
+    },
+    create: {
+      token: pushToken,
+      userId: session.userId,
+      agencyId: session.agencyId,
+    },
+  });
+
+  // Create a welcome notification on first registration
   const existingCount = await prisma.notification.count({
     where: { agencyId: session.agencyId, userId: session.userId },
   });
@@ -117,11 +132,11 @@ export async function POST(req: NextRequest) {
         userId: session.userId,
         type: "SYSTEM_WELCOME",
         title: "Mobile App Connected",
-        body: "Your device is now registered to receive alerts and notifications.",
+        body: "Your device is now registered to receive push notifications.",
       },
     });
   }
 
-  return NextResponse.json({ success: true, message: "Push token registered" });
+  return NextResponse.json({ success: true, message: "FCM token registered" });
 }
 

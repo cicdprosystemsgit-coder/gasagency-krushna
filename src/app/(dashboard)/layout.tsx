@@ -10,6 +10,7 @@ import { CylinderLoader } from "@/components/ui/CylinderLoader";
 import { Footer } from "@/components/layout/Footer";
 import { NotificationToast } from "@/components/layout/NotificationToast";
 import { NotificationFab } from "@/components/layout/NotificationFab";
+import { usePushNotifications } from "@/hooks/usePushNotifications";
 
 interface SessionData {
   name: string;
@@ -45,6 +46,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [mobileOpen, setMobileOpen] = useState(false);
   const [session, setSession] = useState<SessionData | null>(null);
   const router = useRouter();
+
+  usePushNotifications();
 
   useEffect(() => {
     fetch("/api/session")
@@ -122,15 +125,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       />
 
       <main
-        className={`transition-all duration-200 ${collapsed ? "ml-0 md:ml-[52px]" : "ml-0 md:ml-[220px]"} min-h-screen flex flex-col justify-between`}
+        className={`transition-all duration-200 ${collapsed ? "ml-0 md:ml-[52px]" : "ml-0 md:ml-[220px]"} min-h-screen flex flex-col justify-between pb-[var(--app-bottom-nav-height,60px)] md:pb-0`}
         style={{
           paddingTop: "var(--app-header-height, 52px)",
         }}
       >
-        <div className="p-2.5 sm:p-5 lg:p-6 animate-fade-up flex-1">
+        <div className="px-2.5 pt-2 pb-3 sm:p-5 lg:p-6 animate-fade-up flex-1">
           {children}
         </div>
-        <Footer className="pb-[calc(var(--app-bottom-nav-height,60px)+8px)] md:pb-4" />
+        <Footer className="hidden md:block md:pb-4" />
       </main>
 
       {/* Touch-Friendly Mobile Bottom Navigation Bar */}
