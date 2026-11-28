@@ -258,6 +258,21 @@ export function BulkImportModal({ open, onClose, onSuccess }: BulkImportModalPro
               <div className="pt-2 border-t border-emerald-200">
                 <p className="text-[11px] font-semibold text-emerald-800 mb-1.5">Sample Parsed Data Preview:</p>
                 <div className="max-h-[140px] overflow-y-auto rounded-lg border border-emerald-200 bg-white text-[11px]">
+                  {/* Mobile Vertical Cards (< 768px) */}
+                  <div className="block md:hidden divide-y divide-zinc-100">
+                    {result.sample.map((s, idx) => (
+                      <div key={`mob-imp-${idx}`} className="p-2.5 flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="font-medium text-zinc-800 truncate">{s.name}</p>
+                          <p className="text-[10px] font-mono text-blue-600">{s.customerCode} · {s.areaRoute || "—"}</p>
+                        </div>
+                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0 ${s.type === "DOMESTIC" ? "bg-blue-50 text-blue-700" : "bg-purple-50 text-purple-700"}`}>
+                          {s.type}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="hidden md:block">
                   <table className="w-full text-left">
                     <thead className="bg-emerald-50 text-emerald-900 sticky top-0 border-b border-emerald-200">
                       <tr>
@@ -282,6 +297,7 @@ export function BulkImportModal({ open, onClose, onSuccess }: BulkImportModalPro
                       ))}
                     </tbody>
                   </table>
+                  </div>
                 </div>
               </div>
             )}

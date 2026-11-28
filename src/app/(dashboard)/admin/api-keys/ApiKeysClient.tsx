@@ -179,6 +179,33 @@ export function ApiKeysClient({ apiKeys: initial, webhooks: initWh }: { apiKeys:
           )}
 
           <div className="card overflow-hidden">
+            {/* Mobile Vertical Cards (< 768px) */}
+            <div className="block md:hidden divide-y divide-zinc-200 dark:divide-zinc-800">
+              {apiKeys.length === 0 ? (
+                <div className="py-10 px-4 text-center text-[13px] text-zinc-400">
+                  <Key className="w-6 h-6 mx-auto mb-2 text-zinc-300" />No API keys yet
+                </div>
+              ) : apiKeys.map((k) => (
+                <div key={`mob-ak-${k.id}`} className="p-3.5 space-y-2 text-xs">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="font-semibold text-[13px] text-zinc-900 dark:text-zinc-100">{k.name}</p>
+                      <code className="text-[11px] px-1.5 py-0.5 rounded bg-zinc-100 text-zinc-800">{k.prefix}…</code>
+                    </div>
+                    <span className="badge shrink-0" style={{ background: k.isActive ? "#DCFCE7" : "#F4F4F5", color: k.isActive ? "#15803D" : "#71717A" }}>
+                      {k.isActive ? "Active" : "Revoked"}
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap gap-1">{k.scopes.map((s) => <span key={s} className="badge badge-blue text-[10px]">{s}</span>)}</div>
+                  <div className="flex items-center justify-between text-[11px] text-zinc-400 pt-1">
+                    <span>Used: {k.lastUsedAt ? new Date(k.lastUsedAt).toLocaleDateString("en-IN") : "Never"}</span>
+                    {k.isActive && <button onClick={() => handleRevoke(k.id)} className="text-[11px] px-2.5 py-1 rounded text-red-600 border border-red-200">Revoke</button>}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="hidden md:block overflow-x-auto">
             <table className="table">
               <thead><tr><th>Name</th><th>Prefix</th><th>Scopes</th><th>Last Used</th><th>Expires</th><th>Status</th><th></th></tr></thead>
               <tbody>
@@ -199,6 +226,7 @@ export function ApiKeysClient({ apiKeys: initial, webhooks: initWh }: { apiKeys:
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
         </>
       )}
@@ -242,6 +270,28 @@ export function ApiKeysClient({ apiKeys: initial, webhooks: initWh }: { apiKeys:
           )}
 
           <div className="card overflow-hidden">
+            {/* Mobile Vertical Cards (< 768px) */}
+            <div className="block md:hidden divide-y divide-zinc-200 dark:divide-zinc-800">
+              {webhooks.length === 0 ? (
+                <div className="py-10 px-4 text-center text-[13px] text-zinc-400">
+                  <Globe className="w-6 h-6 mx-auto mb-2 text-zinc-300" />No webhooks configured
+                </div>
+              ) : webhooks.map((w) => (
+                <div key={`mob-wh-${w.id}`} className="p-3.5 space-y-2 text-xs">
+                  <div className="flex items-start justify-between gap-2">
+                    <code className="text-[11px] text-blue-600 break-all">{w.url}</code>
+                    <span className="badge shrink-0" style={{ background: w.isActive ? "#DCFCE7" : "#F4F4F5", color: w.isActive ? "#15803D" : "#71717A" }}>{w.isActive ? "Active" : "Inactive"}</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1">{w.events.map((e) => <span key={e} className="badge text-[10px]" style={{ background: "#F5F3FF", color: "#6D28D9" }}>{e}</span>)}</div>
+                  <div className="flex items-center justify-between text-[11px] text-zinc-400">
+                    <span>{new Date(w.createdAt).toLocaleDateString("en-IN")}</span>
+                    <button onClick={() => handleDeleteWebhook(w.id)} className="p-1 text-zinc-400 hover:text-red-500"><Trash2 className="w-3.5 h-3.5" /></button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="hidden md:block overflow-x-auto">
             <table className="table">
               <thead><tr><th>URL</th><th>Events</th><th>Status</th><th>Created</th><th></th></tr></thead>
               <tbody>
@@ -260,6 +310,7 @@ export function ApiKeysClient({ apiKeys: initial, webhooks: initWh }: { apiKeys:
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
         </>
       )}

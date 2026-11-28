@@ -408,6 +408,19 @@ export function DeliveryPhotoBackupPanel() {
                   </p>
                 </div>
                 <div className="max-h-52 overflow-y-auto">
+                  {/* Mobile Vertical List (< 768px) */}
+                  <div className="block md:hidden divide-y divide-gray-100">
+                    {previewData.days.map((day) => (
+                      <div key={`mob-bkd-${day.date}`} className="p-2.5 flex items-center justify-between gap-2 text-xs">
+                        <div>
+                          <p className="font-semibold text-gray-800">{fmtDate(day.date)}</p>
+                          <p className="text-[10px] text-gray-500">{day.deliveries} deliveries</p>
+                        </div>
+                        <span className="font-bold text-blue-700">{day.photos} photos</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="hidden md:block overflow-x-auto">
                   <table className="w-full text-xs">
                     <thead className="bg-gray-50 text-gray-500 font-semibold border-b border-gray-200 sticky top-0">
                       <tr>
@@ -436,6 +449,7 @@ export function DeliveryPhotoBackupPanel() {
                       ))}
                     </tbody>
                   </table>
+                  </div>
                 </div>
               </div>
             )}
@@ -730,6 +744,23 @@ export function DeliveryPhotoBackupPanel() {
             </button>
             {showHistory && (
               <div className="rounded-xl border border-gray-200 overflow-hidden text-xs">
+                {/* Mobile Vertical Cards (< 768px) */}
+                <div className="block md:hidden divide-y divide-gray-100">
+                  {backups.slice(0, 10).map((b) => (
+                    <div key={`mob-bkl-${b.id}`} className="p-3 space-y-1 text-xs">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-semibold text-gray-900">{fmtDateTime(b.startedAt)}</span>
+                        <span className="font-bold text-blue-700">{b.totalPhotos} photos</span>
+                      </div>
+                      <p className="text-[11px] text-gray-500">
+                        {new Date(b.fromDate).toLocaleDateString("en-IN", { month: "short", day: "numeric" })} – {new Date(b.toDate).toLocaleDateString("en-IN", { month: "short", day: "numeric" })}
+                        {b.s3Bucket ? ` · S3: ${b.copiedPhotos + b.skippedPhotos}` : ""}
+                        {b.driveEnabled ? ` · Drive: ${b.driveCopiedPhotos + b.driveSkippedPhotos}` : ""}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+                <div className="hidden md:block overflow-x-auto">
                 <table className="w-full text-left">
                   <thead className="bg-gray-50 text-gray-500 font-semibold border-b border-gray-200">
                     <tr>
@@ -816,6 +847,7 @@ export function DeliveryPhotoBackupPanel() {
                     ))}
                   </tbody>
                 </table>
+                </div>
               </div>
             )}
           </div>

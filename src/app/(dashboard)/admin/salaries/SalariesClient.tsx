@@ -345,7 +345,80 @@ function PayrollOverview({
           <h2 className="font-semibold text-slate-700 text-sm">Payroll — {MONTH_NAMES[month - 1]} {year}</h2>
           <span className="ml-auto text-xs text-slate-400">{staff.length} employees</span>
         </div>
-        <div className="overflow-x-auto">
+        {/* Mobile Vertical Cards (< 768px) */}
+        <div className="block md:hidden divide-y divide-slate-100 dark:divide-zinc-800">
+          {employeeSummaries.map(({ emp, profile, baseSalary, salaryPaid, bonusThisMonth, pendingAdvance, deduction, netPayable, isPaid }) => (
+            <div key={`mob-pay-${emp.id}`} className="p-3.5 space-y-2.5 text-xs">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="font-semibold text-sm text-slate-800 dark:text-zinc-100 truncate">{emp.name}</p>
+                  <p className="text-[11px] text-slate-400">
+                    {ROLE_LABELS[emp.role] ?? emp.role}
+                    {!profile && <span className="text-amber-600 ml-1.5 font-medium">· Salary not configured</span>}
+                  </p>
+                </div>
+                {baseSalary === 0 ? (
+                  <span className="text-[11px] px-2.5 py-0.5 rounded-full font-semibold bg-slate-100 text-slate-500 shrink-0">No Profile</span>
+                ) : isPaid ? (
+                  <span className="text-[11px] px-2.5 py-0.5 rounded-full font-semibold bg-green-100 text-green-700 shrink-0">Paid</span>
+                ) : salaryPaid > 0 ? (
+                  <span className="text-[11px] px-2.5 py-0.5 rounded-full font-semibold bg-yellow-100 text-yellow-700 shrink-0">Partial</span>
+                ) : (
+                  <span className="text-[11px] px-2.5 py-0.5 rounded-full font-semibold bg-red-100 text-red-600 shrink-0">Pending</span>
+                )}
+              </div>
+
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <p className="text-[10px] uppercase text-slate-400">Base</p>
+                  <p className="font-medium text-slate-800 dark:text-zinc-200">{baseSalary > 0 ? formatCurrency(baseSalary) : "—"}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase text-slate-400">Paid</p>
+                  <p className="font-medium text-green-700">{salaryPaid > 0 ? formatCurrency(salaryPaid) : "—"}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase text-slate-400">Remaining</p>
+                  <p className={`font-bold ${netPayable > 0 ? "text-blue-700" : "text-slate-400"}`}>
+                    {baseSalary > 0 ? formatCurrency(Math.max(0, netPayable)) : "—"}
+                  </p>
+                </div>
+                {bonusThisMonth > 0 && (
+                  <div>
+                    <p className="text-[10px] uppercase text-slate-400">Bonus</p>
+                    <p className="font-medium text-purple-700">+{formatCurrency(bonusThisMonth)}</p>
+                  </div>
+                )}
+                {deduction > 0 && (
+                  <div>
+                    <p className="text-[10px] uppercase text-slate-400">Deduction</p>
+                    <p className="font-medium text-rose-600">-{formatCurrency(deduction)}</p>
+                  </div>
+                )}
+                {pendingAdvance > 0 && (
+                  <div>
+                    <p className="text-[10px] uppercase text-slate-400">Advance Bal.</p>
+                    <p className="font-medium text-red-600">{formatCurrency(pendingAdvance)}</p>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex justify-end pt-1">
+                <button
+                  onClick={() => setPayModal(emp)}
+                  className={`inline-flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg transition ${
+                    isAdmin ? "text-blue-700 bg-blue-50" : "text-amber-700 bg-amber-50"
+                  }`}
+                >
+                  {isAdmin ? <Plus className="w-3.5 h-3.5" /> : <Send className="w-3.5 h-3.5" />}
+                  {isAdmin ? "Pay" : "Request"}
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-100">
@@ -658,7 +731,7 @@ function SalaryHistory({ drawings, staff, isAdmin, month, year, onDelete }: {
 
   return (
     <>
-      <div className="grid grid-cols-4 gap-3 mb-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
         {[
           { label: "Salaries", amount: totals.salary, color: "text-blue-700" },
           { label: "Drawings", amount: totals.drawing, color: "text-orange-600" },
@@ -697,7 +770,38 @@ function SalaryHistory({ drawings, staff, isAdmin, month, year, onDelete }: {
         <span className="ml-auto text-sm text-slate-500 self-center">{filtered.length} records</span>
       </div>
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
+        {/* Mobile Vertical Cards (< 768px) */}
+        <div className="block md:hidden divide-y divide-slate-100 dark:divide-zinc-800">
+          {filtered.length === 0 ? (
+            <div className="px-5 py-12 text-center">
+              <Wallet className="w-10 h-10 mx-auto mb-3 text-slate-300" />
+              <p className="text-slate-400 text-xs">No records for selected filters</p>
+            </div>
+          ) : filtered.map((d) => (
+            <div key={`mob-disb-${d.id}`} className="p-3.5 space-y-2 text-xs">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="font-semibold text-sm text-slate-800 dark:text-zinc-100 truncate">{d.employee.name}</p>
+                  <p className="text-[11px] text-slate-400">{formatDate(d.date)} · {MONTHS[d.month - 1]} {d.year}</p>
+                </div>
+                <p className="font-bold text-sm text-slate-800 dark:text-zinc-100 shrink-0">{formatCurrency(d.amount)}</p>
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <span className={`text-[11px] px-2.5 py-0.5 rounded-full font-semibold ${TYPE_COLORS[d.type] ?? "bg-slate-100 text-slate-600"}`}>
+                  {d.type.replace(/_/g, " ")}
+                </span>
+                {isAdmin && (
+                  <button onClick={() => handleDelete(d.id)} disabled={isPending} className="p-1.5 rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600">
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+              {d.remarks && <p className="text-[11px] text-slate-500 break-words">{d.remarks}</p>}
+            </div>
+          ))}
+        </div>
+
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-100">
@@ -788,7 +892,7 @@ function AdvancesTab({ advances, staff, isAdmin, onAdvanceAdded, onAdvanceUpdate
 
   return (
     <>
-      <div className="grid grid-cols-3 gap-4 mb-5">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-5">
         <div className="bg-white rounded-xl border border-slate-100 shadow-sm px-4 py-3">
           <p className="text-xs text-slate-500">Total Outstanding</p>
           <p className="text-xl font-bold text-red-600">{formatCurrency(totalOutstanding)}</p>
@@ -823,7 +927,62 @@ function AdvancesTab({ advances, staff, isAdmin, onAdvanceAdded, onAdvanceUpdate
         </button>
       </div>
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
+        {/* Mobile Vertical Cards (< 768px) */}
+        <div className="block md:hidden divide-y divide-slate-100 dark:divide-zinc-800">
+          {filtered.length === 0 ? (
+            <div className="px-5 py-12 text-center">
+              <ArrowDownCircle className="w-10 h-10 mx-auto mb-3 text-slate-300" />
+              <p className="text-slate-400 text-xs">No advances found</p>
+            </div>
+          ) : filtered.map((a) => (
+            <div key={`mob-adv-${a.id}`} className="p-3.5 space-y-2.5 text-xs">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="font-semibold text-sm text-slate-800 dark:text-zinc-100 truncate">{a.employee.name}</p>
+                  <p className="text-[11px] text-slate-400">{ROLE_LABELS[a.employee.role] ?? a.employee.role} · {formatDate(a.advanceDate)}</p>
+                </div>
+                <span className={`text-[11px] px-2.5 py-0.5 rounded-full font-semibold shrink-0 ${ADVANCE_STATUS_COLORS[a.status] ?? "bg-slate-100 text-slate-600"}`}>
+                  {a.status}
+                </span>
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <p className="text-[10px] uppercase text-slate-400">Advance</p>
+                  <p className="font-semibold text-slate-800 dark:text-zinc-200">{formatCurrency(a.amount)}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase text-slate-400">Recovered</p>
+                  <p className="font-semibold text-green-700">{formatCurrency(a.recoveredAmount)}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase text-slate-400">Balance</p>
+                  <p className="font-bold text-red-600">{a.status === "RECOVERED" ? "—" : formatCurrency(a.balanceAmount)}</p>
+                </div>
+              </div>
+              {a.reason && <p className="text-[11px] text-slate-500 break-words">{a.reason}</p>}
+              <div className="flex items-center justify-end gap-2 pt-1">
+                {a.status !== "RECOVERED" && (
+                  <button
+                    onClick={() => setRecoverModal(a)}
+                    className={`inline-flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg ${
+                      isAdmin ? "text-emerald-700 bg-emerald-50" : "text-amber-700 bg-amber-50"
+                    }`}
+                  >
+                    {isAdmin ? <RotateCcw className="w-3 h-3" /> : <Send className="w-3 h-3" />}
+                    {isAdmin ? "Recover" : "Request"}
+                  </button>
+                )}
+                {isAdmin && a.recoveredAmount === 0 && (
+                  <button onClick={() => handleDelete(a.id)} disabled={isPending} className="p-1.5 rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600">
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-100">
@@ -1146,7 +1305,35 @@ function BonusesTab({ bonuses, staff, isAdmin, month, year, onBonusAdded, onBonu
         </button>
       </div>
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
+        {/* Mobile Vertical Cards (< 768px) */}
+        <div className="block md:hidden divide-y divide-slate-100 dark:divide-zinc-800">
+          {filtered.length === 0 ? (
+            <div className="px-5 py-12 text-center">
+              <Gift className="w-10 h-10 mx-auto mb-3 text-slate-300" />
+              <p className="text-slate-400 text-xs">No bonuses found</p>
+            </div>
+          ) : filtered.map((b) => (
+            <div key={`mob-bon-${b.id}`} className="p-3.5 space-y-2 text-xs">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="font-semibold text-sm text-slate-800 dark:text-zinc-100 truncate">{b.employee.name}</p>
+                  <p className="text-[11px] text-slate-400">{MONTHS[b.month - 1]} {b.year} · {formatDate(b.bonusDate)}</p>
+                </div>
+                <p className="font-bold text-sm text-purple-700 shrink-0">{formatCurrency(b.amount)}</p>
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-[11px] text-slate-500 break-words">{b.reason ?? b.remarks ?? "—"}</p>
+                {isAdmin && (
+                  <button onClick={() => handleDelete(b.id)} disabled={isPending} className="p-1.5 rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600 shrink-0">
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-100">
@@ -1336,7 +1523,44 @@ function SalaryProfilesTab({ profiles, staff, isAdmin, onProfileUpdated }: {
         )}
       </div>
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
+        {/* Mobile Vertical Cards (< 768px) */}
+        <div className="block md:hidden divide-y divide-slate-100 dark:divide-zinc-800">
+          {staff.filter((s) => s.role !== "SYSTEM_ADMIN").map((emp) => {
+            const p = profileMap[emp.id];
+            return (
+              <div key={`mob-prof-${emp.id}`} className="p-3.5 space-y-2 text-xs">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="font-semibold text-sm text-slate-800 dark:text-zinc-100 truncate">{emp.name}</p>
+                    <p className="text-[11px] text-slate-400">
+                      {ROLE_LABELS[emp.role] ?? emp.role} · <span className={emp.isActive ? "text-green-600" : "text-slate-400"}>{emp.isActive ? "Active" : "Inactive"}</span>
+                    </p>
+                  </div>
+                  {p ? (
+                    <span className="font-bold text-sm text-blue-700 shrink-0">{formatCurrency(p.monthlySalary)}</span>
+                  ) : (
+                    <span className="text-amber-600 text-xs font-semibold shrink-0">Not Set</span>
+                  )}
+                </div>
+                {p && (
+                  <div className="flex items-center justify-between text-[11px] text-slate-400">
+                    <span>Effective: {formatDate(p.effectiveFrom)}</span>
+                    {p.notes && <span className="truncate max-w-[160px]">{p.notes}</span>}
+                  </div>
+                )}
+                {isAdmin && (
+                  <div className="flex justify-end pt-1">
+                    <button onClick={() => setEditModal(emp)} className="inline-flex items-center gap-1 text-xs font-semibold text-slate-700 bg-slate-100 px-3 py-1.5 rounded-lg">
+                      <Settings className="w-3.5 h-3.5" /> {p ? "Edit" : "Set Salary"}
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-100">
@@ -1503,7 +1727,7 @@ function ApprovalsTab({ requests, isAdmin, onRequestUpdated }: {
   return (
     <>
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-4 mb-5">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-5">
         <div className="bg-white rounded-xl border border-slate-100 shadow-sm px-4 py-3 flex items-center gap-3">
           <div className="p-2 bg-amber-50 rounded-lg"><Clock className="w-5 h-5 text-amber-600" /></div>
           <div>
@@ -1557,7 +1781,40 @@ function ApprovalsTab({ requests, isAdmin, onRequestUpdated }: {
       )}
 
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
+        {/* Mobile Vertical Cards (< 768px) */}
+        <div className="block md:hidden divide-y divide-slate-100 dark:divide-zinc-800">
+          {filtered.length === 0 ? (
+            <div className="px-5 py-12 text-center">
+              <ShieldCheck className="w-10 h-10 mx-auto mb-3 text-slate-300" />
+              <p className="text-slate-400 text-xs">
+                {filterStatus === "PENDING" ? "No pending requests — all caught up!" : "No requests found"}
+              </p>
+            </div>
+          ) : filtered.map((r) => (
+            <div key={`mob-sreq-${r.id}`} className={`p-3.5 space-y-2.5 text-xs ${r.status === "PENDING" || r.status === "MANAGER_APPROVED" ? "bg-amber-50/30 dark:bg-amber-950/10" : ""}`}>
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="font-semibold text-sm text-slate-800 dark:text-zinc-100 truncate">{r.employee.name}</p>
+                  <p className="text-[11px] text-slate-400">{ROLE_LABELS[r.employee.role] ?? r.employee.role} · {formatDate(r.createdAt)}</p>
+                </div>
+                <p className="font-bold text-sm text-slate-800 dark:text-zinc-100 shrink-0">{formatCurrency(r.amount)}</p>
+              </div>
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <span className={`text-[11px] px-2.5 py-0.5 rounded-full font-semibold ${TYPE_COLORS[r.type] ?? "bg-slate-100 text-slate-600"}`}>
+                  {r.type.replace(/_/g, " ")} {r.month && r.year ? `· ${MONTHS[r.month - 1]} ${r.year}` : ""}
+                </span>
+                <span className={`text-[11px] px-2.5 py-0.5 rounded-full font-semibold ${REQUEST_STATUS_COLORS[r.status] ?? "bg-slate-100 text-slate-600"}`}>
+                  {r.status === "PENDING" ? "⏳ Pending Manager" : r.status === "MANAGER_APPROVED" ? "⏳ Manager Approved" : r.status === "APPROVED" ? "✓ Approved" : "✗ Rejected"}
+                </span>
+              </div>
+              {r.remarks && <p className="text-[11px] text-slate-500 break-words">{r.remarks}</p>}
+              {r.managerReviewNote && <p className="text-[11px] text-amber-700 font-medium">Manager Reason: {r.managerReviewNote}</p>}
+              {r.status === "REJECTED" && r.reviewNote && <p className="text-[11px] text-red-600 font-medium">Admin Reason: {r.reviewNote}</p>}
+            </div>
+          ))}
+        </div>
+
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-100">

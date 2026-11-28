@@ -167,7 +167,7 @@ export function GodownInventoryClient({ initialMovements, products, userId }: {
       </div>
 
       {/* KPI strip */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {[
           { label: "Products Tracked", value: stock.length, icon: <Boxes className="w-4 h-4" />, bg: "#EFF6FF", color: "#2563EB" },
           { label: "Total Received", value: movements.filter(m => m.moveType === "RECEIVED").reduce((a, m) => a + m.qty, 0), icon: <TrendingDown className="w-4 h-4" />, bg: "#F0FDF4", color: "#16A34A" },
@@ -206,6 +206,31 @@ export function GodownInventoryClient({ initialMovements, products, userId }: {
               <p className="text-[13px] font-semibold" style={{ color: "#18181B" }}>Current Stock — All Products</p>
               <p className="text-[11px] mt-0.5" style={{ color: "#A1A1AA" }}>Net available = total received − dispatched to office</p>
             </div>
+            {/* Mobile Vertical Cards (< 768px) */}
+            <div className="block md:hidden divide-y divide-zinc-100 dark:divide-zinc-800">
+              {stock.map((s) => (
+                <div key={`mob-stk-${s.id}`} className="p-3.5 space-y-2 text-xs">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="w-7 h-7 rounded-md flex items-center justify-center shrink-0" style={{ background: "#EFF6FF" }}>
+                        <Package className="w-3.5 h-3.5" style={{ color: "#2563EB" }} />
+                      </div>
+                      <span className="font-semibold text-zinc-900 dark:text-zinc-100 truncate">{s.name}</span>
+                    </div>
+                    <span className="inline-flex px-2.5 py-0.5 rounded-full font-bold text-xs shrink-0"
+                      style={{ background: s.available > 0 ? "#F0FDF4" : "#FEF2F2", color: s.available > 0 ? "#15803D" : "#B91C1C" }}>
+                      {s.available} avail
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div><p className="text-[10px] text-zinc-400">Received</p><p className="font-bold text-blue-600">{s.received}</p></div>
+                    <div><p className="text-[10px] text-zinc-400">Dispatched</p><p className="font-bold text-purple-600">{s.dispatched}</p></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="hidden md:block overflow-x-auto">
             <table className="w-full">
               <thead>
                 <tr style={{ background: "#FAFAFA", borderBottom: "1px solid #F4F4F5" }}>
@@ -237,6 +262,7 @@ export function GodownInventoryClient({ initialMovements, products, userId }: {
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
         )
       )}
@@ -253,7 +279,33 @@ export function GodownInventoryClient({ initialMovements, products, userId }: {
             <div className="px-5 py-3.5" style={{ borderBottom: "1px solid #F4F4F5" }}>
               <p className="text-[13px] font-semibold" style={{ color: "#18181B" }}>All Movements ({movements.length})</p>
             </div>
-            <div className="overflow-x-auto">
+            {/* Mobile Vertical Cards (< 768px) */}
+            <div className="block md:hidden divide-y divide-zinc-100 dark:divide-zinc-800">
+              {movements.map((m) => (
+                <div key={`mob-mov-${m.id}`} className="p-3.5 space-y-1.5 text-xs">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="font-semibold text-zinc-900 dark:text-zinc-100 truncate">{m.product.name}</p>
+                      <p className="text-[11px] text-zinc-400">{fmtDate(m.date)} · {fmtTime(m.date)}</p>
+                    </div>
+                    <span className="font-bold text-sm shrink-0" style={{ color: m.moveType === "RECEIVED" ? "#2563EB" : "#7C3AED" }}>
+                      {m.moveType === "RECEIVED" ? "+" : "-"}{m.qty}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-[11px] text-zinc-500">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold"
+                      style={m.moveType === "RECEIVED" ? { background: "#EFF6FF", color: "#1D4ED8" } : { background: "#F0FDF4", color: "#15803D" }}>
+                      {m.moveType === "RECEIVED" ? "↓ Received" : "↑ To Office"}
+                    </span>
+                    <span>{m.invoiceNo ? `Inv: ${m.invoiceNo}` : m.batchNo ? `Batch: ${m.batchNo}` : ""}</span>
+                  </div>
+                  {m.notes && <p className="text-[11px] text-zinc-400 break-words">{m.notes}</p>}
+                </div>
+              ))}
+            </div>
+
+            <div className="hidden md:block overflow-x-auto">
+              <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
                   <tr style={{ background: "#FAFAFA", borderBottom: "1px solid #F4F4F5" }}>

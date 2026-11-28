@@ -198,7 +198,61 @@ export function DailyClosingEmployeePanel({
             <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">
               Cylinder Sales Breakdown
             </h4>
-            <div className="overflow-x-auto rounded-xl border border-slate-100">
+            {/* Mobile Vertical Cards (< 768px) */}
+            <div className="block md:hidden divide-y divide-slate-100 dark:divide-zinc-800 rounded-xl border border-slate-100 dark:border-zinc-800">
+              {employee.cylinderBreakdown.length === 0 ? (
+                <div className="px-4 py-6 text-center text-slate-400 text-xs">No sales recorded for this date</div>
+              ) : (
+                employee.cylinderBreakdown.map((item) => (
+                  <div key={`mob-dcep-${item.productId}_${item.baseRate}`} className="p-3 space-y-2 text-xs">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <p className="font-semibold text-slate-700 dark:text-zinc-100">{item.productName}</p>
+                        <p className="text-[10px] text-slate-400">Base Rate: {formatCurrency(item.baseRate)}</p>
+                      </div>
+                      <p className="font-black text-slate-800 dark:text-zinc-100">{formatCurrency(item.totalAmt)}</p>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 items-center">
+                      <div>
+                        <p className="text-[10px] text-slate-400 mb-0.5">Qty Sold</p>
+                        {readOnly ? (
+                          <span className="font-bold text-slate-800 dark:text-zinc-200">{item.soldQty}</span>
+                        ) : (
+                          <input
+                            type="number"
+                            min="0"
+                            value={item.soldQty}
+                            onChange={(e) => handleSoldQtyChange(item.productId, item.baseRate, e.target.value)}
+                            className="w-full text-center px-1.5 py-1 border border-slate-200 rounded-lg font-bold text-slate-800 bg-slate-50/30"
+                          />
+                        )}
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-slate-400 mb-0.5">Km Rate (₹)</p>
+                        {readOnly ? (
+                          <span className="font-bold text-slate-800 dark:text-zinc-200">{formatCurrency(item.kmRate)}</span>
+                        ) : (
+                          <input
+                            type="number"
+                            min={item.baseRate}
+                            step="0.01"
+                            value={item.kmRate || ""}
+                            onChange={(e) => handleKmRateChange(item.productId, item.baseRate, e.target.value)}
+                            className="w-full text-right px-2 py-1 border border-slate-200 rounded-lg font-bold text-slate-800 bg-slate-50/30"
+                          />
+                        )}
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[10px] text-slate-400 mb-0.5">Km Extra</p>
+                        <span className="text-amber-700 font-medium">{item.kmExtra > 0 ? `+${formatCurrency(item.kmExtra)}` : "—"}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="hidden md:block overflow-x-auto rounded-xl border border-slate-100">
               <table className="w-full text-xs text-left">
                 <thead>
                   <tr className="bg-slate-50/50 border-b border-slate-100 text-slate-500 font-bold uppercase text-[10px]">

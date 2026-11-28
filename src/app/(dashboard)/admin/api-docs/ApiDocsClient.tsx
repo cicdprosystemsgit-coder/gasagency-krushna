@@ -300,6 +300,16 @@ function verifyWebhook(rawBody, signature, secret) {
       {/* Scopes */}
       {tab === "scopes" && (
         <div className="card overflow-hidden">
+          {/* Mobile Vertical Cards (< 768px) */}
+          <div className="block md:hidden divide-y divide-zinc-200 dark:divide-zinc-800">
+            {SCOPES.map(({ scope, desc }) => (
+              <div key={`mob-sc-${scope}`} className="p-3.5 space-y-1 text-xs">
+                <code className="font-mono text-[11px] px-2 py-0.5 rounded inline-block" style={{ background: "#F5F3FF", color: "#6D28D9" }}>{scope}</code>
+                <p className="text-zinc-600 dark:text-zinc-300">{desc}</p>
+              </div>
+            ))}
+          </div>
+          <div className="hidden md:block overflow-x-auto">
           <table className="table">
             <thead><tr><th>Scope</th><th>Description</th></tr></thead>
             <tbody>
@@ -311,6 +321,7 @@ function verifyWebhook(rawBody, signature, secret) {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 

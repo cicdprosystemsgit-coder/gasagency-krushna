@@ -381,7 +381,24 @@ export function DeliveryBoyClosingClient({
           <h4 className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-3">
             Cylinder Sales Breakdown for {formatDate(selectedDate)}
           </h4>
-          <div className="overflow-x-auto rounded-xl border border-zinc-100">
+          {/* Mobile Vertical Breakdown (< 768px) */}
+          <div className="block md:hidden space-y-2">
+            {todayData.products.length === 0 ? (
+              <div className="py-5 text-center text-xs text-zinc-400">No deliveries recorded for this date</div>
+            ) : (
+              todayData.products.map((p) => (
+                <div key={`mob-prod-${p.productId}_${p.baseRate}`} className="flex items-center justify-between gap-2 p-2.5 rounded-xl border border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/40 text-xs">
+                  <div className="min-w-0">
+                    <p className="font-semibold text-zinc-800 dark:text-zinc-100 truncate">{p.productName}</p>
+                    <p className="text-[11px] text-zinc-400">{p.soldQty} cyl × {formatCurrency(p.baseRate)}</p>
+                  </div>
+                  <p className="font-bold text-zinc-900 dark:text-zinc-100 shrink-0">{formatCurrency(p.totalAmt)}</p>
+                </div>
+              ))
+            )}
+          </div>
+
+          <div className="hidden md:block overflow-x-auto rounded-xl border border-zinc-100">
             <table className="w-full text-xs text-left">
               <thead>
                 <tr className="bg-zinc-50 text-zinc-500 font-bold uppercase text-[10px]">
@@ -561,7 +578,69 @@ export function DeliveryBoyClosingClient({
           </p>
         </div>
 
-        <div className="overflow-x-auto">
+        {/* Mobile Vertical Cards (< 768px) */}
+        <div className="block md:hidden divide-y divide-zinc-100 dark:divide-zinc-800">
+          {closings.length === 0 ? (
+            <div className="px-5 py-12 text-center text-zinc-400 text-xs">
+              <ClipboardCheck className="w-8 h-8 mx-auto mb-2 text-zinc-300" />
+              No past closing records found
+            </div>
+          ) : (
+            closings.map((c) => (
+              <div key={`mob-cls-${c.id}`} className="p-3.5 space-y-2.5 text-xs">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <p className="font-bold text-zinc-800 dark:text-zinc-100 text-[13px]">{formatDate(c.date)}</p>
+                    <p className="text-[11px] text-zinc-400">{c.totalDelivered} delivered</p>
+                  </div>
+                  {c.status === "APPROVED" || c.submissionStatus === "APPROVED" ? (
+                    <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">✓ Confirmed by Admin</span>
+                  ) : c.submissionStatus === "VERIFIED_BY_MANAGER" || c.cashVerified ? (
+                    <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-purple-100 text-purple-800">Verified by Manager</span>
+                  ) : (
+                    <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800">Submitted to Manager</span>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <p className="text-[10px] uppercase text-zinc-400">Cash Given</p>
+                    <p className="font-black text-blue-700">{formatCurrency(c.actualCashGiven)}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase text-zinc-400">Online</p>
+                    <p className="font-bold text-purple-700">{formatCurrency(c.onlineAmount)}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase text-zinc-400">Udhari</p>
+                    <p className="font-bold text-amber-700">{formatCurrency(c.udhariAmount)}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase text-zinc-400">Shortage / Excess</p>
+                    {c.shortageAmount > 0 ? (
+                      <p className="font-bold text-rose-600">-{formatCurrency(c.shortageAmount)} (Udhari)</p>
+                    ) : c.excessAmount > 0 ? (
+                      <p className="font-bold text-emerald-600">+{formatCurrency(c.excessAmount)}</p>
+                    ) : (
+                      <p className="text-zinc-400">Balanced</p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex justify-end pt-1">
+                  <button
+                    onClick={() => setDetailClosing(c)}
+                    className="text-xs text-blue-700 font-bold bg-blue-50 px-3 py-1.5 rounded-lg"
+                  >
+                    View Breakdown
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-sm text-left">
             <thead>
               <tr className="bg-zinc-50/80 border-b border-zinc-100 text-zinc-500 font-bold uppercase text-[11px] tracking-wider">

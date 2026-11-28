@@ -486,7 +486,27 @@ export function StockRegisterClient({
               </div>
             </div>
 
-            <div className="overflow-x-auto">
+            {/* Mobile Vertical Category Cards (< 768px) */}
+            <div className="block md:hidden divide-y divide-zinc-200 dark:divide-zinc-800">
+              {categories.map((c) => (
+                <div key={`mob-sr-${c.categoryKey}`} className="p-3.5 space-y-2 text-xs">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-bold text-sm text-zinc-900 dark:text-zinc-100">{c.label}</span>
+                    <span className="text-[11px] px-2 py-0.5 rounded-full font-bold bg-blue-50 text-blue-700">
+                      Closing: {c.closingFull} Full / {c.closingEmpty} MT
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div><p className="text-[10px] text-zinc-400">Opening</p><p className="font-semibold">{c.openingFull} Full / {c.openingEmpty} MT</p></div>
+                    <div><p className="text-[10px] text-zinc-400">Plant Load</p><p className="font-semibold text-emerald-700">+{c.loadReceivedFull} Full / {c.loadReceivedEmpty} MT</p></div>
+                    <div><p className="text-[10px] text-zinc-400">Delivered</p><p className="font-semibold text-rose-600">-{c.deliveredQty} Full</p></div>
+                    <div><p className="text-[10px] text-zinc-400">Empties Ret.</p><p className="font-semibold text-blue-600">+{c.emptyReturnedQty} MT</p></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-left border-collapse text-xs">
                 <thead>
                   <tr className="bg-zinc-100/75 border-b border-zinc-200 text-zinc-600 font-bold uppercase tracking-wider text-[11px]">
@@ -1031,7 +1051,37 @@ export function StockRegisterClient({
               </div>
             </div>
 
-            <div className="overflow-x-auto">
+            {/* Mobile Vertical Cards (< 768px) */}
+            <div className="block md:hidden divide-y divide-zinc-200 dark:divide-zinc-800">
+              {deliveryBoyUdhariList.length === 0 ? (
+                <div className="px-4 py-10 text-center text-xs text-zinc-400">
+                  No delivery boy closings submitted for this date yet.
+                </div>
+              ) : deliveryBoyUdhariList.map((row) => (
+                <div key={`mob-dbu-${row.id}`} className="p-3.5 space-y-2 text-xs">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="font-semibold text-zinc-900 dark:text-zinc-100">{row.deliveryBoyName}</p>
+                      {row.deliveryBoyPhone && <p className="text-[11px] text-zinc-400">{row.deliveryBoyPhone}</p>}
+                    </div>
+                    {row.shortageAmount > 0 ? (
+                      <span className="text-xs font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-lg">-{formatCurrency(row.shortageAmount)}</span>
+                    ) : row.excessAmount > 0 ? (
+                      <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-lg">+{formatCurrency(row.excessAmount)}</span>
+                    ) : (
+                      <span className="text-xs font-semibold text-emerald-600">Balanced</span>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div><p className="text-[10px] text-zinc-400">Del / Ret</p><p className="font-bold text-blue-600">{row.totalDelivered} / {row.returnedQty}</p></div>
+                    <div><p className="text-[10px] text-zinc-400">Expected</p><p className="font-bold">{formatCurrency(row.expectedCash)}</p></div>
+                    <div><p className="text-[10px] text-zinc-400">Given</p><p className="font-black text-blue-700">{formatCurrency(row.actualCashGiven)}</p></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-left text-xs border-collapse">
                 <thead>
                   <tr className="bg-zinc-100/70 border-b border-zinc-200 text-zinc-600 font-bold uppercase text-[10px] tracking-wider">

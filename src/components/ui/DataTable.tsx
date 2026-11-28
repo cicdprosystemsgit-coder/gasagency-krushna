@@ -20,6 +20,7 @@ interface DataTableProps<T> {
   emptyMessage?: string;
   emptyIcon?: React.ReactNode;
   pageSize?: number;
+  renderMobileCard?: (row: T) => React.ReactNode;
 }
 
 export function DataTable<T extends Record<string, unknown>>({
@@ -31,6 +32,7 @@ export function DataTable<T extends Record<string, unknown>>({
   emptyMessage = "No records found",
   emptyIcon,
   pageSize = 12,
+  renderMobileCard,
 }: DataTableProps<T>) {
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
@@ -68,8 +70,59 @@ export function DataTable<T extends Record<string, unknown>>({
         </div>
       )}
 
-      {/* Responsive Horizontal Touch Scroll Wrapper */}
-      <div className="overflow-x-auto touch-scroll-x overscroll-x-contain relative scrollbar-thin">
+      {/* Mobile Vertical Cards (< 768px) */}
+      <div className="block md:hidden divide-y divide-zinc-200 dark:divide-zinc-800">
+        {pageData.length === 0 ? (
+          <div className="py-12 px-4 text-center text-zinc-400 dark:text-zinc-500">
+            {emptyIcon && <div className="flex justify-center mb-3 opacity-30">{emptyIcon}</div>}
+            <p className="text-xs">{emptyMessage}</p>
+          </div>
+        ) : (
+          pageData.map((row) =>
+            renderMobileCard ? (
+              <div key={String(row[keyField])} className="p-3.5">
+                {renderMobileCard(row)}
+              </div>
+            ) : (
+              <div key={String(row[keyField])} className="p-3.5 space-y-2.5">
+                {columns[0] && (
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="font-semibold text-sm text-zinc-900 dark:text-zinc-100 min-w-0">
+                      {columns[0].render
+                        ? columns[0].render(row)
+                        : String(row[columns[0].key as keyof T] ?? "—")}
+                    </div>
+                    {columns.length > 1 && columns[columns.length - 1] && (
+                      <div className="shrink-0 text-xs">
+                        {columns[columns.length - 1].render
+                          ? columns[columns.length - 1].render(row)
+                          : String(row[columns[columns.length - 1].key as keyof T] ?? "—")}
+                      </div>
+                    )}
+                  </div>
+                )}
+                {columns.length > 2 && (
+                  <div className="grid grid-cols-2 gap-x-3 gap-y-2 pt-1 text-xs">
+                    {columns.slice(1, -1).map((col) => (
+                      <div key={String(col.key)} className="min-w-0">
+                        <p className="text-[10px] uppercase tracking-wider text-zinc-400 dark:text-zinc-500 font-medium">
+                          {col.label}
+                        </p>
+                        <div className="text-zinc-700 dark:text-zinc-300 mt-0.5 break-words">
+                          {col.render ? col.render(row) : String(row[col.key as keyof T] ?? "—")}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
+          )
+        )}
+      </div>
+
+      {/* Desktop Table (>= 768px) */}
+      <div className="hidden md:block overflow-x-auto touch-scroll-x overscroll-x-contain relative scrollbar-thin">
         <table className="table min-w-full">
           <thead>
             <tr>

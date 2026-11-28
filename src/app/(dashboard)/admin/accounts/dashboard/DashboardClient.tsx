@@ -219,7 +219,7 @@ export function DashboardClient({
             </p>
           </div>
 
-          <div className="grid grid-cols-3 gap-3 border-t md:border-t-0 md:border-l border-slate-700/50 pt-4 md:pt-0 md:pl-6">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 border-t md:border-t-0 md:border-l border-slate-700/50 pt-4 md:pt-0 md:pl-6">
             <div>
               <span className="text-[10px] text-slate-400 font-bold uppercase block">Assets</span>
               <span className="text-base md:text-lg font-black text-emerald-400">+{formatCurrency(totalAssets)}</span>

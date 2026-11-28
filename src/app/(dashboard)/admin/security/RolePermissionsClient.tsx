@@ -757,7 +757,48 @@ export function RolePermissionsClient() {
 
       {/* ── Main Permissions Grid Table ── */}
       <div className="bg-white rounded-2xl border border-zinc-200 overflow-hidden shadow-xs">
-        <div className="overflow-x-auto">
+        {/* Mobile Vertical Cards (< 768px) */}
+        <div className="block md:hidden divide-y divide-zinc-200 dark:divide-zinc-800">
+          {filteredResources.length === 0 ? (
+            <div className="py-12 px-4 text-center text-zinc-400 text-xs">
+              <Filter className="w-8 h-8 mx-auto mb-2 text-zinc-300" />
+              <p className="font-semibold text-zinc-600">No modules match your current filter</p>
+            </div>
+          ) : filteredResources.map((res) => {
+            const Icon = res.icon || Boxes;
+            return (
+              <div key={`mob-rp-${res.key}`} className="p-3.5 space-y-2.5 text-xs">
+                <div className="flex items-start gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-zinc-100 border border-zinc-200 flex items-center justify-center shrink-0 text-zinc-700">
+                    <Icon className="w-4 h-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-bold text-zinc-900 dark:text-zinc-100">{res.label}</p>
+                    <p className="text-[11px] text-zinc-500">{res.description}</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2 pt-1">
+                  {ACTIONS.map((act) => {
+                    const isChecked = matrixState[activeRole]?.[res.key]?.[act.key] || false;
+                    return (
+                      <label key={act.key} className="flex items-center justify-between px-2.5 py-2 rounded-lg border border-zinc-200 dark:border-zinc-800 cursor-pointer">
+                        <span className="font-medium text-zinc-700 dark:text-zinc-300">{act.label}</span>
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => handleToggle(activeRole, res.key, act.key)}
+                          className="w-4 h-4 accent-blue-600"
+                        />
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-zinc-50/80 border-b border-zinc-200 text-[11px] font-extrabold uppercase tracking-wider text-zinc-500">

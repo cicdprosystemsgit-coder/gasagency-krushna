@@ -477,7 +477,44 @@ export function AgencyAccountClient({ agencyAccounts, initialTransactions, owner
               <p className="text-slate-400 text-sm">No transaction matches filter criteria.</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <>
+            {/* Mobile Vertical Cards (< 768px) */}
+            <div className="block md:hidden divide-y divide-slate-100 dark:divide-zinc-800">
+              {filteredTransactions.map((t) => {
+                const isDebit = ["EXPENSE", "TRANSFER_OUT", "UDHAARI_GIVEN"].includes(t.type);
+                return (
+                  <div key={`mob-acc-${t.id}`} className="py-3 space-y-2 text-xs">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="font-semibold text-slate-800 dark:text-zinc-100 break-words">{t.description}</p>
+                        <p className="text-[11px] text-slate-400 mt-0.5">{formatDate(t.date)}{t.referenceNo ? ` · Ref: ${t.referenceNo}` : ""}</p>
+                      </div>
+                      <span className={cn("font-bold text-sm shrink-0", isDebit ? "text-rose-600" : "text-emerald-600")}>
+                        {isDebit ? "-" : "+"}{formatCurrency(t.amount)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {selectedAccountId === "ALL" && (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold" style={{ backgroundColor: `${t.account?.color || "#4F46E5"}15`, color: t.account?.color || "#4F46E5" }}>
+                            {t.account?.name || "Agency"}
+                          </span>
+                        )}
+                        <span className="text-[10px] font-bold text-slate-500 bg-slate-100 dark:bg-zinc-800 px-2 py-0.5 rounded">
+                          {t.linkedModule ? `Sync: ${t.linkedModule}` : "Manual"}
+                        </span>
+                      </div>
+                      <button onClick={() => handlePrintVoucher(t)} title="Print Voucher" className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-indigo-600">
+                        <Printer className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                    {t.notes && <p className="text-[11px] text-slate-400 italic break-words">{t.notes}</p>}
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-left text-xs border-collapse">
                 <thead>
                   <tr className="border-b border-slate-100 text-slate-400 font-bold">
@@ -562,6 +599,7 @@ export function AgencyAccountClient({ agencyAccounts, initialTransactions, owner
                 </tbody>
               </table>
             </div>
+            </>
           )}
         </div>
       )}
@@ -629,6 +667,22 @@ export function AgencyAccountClient({ agencyAccounts, initialTransactions, owner
                       <span className="text-xs font-extrabold text-slate-700">{group.month}</span>
                       <span className="text-xs font-black text-rose-600">-{formatCurrency(group.total)}</span>
                     </div>
+                    {/* Mobile Vertical List (< 768px) */}
+                    <div className="block md:hidden divide-y divide-slate-100 dark:divide-zinc-800">
+                      {group.entries.map((d: any) => (
+                        <div key={`mob-dr-${d.id}`} className="p-3 flex items-start justify-between gap-2 text-xs">
+                          <div className="min-w-0">
+                            <p className="font-medium text-slate-800 dark:text-zinc-100 break-words">{d.description}</p>
+                            <p className="text-[11px] text-slate-400 mt-0.5">
+                              {formatDate(d.date)}{d.account?.name ? ` · ${d.account.name}` : ""}
+                            </p>
+                          </div>
+                          <span className="font-black text-rose-600 shrink-0">{formatCurrency(d.amount)}</span>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="hidden md:block">
                     <table className="w-full text-xs text-left">
                       <tbody className="divide-y divide-slate-50">
                         {group.entries.map((d: any) => (
@@ -647,6 +701,7 @@ export function AgencyAccountClient({ agencyAccounts, initialTransactions, owner
                         ))}
                       </tbody>
                     </table>
+                    </div>
                   </div>
                 ))
               )}

@@ -351,7 +351,46 @@ export function GstInvoicingClient({
       </div>
 
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
+        {/* Mobile Vertical Cards (< 768px) */}
+        <div className="block md:hidden divide-y divide-slate-100 dark:divide-zinc-800">
+          {invoices.length === 0 ? (
+            <div className="px-5 py-12 text-center">
+              <FileText className="w-10 h-10 mx-auto mb-3 text-slate-300" />
+              <p className="text-slate-400 font-medium text-sm">No invoices yet</p>
+              {!readonly && (
+                <button onClick={() => setModalOpen(true)} className="text-blue-600 text-sm underline mt-2">
+                  Create first invoice
+                </button>
+              )}
+            </div>
+          ) : invoices.map((inv) => (
+            <div key={`mob-inv-${inv.id}`} className="p-3.5 space-y-2 text-xs">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="font-mono font-bold text-blue-700 text-xs">{inv.invoiceNo}</p>
+                  <p className="font-semibold text-sm text-slate-800 dark:text-zinc-100 truncate">{customerName(inv.customerId)}</p>
+                  <p className="text-[11px] text-slate-400">{formatDate(inv.date)}</p>
+                </div>
+                <span className="text-[11px] px-2.5 py-0.5 rounded-full font-semibold bg-green-100 text-green-700 shrink-0">{inv.status}</span>
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <div><p className="text-[10px] uppercase text-slate-400">Taxable</p><p className="text-slate-700 dark:text-zinc-300">{formatCurrency(inv.subtotal)}</p></div>
+                <div><p className="text-[10px] uppercase text-slate-400">GST</p><p className="text-orange-600">{formatCurrency(inv.gstAmount)}</p></div>
+                <div><p className="text-[10px] uppercase text-slate-400">Total</p><p className="font-bold text-slate-900 dark:text-zinc-100">{formatCurrency(inv.total)}</p></div>
+              </div>
+              <div className="flex items-center justify-end gap-2 pt-1">
+                <button onClick={() => setViewInvoice(inv)} className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 text-slate-600 text-xs font-medium">
+                  <Eye className="w-3.5 h-3.5" /> View
+                </button>
+                <button onClick={() => handleDownload(inv)} disabled={isDownloading} className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-blue-200 bg-blue-50 text-blue-600 text-xs font-medium disabled:opacity-50">
+                  <Download className="w-3.5 h-3.5" /> PDF
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-100">

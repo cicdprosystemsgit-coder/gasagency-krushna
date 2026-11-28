@@ -107,6 +107,37 @@ export function SubscriptionsDashboardClient({ stats, agencies: initial }: Props
       {/* Agency table */}
       <div className="card overflow-hidden">
         <div className="card-section"><p className="text-[13px] font-semibold" style={{ color: "#18181B" }}>All Agencies ({agencies.length})</p></div>
+        {/* Mobile Vertical Cards (< 768px) */}
+        <div className="block md:hidden divide-y divide-zinc-200 dark:divide-zinc-800">
+          {agencies.map((a) => {
+            const s = statusOf(a);
+            const isLoading = isPending && actionId === a.id;
+            return (
+              <div key={`mob-sub-${a.id}`} className="p-3.5 space-y-2.5 text-xs">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="font-semibold text-[13px] text-zinc-900 dark:text-zinc-100 truncate">{a.name}</p>
+                    <p className="text-[11px] text-zinc-400 truncate">{a.ownerName} · {a.phone}</p>
+                  </div>
+                  <span className="badge flex items-center gap-1 w-fit shrink-0" style={{ background: s.bg, color: s.color }}>{s.icon} {s.label}</span>
+                </div>
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <span className="text-xs font-semibold capitalize">Plan: {a.subscriptionPlan}</span>
+                  <div className="flex items-center gap-1 flex-wrap">
+                    <button onClick={() => handleStartTrial(a.id)} disabled={isLoading} className="text-[11px] px-2 py-1 rounded font-medium" style={{ color: "#D97706", border: "1px solid #FDE68A" }}>Trial</button>
+                    {(["basic", "professional", "enterprise"] as const).map((plan) => (
+                      <button key={plan} onClick={() => handleAssignPlan(a.id, plan, "monthly")} disabled={isLoading} className="text-[11px] px-2 py-1 rounded font-medium text-white capitalize" style={{ background: PLANS[plan].color }}>
+                        {plan.charAt(0).toUpperCase() + plan.slice(1, 3)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="hidden md:block overflow-x-auto">
         <table className="table">
           <thead><tr><th>Agency</th><th>Owner</th><th>Status</th><th>Plan</th><th>Actions</th></tr></thead>
           <tbody>
@@ -138,6 +169,7 @@ export function SubscriptionsDashboardClient({ stats, agencies: initial }: Props
             })}
           </tbody>
         </table>
+        </div>
       </div>
     </div>
   );

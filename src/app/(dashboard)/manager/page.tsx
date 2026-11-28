@@ -91,6 +91,25 @@ export default async function ManagerDashboard() {
               <p className="text-[13px] font-semibold" style={{ color: "#18181B" }}>{tDash("recentSubmissions")}</p>
               <Link href="/manager/approvals" className="flex items-center gap-1 text-[12px] font-medium" style={{ color: "#2563EB" }}>{tDash("allRoles")} <ArrowRight className="w-3 h-3" /></Link>
             </div>
+            {/* Mobile Vertical Cards (< 768px) */}
+            <div className="block md:hidden divide-y divide-zinc-200 dark:divide-zinc-800">
+              {recentSummaries.length === 0 ? (
+                <div className="py-10 px-4 text-center text-[13px] text-zinc-400">{t("noSubmissions")}</div>
+              ) : recentSummaries.map((s) => (
+                <div key={`mob-mgr-${s.id}`} className="p-3.5 flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-[13px] font-semibold text-zinc-900 dark:text-zinc-100 truncate">{s.submittedBy.name}</p>
+                    <p className="text-[11px] text-zinc-400">{ROLE_LABELS[s.submittedBy.role] || s.submittedBy.role} · {formatDate(s.date)}</p>
+                  </div>
+                  <div className="flex flex-col items-end gap-1 shrink-0">
+                    <StatusBadge status={s.status} />
+                    <Link href={`/manager/approvals?id=${s.id}`} className="text-[11px] font-medium text-blue-600">{tDash("reviewApprovals")}</Link>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="hidden md:block overflow-x-auto">
             <table className="table">
               <thead><tr>
                 <th>{tDash("employee")}</th><th>{tDash("role")}</th><th>{tDash("date")}</th><th>{tDash("status")}</th><th></th>
@@ -109,6 +128,7 @@ export default async function ManagerDashboard() {
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
         ) : (
           <div className="lg:col-span-2 rounded-lg p-6 flex flex-col justify-center items-center gap-3.5 bg-zinc-50 border border-zinc-200">

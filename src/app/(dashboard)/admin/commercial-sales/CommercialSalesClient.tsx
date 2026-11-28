@@ -903,7 +903,7 @@ export function CommercialSalesClient({
                   </div>
 
                   {/* Summary row for this specific customer */}
-                  <div className="grid grid-cols-3 gap-3 p-6 border-b border-slate-100 bg-slate-50/20">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-4 sm:p-6 border-b border-slate-100 bg-slate-50/20">
                     <div className="bg-white p-4.5 rounded-2xl border border-slate-100 shadow-sm text-center">
                       <span className="text-[9px] uppercase tracking-wider font-extrabold text-slate-400">Refills Delivered</span>
                       <p className="text-lg font-black text-blue-600 mt-1">{selectedCylStats.delivered} pcs</p>

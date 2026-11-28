@@ -373,7 +373,35 @@ export function DailySheetClient({ initialData, selectedDate, userRole = "ADMIN"
               </div>
             </div>
 
-            <div className="overflow-x-auto">
+            {/* Mobile Vertical Cards (< 768px) */}
+            <div className="block md:hidden divide-y divide-slate-100 dark:divide-zinc-800">
+              {productRows.length === 0 ? (
+                <div className="py-12 px-4 text-center text-slate-400 text-xs">
+                  <Package className="w-8 h-8 mx-auto mb-2 text-slate-300" />
+                  <p className="font-semibold text-slate-600">No cylinders allocated for this date</p>
+                </div>
+              ) : productRows.map((row) => (
+                <div key={`mob-ds-${row.productId}`} className={`p-3.5 space-y-2 text-xs ${row.shortQty > 0 ? "bg-red-50/30" : ""}`}>
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="font-bold text-slate-900 dark:text-zinc-100">{row.productName}</p>
+                      <p className="text-[10px] text-slate-400">Allocated: <strong className="text-blue-700">{row.allocatedQty}</strong></p>
+                    </div>
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${row.shortQty > 0 ? "bg-rose-100 text-rose-700" : "bg-emerald-100 text-emerald-700"}`}>
+                      {row.shortQty > 0 ? `Short: ${row.shortQty}` : "Balanced"}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-4 gap-1.5 text-center">
+                    <div><p className="text-[10px] text-slate-400">Del</p><p className="font-semibold">{row.deliveredQty}</p></div>
+                    <div><p className="text-[10px] text-slate-400">Empty</p><p className="font-semibold">{row.emptyReturnedQty}</p></div>
+                    <div><p className="text-[10px] text-slate-400">Full Ret</p><p className="font-semibold">{row.fullReturnedQty}</p></div>
+                    <div><p className="text-[10px] text-slate-400">Accounted</p><p className="font-bold text-indigo-700">{row.accountedQty}</p></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-slate-50/80 border-b border-slate-200/80 text-[11px] font-bold uppercase tracking-wider text-slate-500">
@@ -1102,8 +1130,35 @@ export function DailySheetClient({ initialData, selectedDate, userRole = "ADMIN"
               </span>
             </div>
 
+            {/* Mobile Vertical Cards (< 768px) */}
+            <div className="block md:hidden divide-y divide-slate-100 dark:divide-zinc-800 rounded-xl border border-slate-200 dark:border-zinc-800">
+              {filteredCustomers.length === 0 ? (
+                <div className="py-10 px-4 text-center text-slate-400 text-xs">
+                  <CheckCircle2 className="w-8 h-8 mx-auto mb-2 text-emerald-400" />
+                  <p className="font-semibold text-slate-600">No pending empty cylinders found</p>
+                </div>
+              ) : filteredCustomers.map((c) => (
+                <div key={`mob-dsc-${c.id}`} className="p-3.5 space-y-2 text-xs bg-amber-50/10">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="font-bold text-slate-900 dark:text-zinc-100 truncate">{c.customerName}</p>
+                      <p className="text-[11px] text-slate-400">{c.phone !== "-" ? c.phone : ""}{c.customerCode ? ` · ${c.customerCode}` : ""}</p>
+                    </div>
+                    <span className="px-2 py-0.5 rounded-full text-[11px] font-extrabold bg-amber-100 text-amber-800 shrink-0">
+                      Pending: {c.pendingEmpty}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div><p className="text-[10px] text-slate-400">Product</p><p className="truncate">{c.productName}</p></div>
+                    <div><p className="text-[10px] text-slate-400">Delivered</p><p className="font-semibold">{c.deliveredQty}</p></div>
+                    <div><p className="text-[10px] text-slate-400">Returned</p><p className="font-semibold">{c.emptyReturned}</p></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
             {/* Customers Table */}
-            <div className="overflow-x-auto rounded-xl border border-slate-200">
+            <div className="hidden md:block overflow-x-auto rounded-xl border border-slate-200">
               <table className="w-full text-left border-collapse text-xs">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200 text-[10px] font-bold uppercase tracking-wider text-slate-500">

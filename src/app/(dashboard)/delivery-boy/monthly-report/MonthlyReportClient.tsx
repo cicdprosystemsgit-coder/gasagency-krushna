@@ -230,7 +230,66 @@ export function MonthlyReportClient({ initialRequests }: MonthlyReportClientProp
             <p className="text-xs text-zinc-400 mt-1">Select another month or submit a new request.</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          {/* Mobile Vertical Cards (< 768px) */}
+          <div className="block md:hidden divide-y divide-zinc-200 dark:divide-zinc-800">
+            {monthlyRequests.map((req) => (
+              <div key={`mob-mreq-${req.id}`} className="p-3.5 space-y-2.5">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <p className="text-[13px] font-semibold text-zinc-900 dark:text-zinc-100">
+                      {format(parseISO(req.date), "dd MMM yyyy")}
+                    </p>
+                    <p className="text-[11px] text-zinc-400">
+                      Req: {req.totalRequested} cyl{req.totalLoaded != null ? ` · Loaded: ${req.totalLoaded} cyl` : ""}
+                    </p>
+                  </div>
+                  {req.status === "PENDING" && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-50 text-amber-700 border border-amber-200">
+                      <Clock className="w-3 h-3" /> Pending
+                    </span>
+                  )}
+                  {req.status === "APPROVED" && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-blue-50 text-blue-700 border border-blue-200">
+                      <CheckCircle2 className="w-3 h-3" /> Approved
+                    </span>
+                  )}
+                  {req.status === "FULFILLED" && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                      <Truck className="w-3 h-3" /> Fulfilled
+                    </span>
+                  )}
+                  {req.status === "REJECTED" && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-rose-50 text-rose-700 border border-rose-200">
+                      <XCircle className="w-3 h-3" /> Rejected
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex flex-wrap gap-1">
+                  {req.items.map((it, idx) => (
+                    <span key={idx} className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-zinc-100 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 border border-zinc-200 dark:border-zinc-700">
+                      {it.productName}: {it.requestedQty}
+                    </span>
+                  ))}
+                </div>
+
+                <div className="flex items-center justify-between text-xs pt-1 border-t border-zinc-100 dark:border-zinc-800">
+                  <span className="text-zinc-500">
+                    {req.fuelLitres != null ? `Fuel: ${req.fuelLitres}L${req.fuelAmount ? ` (₹${req.fuelAmount})` : ""}` : req.fulfilledBy ? `Loaded by ${req.fulfilledBy}` : "Awaiting review"}
+                  </span>
+                  <button
+                    onClick={() => setSelectedRequest(req)}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200"
+                  >
+                    <Eye className="w-3.5 h-3.5" /> Details
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
                 <tr className="border-b border-zinc-200 bg-zinc-50/80 text-zinc-600 font-semibold uppercase tracking-wider text-[11px]">
@@ -367,6 +426,7 @@ export function MonthlyReportClient({ initialRequests }: MonthlyReportClientProp
               </tfoot>
             </table>
           </div>
+          </>
         )}
       </div>
 

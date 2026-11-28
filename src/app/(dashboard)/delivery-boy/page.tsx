@@ -217,6 +217,41 @@ export default async function DeliveryBoyDashboard() {
                   {tCommon("viewAll")} <ArrowRight className="w-3 h-3" />
                 </Link>
               </div>
+              {/* Mobile Vertical Cards (< 768px) */}
+              <div className="block md:hidden divide-y divide-zinc-200 dark:divide-zinc-800">
+                {deliveries.slice(0, 6).map((d) => {
+                  const cashVal = d.cashCollected + (d.paymentMode === "PARTIAL" && d.customer.type === "DOMESTIC" ? (d.creditAmount ?? 0) : 0);
+                  return (
+                    <div key={`mob-del-${d.id}`} className="p-3.5 space-y-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="text-[13px] font-semibold text-zinc-900 dark:text-zinc-100 truncate">{d.customer.name}</p>
+                          <p className="text-[11px] text-zinc-400">{d.customer.phone}</p>
+                        </div>
+                        {d.pendingQty > 0
+                          ? <span className="badge badge-pending shrink-0">{t("pending")}</span>
+                          : <span className="badge badge-approved shrink-0">{t("done")}</span>}
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 text-xs">
+                        <div>
+                          <p className="text-[10px] uppercase text-zinc-400">{t("product")}</p>
+                          <p className="text-zinc-700 dark:text-zinc-300 truncate">{d.product.name}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] uppercase text-zinc-400">{t("qty")}</p>
+                          <p className="font-bold text-blue-600">{d.deliveredQty}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] uppercase text-zinc-400">{t("cash")}</p>
+                          <p className="font-semibold text-emerald-600">{formatCurrency(cashVal)}</p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="hidden md:block overflow-x-auto">
               <table className="table">
                 <thead><tr>
                   <th>{t("customer")}</th><th>{t("product")}</th>
@@ -247,6 +282,7 @@ export default async function DeliveryBoyDashboard() {
                   ))}
                 </tbody>
               </table>
+              </div>
             </div>
           )}
 

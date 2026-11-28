@@ -237,7 +237,7 @@ html {
     padding: 8px 12px;
   }
 
-  /* Filter chip rows: scroll horizontally instead of wrapping */
+  /* Filter chip rows: opt-in horizontal scroll only when explicitly requested */
   .filter-scroll-row {
     display: flex;
     flex-wrap: nowrap !important;
@@ -246,36 +246,20 @@ html {
     overscroll-behavior-x: contain;
     gap: 6px;
     padding-bottom: 4px;
-    scrollbar-width: none; /* hide scrollbar Firefox */
+    scrollbar-width: none;
   }
   .filter-scroll-row::-webkit-scrollbar {
-    display: none; /* hide scrollbar Chrome/Safari */
-  }
-  .filter-scroll-row > * {
-    flex-shrink: 0; /* prevent chips from squishing */
-  }
-
-  /* Auto-convert any flex-wrap filter rows to scroll rows on mobile */
-  .flex.flex-wrap.gap-1,
-  .flex.flex-wrap.gap-1\.5,
-  .flex.flex-wrap.gap-2 {
-    flex-wrap: nowrap !important;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    overscroll-behavior-x: contain;
-    scrollbar-width: none;
-    padding-bottom: 2px;
-  }
-  .flex.flex-wrap.gap-1::-webkit-scrollbar,
-  .flex.flex-wrap.gap-1\.5::-webkit-scrollbar,
-  .flex.flex-wrap.gap-2::-webkit-scrollbar {
     display: none;
   }
-  .flex.flex-wrap.gap-1 > *,
-  .flex.flex-wrap.gap-1\.5 > *,
-  .flex.flex-wrap.gap-2 > * {
+  .filter-scroll-row > * {
     flex-shrink: 0;
   }
+}
+
+html,
+body {
+  overflow-x: clip;
+  max-width: 100%;
 }
 
 body {

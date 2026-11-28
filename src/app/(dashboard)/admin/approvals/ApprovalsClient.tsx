@@ -195,7 +195,7 @@ export function ApprovalsClient({
   return (
     <>
       {/* Tab bar */}
-      <div className="flex gap-1 mb-5 bg-slate-100 p-1 rounded-xl w-fit flex-wrap">
+      <div className="flex gap-1 mb-5 bg-slate-100 dark:bg-zinc-900 p-1 rounded-xl w-full sm:w-fit flex-wrap">
         <TabBtn
           label="Daily Summaries"
           badge={pendingSummaries}
@@ -368,7 +368,66 @@ function DailySummariesSection({
       </div>
 
       <div className="rounded-lg overflow-hidden" style={{ background: "#fff", border: "1px solid #E4E4E7", boxShadow: "0 1px 2px rgba(0,0,0,0.04)" }}>
-        <div className="overflow-x-auto">
+        {/* Mobile Vertical Cards (< 768px) */}
+        <div className="block md:hidden divide-y divide-zinc-200 dark:divide-zinc-800">
+          {filtered.length === 0 ? (
+            <div className="py-12 px-4 text-center">
+              <BookOpen className="w-8 h-8 mx-auto mb-2 text-zinc-300 dark:text-zinc-600" />
+              <p className="text-[13px] text-zinc-400 dark:text-zinc-500">
+                No {filter === "ALL" ? "" : filter.toLowerCase().replace(/_/g, " ")} submissions
+              </p>
+            </div>
+          ) : filtered.map((s) => (
+            <div key={`mob-sum-${s.id}`} className="p-3.5 space-y-2.5">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0" style={{ background: "#2563EB" }}>
+                    {s.submittedBy.name.charAt(0)}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[13px] font-semibold text-zinc-900 dark:text-zinc-100 truncate">{s.submittedBy.name}</p>
+                    <p className="text-[11px] text-zinc-400 dark:text-zinc-500">{ROLE_LABELS[s.submittedBy.role] ?? s.submittedBy.role}</p>
+                  </div>
+                </div>
+                <StatusBadge status={s.status} />
+              </div>
+
+              <div className="grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
+                <div>
+                  <p className="text-[10px] uppercase tracking-wider text-zinc-400 dark:text-zinc-500">Submitted</p>
+                  <p className="text-zinc-700 dark:text-zinc-300 mt-0.5">{formatDateTime(s.createdAt)}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase tracking-wider text-zinc-400 dark:text-zinc-500">Approvals</p>
+                  <p className="text-zinc-700 dark:text-zinc-300 mt-0.5">
+                    {s.approvedByAdmin ? `Admin: ${s.approvedByAdmin.name}` : s.approvedByManager ? `Mgr: ${s.approvedByManager.name}` : "Pending"}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-zinc-100 dark:border-zinc-800 flex-wrap">
+                <button onClick={() => setViewSummary(s)} className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200">
+                  <Eye className="w-3.5 h-3.5" /> View
+                </button>
+                {s.status === "PENDING" && (
+                  <>
+                    <button onClick={() => doAction(s.id, "CORRECTION_NEEDED")} disabled={isPending} className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium border border-amber-200 dark:border-amber-900/60 bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400">
+                      <RotateCcw className="w-3.5 h-3.5" /> Fix
+                    </button>
+                    <button onClick={() => { setRejectId(s.id); setRejectNote(""); }} disabled={isPending} className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold border border-red-200 dark:border-red-900/60 bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400">
+                      <XCircle className="w-3.5 h-3.5" /> Reject
+                    </button>
+                    <button onClick={() => doAction(s.id, role === "MANAGER" ? "MANAGER_APPROVE" : "ADMIN_APPROVE")} disabled={isPending} className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold border border-emerald-200 dark:border-emerald-900/60 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400">
+                      <CheckCircle2 className="w-3.5 h-3.5" /> Approve
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="hidden md:block overflow-x-auto">
           <table className="table">
             <thead>
               <tr>
@@ -571,7 +630,7 @@ function SalaryRequestsSection({
   return (
     <>
       {/* Summary strip */}
-      <div className="grid grid-cols-4 gap-3 mb-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
         {[
           { label: "Pending",  val: requests.filter((r) => r.status === "PENDING" || r.status === "MANAGER_APPROVED").length,  color: "#D97706", bg: "#FFFBEB" },
           { label: "Approved", val: requests.filter((r) => r.status === "APPROVED").length, color: "#16A34A", bg: "#F0FDF4" },
@@ -627,7 +686,66 @@ function SalaryRequestsSection({
 
       {/* Table */}
       <div className="rounded-lg overflow-hidden" style={{ background: "#fff", border: "1px solid #E4E4E7", boxShadow: "0 1px 2px rgba(0,0,0,0.04)" }}>
-        <div className="overflow-x-auto">
+        {/* Mobile Vertical Cards (< 768px) */}
+        <div className="block md:hidden divide-y divide-zinc-200 dark:divide-zinc-800">
+          {filtered.length === 0 ? (
+            <div className="py-12 px-4 text-center">
+              <BookOpen className="w-8 h-8 mx-auto mb-2 text-zinc-300 dark:text-zinc-600" />
+              <p className="text-[13px] text-zinc-400 dark:text-zinc-500">
+                No {filter === "ALL" ? "" : filter.toLowerCase().replace(/_/g, " ")} submissions
+              </p>
+            </div>
+          ) : filtered.map((s) => (
+            <div key={`mob-sum-${s.id}`} className="p-3.5 space-y-2.5">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0" style={{ background: "#2563EB" }}>
+                    {s.submittedBy.name.charAt(0)}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[13px] font-semibold text-zinc-900 dark:text-zinc-100 truncate">{s.submittedBy.name}</p>
+                    <p className="text-[11px] text-zinc-400 dark:text-zinc-500">{ROLE_LABELS[s.submittedBy.role] ?? s.submittedBy.role}</p>
+                  </div>
+                </div>
+                <StatusBadge status={s.status} />
+              </div>
+
+              <div className="grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
+                <div>
+                  <p className="text-[10px] uppercase tracking-wider text-zinc-400 dark:text-zinc-500">Submitted</p>
+                  <p className="text-zinc-700 dark:text-zinc-300 mt-0.5">{formatDateTime(s.createdAt)}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase tracking-wider text-zinc-400 dark:text-zinc-500">Approvals</p>
+                  <p className="text-zinc-700 dark:text-zinc-300 mt-0.5">
+                    {s.approvedByAdmin ? `Admin: ${s.approvedByAdmin.name}` : s.approvedByManager ? `Mgr: ${s.approvedByManager.name}` : "Pending"}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-zinc-100 dark:border-zinc-800 flex-wrap">
+                <button onClick={() => setViewSummary(s)} className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200">
+                  <Eye className="w-3.5 h-3.5" /> View
+                </button>
+                {s.status === "PENDING" && (
+                  <>
+                    <button onClick={() => doAction(s.id, "CORRECTION_NEEDED")} disabled={isPending} className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium border border-amber-200 dark:border-amber-900/60 bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400">
+                      <RotateCcw className="w-3.5 h-3.5" /> Fix
+                    </button>
+                    <button onClick={() => { setRejectId(s.id); setRejectNote(""); }} disabled={isPending} className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold border border-red-200 dark:border-red-900/60 bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400">
+                      <XCircle className="w-3.5 h-3.5" /> Reject
+                    </button>
+                    <button onClick={() => doAction(s.id, role === "MANAGER" ? "MANAGER_APPROVE" : "ADMIN_APPROVE")} disabled={isPending} className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold border border-emerald-200 dark:border-emerald-900/60 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400">
+                      <CheckCircle2 className="w-3.5 h-3.5" /> Approve
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="hidden md:block overflow-x-auto">
           <table className="table">
             <thead>
               <tr>
@@ -947,7 +1065,7 @@ function LeaveRequestsSection({
   return (
     <>
       {/* Stats strip */}
-      <div className="grid grid-cols-4 gap-3 mb-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
         {[
           { label: "Pending",       val: pendingCount,              color: "#D97706", bg: "#FFFBEB" },
           { label: "Approved",      val: approvedCount,             color: "#16A34A", bg: "#F0FDF4" },
@@ -1003,7 +1121,96 @@ function LeaveRequestsSection({
       {/* Table */}
       <div className="rounded-lg overflow-hidden"
         style={{ background: "#fff", border: "1px solid #E4E4E7", boxShadow: "0 1px 2px rgba(0,0,0,0.04)" }}>
-        <div className="overflow-x-auto">
+        {/* Mobile Vertical Cards (< 768px) */}
+        <div className="block md:hidden divide-y divide-zinc-200 dark:divide-zinc-800">
+          {filtered.length === 0 ? (
+            <div className="py-12 px-4 text-center">
+              <CalendarDays className="w-8 h-8 mx-auto mb-2 text-zinc-300 dark:text-zinc-600" />
+              <p className="text-[13px] text-zinc-400 dark:text-zinc-500">
+                {filter === "PENDING" ? "No pending leave requests" : "No leave requests found"}
+              </p>
+            </div>
+          ) : filtered.map((r) => {
+            const isPendingRow = r.status === "PENDING";
+            const statusChip =
+              r.status === "APPROVED" ? "bg-green-100 text-green-700" :
+              r.status === "REJECTED" ? "bg-red-100 text-red-700" :
+              "bg-amber-100 text-amber-700";
+            const statusIcon = r.status === "APPROVED" ? "✓" : r.status === "REJECTED" ? "✗" : "⏳";
+            return (
+              <div key={`mob-lv-${r.id}`} className="p-3.5 space-y-2.5">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0" style={{ background: "#7C3AED" }}>
+                      {r.employee.name.charAt(0)}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[13px] font-semibold text-zinc-900 dark:text-zinc-100 truncate">{r.employee.name}</p>
+                      <p className="text-[11px] text-zinc-400 dark:text-zinc-500">{ROLE_LABELS[r.employee.role] ?? r.employee.role}</p>
+                    </div>
+                  </div>
+                  <span className={`text-[11px] px-2.5 py-0.5 rounded-full font-semibold shrink-0 ${statusChip}`}>
+                    {statusIcon} {r.status}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wider text-zinc-400 dark:text-zinc-500">Leave Type</p>
+                    <div className="mt-0.5">
+                      <span className={`text-[11px] px-2 py-0.5 rounded-full font-semibold ${leaveColor(r.leaveType)}`}>
+                        {leaveLabel(r.leaveType)}
+                      </span>
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wider text-zinc-400 dark:text-zinc-500">Days</p>
+                    <p className="font-semibold text-zinc-900 dark:text-zinc-100 mt-0.5">{r.totalDays} day{r.totalDays !== 1 ? "s" : ""}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wider text-zinc-400 dark:text-zinc-500">From</p>
+                    <p className="text-zinc-700 dark:text-zinc-300 mt-0.5">{formatDate(r.startDate)}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wider text-zinc-400 dark:text-zinc-500">To</p>
+                    <p className="text-zinc-700 dark:text-zinc-300 mt-0.5">{formatDate(r.endDate)}</p>
+                  </div>
+                </div>
+
+                {r.reason && (
+                  <div className="text-xs">
+                    <p className="text-[10px] uppercase tracking-wider text-zinc-400 dark:text-zinc-500">Reason</p>
+                    <p className="text-zinc-700 dark:text-zinc-300 mt-0.5 break-words">{r.reason}</p>
+                  </div>
+                )}
+
+                {r.reviewedBy && (
+                  <p className="text-[11px] text-zinc-400 dark:text-zinc-500">
+                    Reviewed by: <span className="text-zinc-700 dark:text-zinc-300 font-medium">{r.reviewedBy.name}</span>
+                  </p>
+                )}
+
+                <div className="flex items-center justify-end gap-2 pt-2 border-t border-zinc-100 dark:border-zinc-800">
+                  <button onClick={() => setViewModal(r)} className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200">
+                    <Eye className="w-3.5 h-3.5" /> View
+                  </button>
+                  {isPendingRow && (
+                    <>
+                      <button onClick={() => { setRejectModal(r); setRejectNote(""); }} disabled={isPending} className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold border border-red-200 dark:border-red-900/60 bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400">
+                        <XCircle className="w-3.5 h-3.5" /> Reject
+                      </button>
+                      <button onClick={() => handleApprove(r.id)} disabled={isPending} className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold border border-emerald-200 dark:border-emerald-900/60 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400">
+                        <CheckCircle2 className="w-3.5 h-3.5" /> Approve
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="hidden md:block overflow-x-auto">
           <table className="table">
             <thead>
               <tr>
@@ -1662,7 +1869,86 @@ function DeliveryCountRequestsSection({
             <p className="text-xs text-zinc-400 mt-0.5">Switch filter tabs to view other records</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          {/* Mobile Vertical Cards (< 768px) */}
+          <div className="block md:hidden divide-y divide-zinc-200 dark:divide-zinc-800">
+            {filtered.map((r) => {
+              const isPendingRow = r.status === "PENDING";
+              return (
+                <div key={`mob-del-${r.id}`} className="p-3.5 space-y-2.5">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-[13px] font-semibold text-zinc-900 dark:text-zinc-100">{r.requestedBy.name}</p>
+                      <p className="text-[11px] text-zinc-400 dark:text-zinc-500">
+                        {formatDate(new Date(r.date))} · {r.totalRequested} cyl
+                      </p>
+                    </div>
+                    <div className="shrink-0">
+                      {r.status === "PENDING" && (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-amber-50 text-amber-700 border border-amber-200">
+                          <Clock className="w-3 h-3 animate-pulse" /> Pending
+                        </span>
+                      )}
+                      {r.status === "APPROVED" && (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-blue-50 text-blue-700 border border-blue-200">
+                          <CheckCircle2 className="w-3 h-3" /> Approved
+                        </span>
+                      )}
+                      {r.status === "FULFILLED" && (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          <Truck className="w-3 h-3" /> Fulfilled
+                        </span>
+                      )}
+                      {r.status === "REJECTED" && (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-rose-50 text-rose-700 border border-rose-200">
+                          <XCircle className="w-3 h-3" /> Rejected
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap gap-1">
+                    {r.items.map((it, idx) => (
+                      <span
+                        key={idx}
+                        className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-zinc-100 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 border border-zinc-200 dark:border-zinc-700"
+                      >
+                        {it.productName}: <strong className="ml-1">{it.requestedQty}</strong>
+                      </span>
+                    ))}
+                  </div>
+
+                  {r.notes && (
+                    <p className="text-[11px] text-zinc-500 dark:text-zinc-400 italic break-words">Note: {r.notes}</p>
+                  )}
+
+                  {r.status === "FULFILLED" && (
+                    <p className="text-xs font-medium text-emerald-700 dark:text-emerald-400">
+                      Loaded: {r.totalLoaded} cyl by {r.fulfilledBy?.name || "Godown"}
+                    </p>
+                  )}
+
+                  <div className="flex items-center justify-end gap-2 pt-2 border-t border-zinc-100 dark:border-zinc-800">
+                    <button onClick={() => setViewModal(r)} className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200">
+                      <Eye className="w-3.5 h-3.5" /> View
+                    </button>
+                    {isPendingRow && (
+                      <>
+                        <button onClick={() => { setRejectModal(r); setRejectNote(""); }} disabled={isPending} className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold border border-rose-200 dark:border-rose-900/60 bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-400">
+                          <XCircle className="w-3.5 h-3.5" /> Reject
+                        </button>
+                        <button onClick={() => handleApprove(r.id)} disabled={isPending} className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold border border-emerald-200 dark:border-emerald-900/60 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400">
+                          <CheckCircle2 className="w-3.5 h-3.5" /> Approve
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
                 <tr className="border-b border-zinc-200 bg-zinc-50 text-zinc-600 font-semibold uppercase tracking-wider text-[11px]">
@@ -1802,6 +2088,7 @@ function DeliveryCountRequestsSection({
               </tbody>
             </table>
           </div>
+          </>
         )}
       </div>
 

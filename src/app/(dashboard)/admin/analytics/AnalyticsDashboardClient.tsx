@@ -278,6 +278,31 @@ export function AnalyticsDashboardClient({ revenue, productSales, deliveryPerf, 
                   <Bar dataKey="target" fill="#E4E4E7" name="Target" radius={[0, 3, 3, 0]} />
                 </BarChart>
               </ResponsiveContainer>
+              {/* Mobile Vertical Cards (< 768px) */}
+              <div className="block md:hidden divide-y divide-zinc-200 dark:divide-zinc-800 mt-4">
+                {deliveryPerf.map((d, i) => (
+                  <div key={`mob-dp-${i}`} className="py-3 space-y-1.5 text-xs">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-semibold text-zinc-900 dark:text-zinc-100">{d.name}</span>
+                      {d.achievement !== null ? (
+                        <span className="badge" style={{
+                          background: d.achievement >= 100 ? "#DCFCE7" : d.achievement >= 75 ? "#FEF9C3" : "#FEE2E2",
+                          color: d.achievement >= 100 ? "#15803D" : d.achievement >= 75 ? "#854D0E" : "#B91C1C",
+                        }}>
+                          {d.achievement}%
+                        </span>
+                      ) : <span className="text-zinc-400">—</span>}
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div><p className="text-[10px] text-zinc-400">Delivered</p><p className="font-semibold">{d.delivered}</p></div>
+                      <div><p className="text-[10px] text-zinc-400">Target</p><p>{d.target || "—"}</p></div>
+                      <div><p className="text-[10px] text-zinc-400">Cash</p><p className="font-semibold text-emerald-600">{formatCurrency(d.cashCollected)}</p></div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="hidden md:block overflow-x-auto">
               <table className="table mt-4">
                 <thead>
                   <tr>
@@ -309,6 +334,7 @@ export function AnalyticsDashboardClient({ revenue, productSales, deliveryPerf, 
                   ))}
                 </tbody>
               </table>
+              </div>
             </div>
           )}
         </div>
@@ -322,6 +348,29 @@ export function AnalyticsDashboardClient({ revenue, productSales, deliveryPerf, 
           {topCustomers.length === 0 ? (
             <div className="p-8 text-center text-[13px]" style={{ color: "#A1A1AA" }}>No customer data</div>
           ) : (
+            <>
+            {/* Mobile Vertical Cards (< 768px) */}
+            <div className="block md:hidden divide-y divide-zinc-200 dark:divide-zinc-800">
+              {topCustomers.map((c, i) => (
+                <div key={`mob-tc-${i}`} className="p-3.5 flex items-center justify-between gap-2 text-xs">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <span className="text-[11px] font-bold px-2 py-0.5 rounded shrink-0" style={{
+                      background: i === 0 ? "#FEF9C3" : i === 1 ? "#F4F4F5" : i === 2 ? "#FED7AA" : "#F4F4F5",
+                      color: i === 0 ? "#854D0E" : "#52525B",
+                    }}>
+                      #{i + 1}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="font-semibold text-zinc-900 dark:text-zinc-100 truncate">{c.name}</p>
+                      <p className="text-[11px] text-zinc-400">{c.qty} cylinders</p>
+                    </div>
+                  </div>
+                  <span className="font-bold text-emerald-600 shrink-0">{formatCurrency(c.cash)}</span>
+                </div>
+              ))}
+            </div>
+
+            <div className="hidden md:block overflow-x-auto">
             <table className="table">
               <thead>
                 <tr>
@@ -349,6 +398,8 @@ export function AnalyticsDashboardClient({ revenue, productSales, deliveryPerf, 
                 ))}
               </tbody>
             </table>
+            </div>
+            </>
           )}
         </div>
       )}

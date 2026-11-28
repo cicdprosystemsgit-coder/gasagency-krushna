@@ -442,7 +442,60 @@ export function AccountStatementClient({ account, initialTransactions }: Account
 
       {/* ── Transaction Statement Table ── */}
       <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
+        {/* Mobile Vertical Cards (< 768px) */}
+        <div className="block md:hidden divide-y divide-slate-100 dark:divide-zinc-800">
+          {displayTransactions.length === 0 ? (
+            <div className="px-5 py-14 text-center text-slate-400 text-xs">
+              No transactions found matching the filters
+            </div>
+          ) : (
+            displayTransactions.map((t) => {
+              const isCredit = isCreditType(t.type);
+              return (
+                <div key={`mob-stmt-${t.id}`} className="p-3.5 space-y-2 text-xs">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="font-semibold text-slate-800 dark:text-zinc-100 break-words">{t.description}</p>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        {formatDate(t.date)}{t.partyName ? ` · ${t.partyName}` : ""}
+                      </p>
+                      {t.referenceNo && <p className="text-[10px] font-mono text-slate-400">Ref: {t.referenceNo}</p>}
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className={cn("font-bold text-sm", isCredit ? "text-emerald-600" : "text-rose-600")}>
+                        {isCredit ? "+" : "-"}{formatCurrency(t.amount)}
+                      </p>
+                      <p className="text-[10px] text-slate-500 font-medium">Bal: {formatCurrency(t.runningBalance)}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between pt-1">
+                    <div className="flex items-center gap-1.5">
+                      <span className={cn("text-[10px] font-bold px-2 py-0.5 rounded-full uppercase inline-flex items-center gap-1", isCredit ? "bg-emerald-100 text-emerald-800" : "bg-rose-100 text-rose-800")}>
+                        {isCredit ? <><ArrowDownLeft className="w-3 h-3" /> In</> : <><ArrowUpRight className="w-3 h-3" /> Out</>}
+                      </span>
+                      <span className="text-[10px] bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-zinc-300 px-1.5 py-0.5 rounded-md font-bold uppercase">
+                        {t.paymentMode || "UPI"}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button onClick={() => handlePrintVoucher(t)} title="Print Voucher" className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-indigo-600">
+                        <Printer className="w-3.5 h-3.5" />
+                      </button>
+                      <button onClick={() => openEditModal(t)} className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700">
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                      <button onClick={() => handleDelete(t.id)} className="p-1.5 rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-100">

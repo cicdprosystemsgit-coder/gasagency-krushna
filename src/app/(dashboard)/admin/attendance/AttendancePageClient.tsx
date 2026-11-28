@@ -575,6 +575,86 @@ export function AttendancePageClient({
 
           {/* Table */}
           <div className="card overflow-hidden bg-white border border-zinc-200 rounded-xl shadow-sm">
+            {/* Mobile Vertical Cards (< 768px) */}
+            <div className="block md:hidden divide-y divide-zinc-100 dark:divide-zinc-800">
+              {records.length === 0 ? (
+                <div className="text-center py-10 text-xs text-zinc-400 italic">No employees active today</div>
+              ) : records.map((r) => {
+                const cfg = STATUS_CONFIG[r.status] ?? STATUS_CONFIG.ABSENT;
+                const duration = r.punchIn && r.punchOut
+                  ? (() => {
+                      const mins = Math.floor((new Date(r.punchOut).getTime() - new Date(r.punchIn).getTime()) / 60000);
+                      return `${Math.floor(mins / 60)}h ${mins % 60}m`;
+                    })()
+                  : null;
+                const isChecked = selectedEmployees.includes(r.id);
+
+                return (
+                  <div key={`mob-att-${r.id}`} className="p-3.5 space-y-2.5 text-xs">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => toggleSelectEmployee(r.id)}
+                          className="rounded border-zinc-300 text-blue-600 focus:ring-blue-500 shrink-0"
+                        />
+                        <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white bg-blue-600 shrink-0">
+                          {r.name.charAt(0)}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="font-bold text-xs text-zinc-800 dark:text-zinc-100 truncate">{r.name}</p>
+                          <p className="text-[10px] text-zinc-500 uppercase">{r.role.replace(/_/g, " ")}</p>
+                        </div>
+                      </div>
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0" style={{ background: cfg.bg, color: cfg.color }}>
+                        {cfg.icon} {cfg.label}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2">
+                      <div>
+                        <p className="text-[10px] uppercase text-zinc-400">Punch In</p>
+                        <p className="font-semibold text-zinc-700 dark:text-zinc-300">
+                          {r.punchIn ? formatTime(r.punchIn) : "—"}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] uppercase text-zinc-400">Punch Out</p>
+                        <p className="font-semibold text-zinc-700 dark:text-zinc-300">{formatTime(r.punchOut)}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] uppercase text-zinc-400">Duration</p>
+                        <p className="font-mono font-bold text-zinc-700 dark:text-zinc-300">{duration ?? "—"}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-2 border-t border-zinc-100 dark:border-zinc-800">
+                      <span className="text-[11px] text-zinc-400">Quick Mark:</span>
+                      <div className="flex items-center gap-1.5">
+                        {(["PRESENT", "ABSENT", "HALF_DAY", "ON_LEAVE"] as const).map((status) => (
+                          <button
+                            key={status}
+                            onClick={() => handleMarkStatus(r.id, status)}
+                            disabled={isPending && markingId === r.id}
+                            title={STATUS_CONFIG[status].label}
+                            className="w-7 h-7 rounded flex items-center justify-center transition"
+                            style={{
+                              color: r.status === status ? STATUS_CONFIG[status].color : "#A1A1AA",
+                              background: r.status === status ? STATUS_CONFIG[status].bg : "transparent",
+                            }}
+                          >
+                            {STATUS_CONFIG[status].icon}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="hidden md:block overflow-x-auto">
             <table className="table w-full text-left">
               <thead>
                 <tr className="bg-zinc-50 border-b border-zinc-200 text-xs font-bold text-zinc-500">
@@ -704,6 +784,7 @@ export function AttendancePageClient({
                 )}
               </tbody>
             </table>
+            </div>
           </div>
         </div>
       )}
@@ -1133,7 +1214,25 @@ export function AttendancePageClient({
                     </button>
                   </div>
 
-                  <div className="overflow-x-auto border border-zinc-100 rounded-xl">
+                  {/* Mobile Vertical Cards (< 768px) */}
+                  <div className="block md:hidden divide-y divide-zinc-200 dark:divide-zinc-800 border border-zinc-100 dark:border-zinc-800 rounded-xl">
+                    {lateEarlyData.map((d, i) => (
+                      <div key={`mob-le-${i}`} className="p-3.5 space-y-2 text-xs">
+                        <div className="flex items-center justify-between">
+                          <span className="font-semibold text-zinc-800 dark:text-zinc-100">{d.employeeName}</span>
+                          <span className="text-zinc-500">{d.date}</span>
+                        </div>
+                        <div className="grid grid-cols-4 gap-2 text-center">
+                          <div><p className="text-[10px] text-zinc-400">In</p><p className="text-zinc-700 dark:text-zinc-300">{d.punchIn}</p></div>
+                          <div><p className="text-[10px] text-zinc-400">Out</p><p className="text-zinc-700 dark:text-zinc-300">{d.punchOut}</p></div>
+                          <div><p className="text-[10px] text-zinc-400">Late</p><p className="font-semibold text-red-600">{d.lateMinutes > 0 ? `${d.lateMinutes}m` : "—"}</p></div>
+                          <div><p className="text-[10px] text-zinc-400">Early</p><p className="font-semibold text-amber-600">{d.earlyMinutes > 0 ? `${d.earlyMinutes}m` : "—"}</p></div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="hidden md:block overflow-x-auto border border-zinc-100 rounded-xl">
                     <table className="min-w-full divide-y divide-zinc-200 text-xs text-left">
                       <thead className="bg-zinc-50 text-zinc-500 uppercase font-bold tracking-wider">
                         <tr>
@@ -1184,7 +1283,24 @@ export function AttendancePageClient({
                     </button>
                   </div>
 
-                  <div className="overflow-x-auto border border-zinc-100 rounded-xl">
+                  {/* Mobile Vertical Cards (< 768px) */}
+                  <div className="block md:hidden divide-y divide-zinc-200 dark:divide-zinc-800 border border-zinc-100 dark:border-zinc-800 rounded-xl">
+                    {overtimeData.map((d, i) => (
+                      <div key={`mob-ot-${i}`} className="p-3.5 space-y-2 text-xs">
+                        <div className="flex items-center justify-between">
+                          <span className="font-semibold text-zinc-800 dark:text-zinc-100">{d.employeeName}</span>
+                          <span className="text-zinc-500">{d.date}</span>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2">
+                          <div><p className="text-[10px] text-zinc-400">Regular</p><p className="text-zinc-700 dark:text-zinc-300">{d.regularHours}h</p></div>
+                          <div><p className="text-[10px] text-zinc-400">Overtime</p><p className="font-bold text-emerald-600">{d.overtimeHours}h ({d.overtimeMinutes}m)</p></div>
+                          <div><p className="text-[10px] text-zinc-400">Total</p><p className="font-semibold text-zinc-800 dark:text-zinc-200">{d.totalHours}h</p></div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="hidden md:block overflow-x-auto border border-zinc-100 rounded-xl">
                     <table className="min-w-full divide-y divide-zinc-200 text-xs text-left">
                       <thead className="bg-zinc-50 text-zinc-500 uppercase font-bold tracking-wider">
                         <tr>

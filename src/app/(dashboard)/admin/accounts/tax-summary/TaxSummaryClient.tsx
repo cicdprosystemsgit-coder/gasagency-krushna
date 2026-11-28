@@ -383,7 +383,26 @@ export function TaxSummaryClient({ initialData, defaultFY }: TaxSummaryClientPro
           </div>
 
           {fdInterestDetails.length > 0 ? (
-            <div className="overflow-x-auto">
+            <>
+            <div className="block md:hidden divide-y divide-slate-100 dark:divide-zinc-800">
+              {fdInterestDetails.map((fd: any, idx: number) => (
+                <div key={`mob-fd-${idx}`} className="py-3 space-y-1.5 text-xs">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="font-bold text-slate-800 dark:text-zinc-100">{fd.bankName}</p>
+                      <p className="text-[10px] text-slate-400">Ref: {fd.accountRef}</p>
+                    </div>
+                    <span className="font-bold text-emerald-600">+{formatCurrency(fd.interestEarned)}</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div><p className="text-[10px] text-slate-400">Principal</p><p className="font-semibold">{formatCurrency(fd.principal)}</p></div>
+                    <div><p className="text-[10px] text-slate-400">Rate</p><p className="font-semibold">{fd.rate}%</p></div>
+                    <div><p className="text-[10px] text-slate-400">Days</p><p>{fd.daysInPeriod} days</p></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-left border-collapse text-xs">
                 <thead>
                   <tr className="text-slate-400 font-bold border-b border-slate-100 pb-2">
@@ -410,6 +429,7 @@ export function TaxSummaryClient({ initialData, defaultFY }: TaxSummaryClientPro
                 </tbody>
               </table>
             </div>
+            </>
           ) : (
             <p className="text-xs text-slate-400 text-center py-6">No active investments found during this financial year.</p>
           )}
@@ -434,7 +454,26 @@ export function TaxSummaryClient({ initialData, defaultFY }: TaxSummaryClientPro
         </div>
 
         {loanDetails.length > 0 ? (
-          <div className="overflow-x-auto">
+          <>
+          <div className="block md:hidden divide-y divide-slate-100 dark:divide-zinc-800">
+            {loanDetails.map((loan: any, idx: number) => (
+              <div key={`mob-ln-${idx}`} className="py-3 space-y-1.5 text-xs">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <p className="font-bold text-slate-800 dark:text-zinc-100">{loan.bankName}</p>
+                    <p className="text-[10px] text-slate-400">Ref: {loan.loanRef}</p>
+                  </div>
+                  <span className="font-extrabold text-slate-800 dark:text-zinc-100">{formatCurrency(loan.emiPaidAmount)}</span>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <div><p className="text-[10px] text-slate-400">Principal</p><p className="font-semibold">{formatCurrency(loan.principal)}</p></div>
+                  <div><p className="text-[10px] text-slate-400">Rate</p><p className="font-semibold">{loan.rate}%</p></div>
+                  <div><p className="text-[10px] text-slate-400">Penalty</p><p className="font-bold text-red-600">{loan.penaltyPaidAmount > 0 ? `-${formatCurrency(loan.penaltyPaidAmount)}` : "—"}</p></div>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-left border-collapse text-xs">
               <thead>
                 <tr className="text-slate-400 font-bold border-b border-slate-100 pb-2">
@@ -463,6 +502,7 @@ export function TaxSummaryClient({ initialData, defaultFY }: TaxSummaryClientPro
               </tbody>
             </table>
           </div>
+          </>
         ) : (
           <p className="text-xs text-slate-400 text-center py-6">No active loans repayments recorded during this period.</p>
         )}

@@ -357,6 +357,33 @@ export function DemoRequestsClient({ initialRequests }: { initialRequests: DemoR
             </p>
           </div>
         ) : (
+          <>
+          {/* Mobile Vertical Cards (< 768px) */}
+          <div className="block md:hidden divide-y divide-slate-100">
+            {filtered.map((r) => (
+              <div key={`mob-demo-${r.id}`} className="p-3.5 space-y-2 text-xs">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="font-semibold text-slate-900 truncate">{r.name}</p>
+                    <p className="text-[11px] text-slate-400">{r.phone} · {r.email}</p>
+                  </div>
+                  <select
+                    value={r.status}
+                    onChange={(e) => handleStatusChange(r.id, e.target.value)}
+                    className="text-[11px] font-semibold px-2 py-1 rounded-md border border-slate-200 bg-slate-50"
+                  >
+                    <option value="NEW">New</option>
+                    <option value="CONTACTED">Contacted</option>
+                    <option value="CONVERTED">Converted</option>
+                    <option value="CLOSED">Closed</option>
+                  </select>
+                </div>
+                {r.notes && <p className="text-[11px] text-slate-500 break-words">{r.notes}</p>}
+              </div>
+            ))}
+          </div>
+
+          <div className="hidden md:block overflow-x-auto">
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
             <thead>
               <tr style={{ borderBottom: "1px solid #F1F5F9", background: "#F8FAFC" }}>
@@ -377,6 +404,8 @@ export function DemoRequestsClient({ initialRequests }: { initialRequests: DemoR
               ))}
             </tbody>
           </table>
+          </div>
+          </>
         )}
       </div>
 

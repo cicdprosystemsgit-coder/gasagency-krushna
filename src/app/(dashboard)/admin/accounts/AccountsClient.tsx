@@ -630,7 +630,7 @@ export function AccountsClient({ initialAccounts, userId }: AccountsClientProps)
           )}
 
           {["SAVINGS", "CURRENT"].includes(accountForm.accountType) && (
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="col-span-2">
                 <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
                   Bank Name

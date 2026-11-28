@@ -389,7 +389,121 @@ export function LeaveAdminClient({
               <span className="text-[12px]" style={{ color: "#A1A1AA" }}>{filtered.length} requests</span>
             </div>
 
-            <div className="overflow-x-auto">
+            {/* Mobile Vertical Cards (< 768px) */}
+            <div className="block md:hidden divide-y divide-zinc-200 dark:divide-zinc-800">
+              {filtered.length === 0 ? (
+                <div className="py-12 px-4 text-center">
+                  <CalendarDays className="w-8 h-8 mx-auto mb-2 text-zinc-300 dark:text-zinc-600" />
+                  <p className="text-[13px] font-medium text-zinc-600 dark:text-zinc-300">No leave requests found</p>
+                  <p className="text-[12px] mt-0.5 text-zinc-400 dark:text-zinc-500">
+                    Try adjusting your filters
+                  </p>
+                </div>
+              ) : filtered.map((leave) => {
+                const st = STATUS_STYLES[leave.status] ?? STATUS_STYLES.PENDING;
+                const isPendingRow = leave.status === "PENDING";
+                return (
+                  <div
+                    key={`mob-${leave.id}`}
+                    className={`p-3.5 space-y-2.5 ${isPendingRow && selected.has(leave.id) ? "bg-blue-50/60 dark:bg-blue-950/20" : ""}`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        {statusFilter === "PENDING" && isPendingRow && (
+                          <input
+                            type="checkbox"
+                            className="w-4 h-4 shrink-0 accent-blue-600"
+                            checked={selected.has(leave.id)}
+                            onChange={(e) => {
+                              const next = new Set(selected);
+                              if (e.target.checked) next.add(leave.id);
+                              else next.delete(leave.id);
+                              setSelected(next);
+                            }}
+                          />
+                        )}
+                        <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0" style={{ background: "#7C3AED" }}>
+                          {leave.employee.name.charAt(0)}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[13px] font-semibold text-zinc-900 dark:text-zinc-100 truncate">{leave.employee.name}</p>
+                          <p className="text-[11px] text-zinc-400 dark:text-zinc-500">{ROLE_LABELS[leave.employee.role] ?? leave.employee.role}</p>
+                        </div>
+                      </div>
+                      <span className={`inline-flex items-center gap-1 text-[11px] px-2.5 py-0.5 rounded-full font-semibold shrink-0 ${st.chip}`}>
+                        {st.icon} {leave.status}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wider text-zinc-400 dark:text-zinc-500">Leave Type</p>
+                        <div className="mt-0.5">
+                          <span className={`text-[11px] px-2 py-0.5 rounded-full font-semibold ${leaveTypeColor(leave.leaveType)}`}>
+                            {leaveTypeLabel(leave.leaveType)}
+                          </span>
+                        </div>
+                      </div>
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wider text-zinc-400 dark:text-zinc-500">Duration</p>
+                        <p className="font-semibold text-zinc-900 dark:text-zinc-100 mt-0.5">{leave.totalDays} day{leave.totalDays !== 1 ? "s" : ""}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wider text-zinc-400 dark:text-zinc-500">From</p>
+                        <p className="text-zinc-700 dark:text-zinc-300 mt-0.5">{formatDate(leave.startDate)}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wider text-zinc-400 dark:text-zinc-500">To</p>
+                        <p className="text-zinc-700 dark:text-zinc-300 mt-0.5">{formatDate(leave.endDate)}</p>
+                      </div>
+                    </div>
+
+                    {leave.reason && (
+                      <div className="text-xs">
+                        <p className="text-[10px] uppercase tracking-wider text-zinc-400 dark:text-zinc-500">Reason</p>
+                        <p className="text-zinc-700 dark:text-zinc-300 mt-0.5 break-words">{leave.reason}</p>
+                      </div>
+                    )}
+
+                    {leave.reviewedBy && (
+                      <p className="text-[11px] text-zinc-400 dark:text-zinc-500">
+                        Reviewed by: <span className="text-zinc-700 dark:text-zinc-300 font-medium">{leave.reviewedBy.name}</span>
+                      </p>
+                    )}
+
+                    <div className="flex items-center justify-end gap-2 pt-2 border-t border-zinc-100 dark:border-zinc-800">
+                      <button
+                        onClick={() => setViewLeave(leave)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200"
+                      >
+                        <Eye className="w-3.5 h-3.5" /> View
+                      </button>
+                      {isPendingRow && (
+                        <>
+                          <button
+                            onClick={() => { setRejectLeave(leave); setRejectNote(""); }}
+                            disabled={isPending}
+                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold border border-red-200 dark:border-red-900/60 bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400"
+                          >
+                            <XCircle className="w-3.5 h-3.5" /> Reject
+                          </button>
+                          <button
+                            onClick={() => doApprove(leave.id)}
+                            disabled={isPending}
+                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold border border-emerald-200 dark:border-emerald-900/60 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400"
+                          >
+                            <CheckCircle2 className="w-3.5 h-3.5" /> Approve
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Desktop Table (>= 768px) */}
+            <div className="hidden md:block overflow-x-auto">
               <table className="table">
                 <thead>
                   <tr>
@@ -537,7 +651,60 @@ export function LeaveAdminClient({
               <p className="text-[13px]" style={{ color: "#A1A1AA" }}>No leave data yet</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <>
+              {/* Mobile Vertical Cards (< 768px) */}
+              <div className="block md:hidden divide-y divide-zinc-200 dark:divide-zinc-800">
+                {[...employeeSummary]
+                  .sort((a, b) => b.totalDays - a.totalDays)
+                  .map((emp) => (
+                    <div key={`mob-sum-${emp.id}`} className="p-3.5 space-y-2.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0" style={{ background: "#2563EB" }}>
+                            {emp.name.charAt(0)}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-[13px] font-semibold text-zinc-900 dark:text-zinc-100 truncate">{emp.name}</p>
+                            <p className="text-[11px] text-zinc-400 dark:text-zinc-500">{ROLE_LABELS[emp.role] ?? emp.role}</p>
+                          </div>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <span className="text-sm font-bold text-zinc-900 dark:text-zinc-100">{emp.totalDays}</span>
+                          <span className="text-[11px] ml-1 text-zinc-400">days</span>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 text-center text-xs pt-1">
+                        <div className="rounded-lg py-1.5 bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400">
+                          <p className="text-[10px] opacity-80">Pending</p>
+                          <p className="font-bold">{emp.pending}</p>
+                        </div>
+                        <div className="rounded-lg py-1.5 bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-400">
+                          <p className="text-[10px] opacity-80">Approved</p>
+                          <p className="font-bold">{emp.approved}</p>
+                        </div>
+                        <div className="rounded-lg py-1.5 bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-400">
+                          <p className="text-[10px] opacity-80">Rejected</p>
+                          <p className="font-bold">{emp.rejected}</p>
+                        </div>
+                      </div>
+                      <div className="flex justify-end pt-1">
+                        <button
+                          onClick={() => {
+                            setEmpFilter(emp.id);
+                            setStatusFilter("ALL");
+                            setActiveTab("requests");
+                          }}
+                          className="text-xs font-semibold text-blue-600 dark:text-blue-400"
+                        >
+                          View all requests →
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+
+              {/* Desktop Table (>= 768px) */}
+              <div className="hidden md:block overflow-x-auto">
               <table className="table">
                 <thead>
                   <tr>
@@ -603,6 +770,7 @@ export function LeaveAdminClient({
                 </tbody>
               </table>
             </div>
+            </>
           )}
         </div>
       )}

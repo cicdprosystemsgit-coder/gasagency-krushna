@@ -394,7 +394,69 @@ export function ManagerDailyClosingClient({ initialClosings, role }: ManagerDail
 
       {/* Closings List Table */}
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
+        {/* Mobile Vertical Cards (< 768px) */}
+        <div className="block md:hidden divide-y divide-slate-100 dark:divide-zinc-800">
+          {filteredClosings.length === 0 ? (
+            <div className="px-5 py-12 text-center">
+              <ClipboardCheck className="w-10 h-10 mx-auto mb-3 text-slate-300" />
+              <p className="text-slate-400 text-xs">No daily closing records found</p>
+            </div>
+          ) : (
+            filteredClosings.map((c) => (
+              <div key={`mob-mcls-${c.id}`} className="p-3.5 space-y-2.5 text-xs">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <p className="font-semibold text-[13px] text-slate-800 dark:text-zinc-100">{formatDate(c.date)}</p>
+                    <p className="text-[11px] text-slate-400">{c.totalDeliveries} deliveries</p>
+                  </div>
+                  <StatusBadge status={c.status === "PENDING" && c.managerApprovedAt ? "MANAGER_APPROVED" : c.status} />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <p className="text-[10px] uppercase text-slate-400">Cash Handover</p>
+                    <p className="font-bold text-green-700">{formatCurrency(c.cashOnHand)}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase text-slate-400">Online Payments</p>
+                    <p className="font-bold text-purple-700">{formatCurrency(c.totalOnlinePayment)}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase text-slate-400">Udhari (Credit)</p>
+                    <p className="font-bold text-amber-700">{formatCurrency(c.totalUdhari)}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase text-slate-400">Shortage / Excess</p>
+                    {c.shortageAmount > 0 ? (
+                      <p className="font-semibold text-rose-600">-{formatCurrency(c.shortageAmount)}</p>
+                    ) : c.excessAmount > 0 ? (
+                      <p className="font-semibold text-emerald-600">+{formatCurrency(c.excessAmount)}</p>
+                    ) : (
+                      <p className="text-slate-400">Balanced</p>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-zinc-800">
+                  <button
+                    onClick={() => { setDetailClosing(c); setEditMode(false); }}
+                    className="text-xs text-blue-700 font-bold bg-blue-50 px-3 py-1.5 rounded-lg"
+                  >
+                    View
+                  </button>
+                  {c.status !== "APPROVED" && (
+                    <button
+                      onClick={() => handleDirectEdit(c)}
+                      className="inline-flex items-center gap-1 text-xs text-amber-700 font-bold bg-amber-50 px-3 py-1.5 rounded-lg border border-amber-200"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" /> Edit
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-100 text-slate-500 font-bold uppercase text-[11px] tracking-wider">

@@ -1897,7 +1897,7 @@ export function InventoryClient({ initialProducts, initialDeletedProducts = EMPT
               </div>
             );
           })()}
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label className="block text-[12px] font-medium mb-1.5" style={{ color: "#52525B" }}>Base Rate (₹)</label>
               <input
@@ -2013,7 +2013,7 @@ export function InventoryClient({ initialProducts, initialDeletedProducts = EMPT
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label className="block text-[12px] font-medium mb-1.5 text-zinc-700">Base Rate (₹)</label>
               <input

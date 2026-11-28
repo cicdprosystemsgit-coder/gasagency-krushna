@@ -864,7 +864,42 @@ export function AssetsManagementClient({
             <span className="badge badge-neutral text-xs">{assets.length} Assets Registered</span>
           </div>
 
-          <div className="overflow-x-auto">
+          {/* Mobile Vertical Cards (< 768px) */}
+          <div className="block md:hidden divide-y divide-slate-100 dark:divide-zinc-800">
+            {assets.length === 0 ? (
+              <div className="py-12 text-center text-slate-400 text-xs">No registered physical assets</div>
+            ) : assets.map((a) => (
+              <div key={`mob-ast-${a.id}`} className="py-3 space-y-2 text-xs">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <span className={`badge ${a.assetType === "VEHICLE" ? "badge-info" : "badge-neutral"} text-[10px] px-2 py-0.5 rounded-md`}>
+                      {a.assetType}
+                    </span>
+                    <p className="font-bold text-slate-800 dark:text-zinc-100 mt-1">{a.name}</p>
+                  </div>
+                  <span className="font-bold text-slate-900 dark:text-zinc-100 shrink-0">{formatCurrency(a.price)}</span>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div><p className="text-[10px] text-slate-400">Reg. Date</p><p>{formatDate(a.registrationDate)}</p></div>
+                  <div><p className="text-[10px] text-slate-400">Next Renewal</p><p>{a.nextRenewalDate ? formatDate(a.nextRenewalDate) : "—"}</p></div>
+                </div>
+                <div className="flex items-center justify-between pt-1">
+                  {a.nextRenewalDate ? (
+                    <span className={`badge text-[10px] px-2 py-0.5 rounded font-bold ${a.renewalStatus === "critical" ? "bg-red-100 text-red-800" : a.renewalStatus === "warning" ? "bg-amber-100 text-amber-800" : "bg-green-100 text-green-800"}`}>
+                      {a.daysLeft !== null && a.daysLeft < 0 ? `Expired (${Math.abs(a.daysLeft)}d ago)` : `${a.daysLeft} days left`}
+                    </span>
+                  ) : <span />}
+                  {canEdit && (
+                    <button onClick={() => openEditAssetModal(a)} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-slate-200 text-slate-600 text-xs">
+                      <Edit className="w-3 h-3" /> Edit
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="hidden md:block overflow-x-auto">
             <table className="table w-full">
               <thead>
                 <tr>
@@ -951,7 +986,26 @@ export function AssetsManagementClient({
               </div>
             </div>
 
-            <div className="overflow-x-auto">
+            {/* Mobile Vertical Cards (< 768px) */}
+            <div className="block md:hidden divide-y divide-slate-100 dark:divide-zinc-800">
+              {inventory.length === 0 ? (
+                <div className="py-12 text-center text-slate-400 text-xs">No product stocks recorded</div>
+              ) : inventory.map((item) => (
+                <div key={`mob-invv-${item.id}`} className="py-3 space-y-1.5 text-xs">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-bold text-slate-800 dark:text-zinc-100">{item.name}</span>
+                    <span className="font-bold text-slate-900 dark:text-zinc-100">{formatCurrency(item.stockValue)}</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div><p className="text-[10px] text-slate-400">Stock</p><p className="font-medium">{item.closingStock} units</p></div>
+                    <div><p className="text-[10px] text-slate-400">Unit Cost</p><p>{formatCurrency(item.unitCost)}</p></div>
+                    <div><p className="text-[10px] text-slate-400">Potential Rev.</p><p className="font-bold text-green-600">{formatCurrency(item.potentialRevenue)}</p></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="hidden md:block overflow-x-auto">
               <table className="table w-full">
                 <thead>
                   <tr>

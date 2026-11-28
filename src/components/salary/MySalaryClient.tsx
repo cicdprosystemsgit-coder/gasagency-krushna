@@ -568,8 +568,38 @@ function PayslipsTab({ drawings, bonuses, yearFilter, setYearFilter, availableYe
                 </div>
 
                 {isOpen && (
-                  <div className="px-5 pb-4 border-t" style={{ borderColor: "#F4F4F5" }}>
-                    <div className="mt-3 rounded-lg overflow-hidden"
+                  <div className="px-4 sm:px-5 pb-4 border-t" style={{ borderColor: "#F4F4F5" }}>
+                    {/* Mobile Vertical Breakdown (< 768px) */}
+                    <div className="block md:hidden mt-3 space-y-2">
+                      {entry.salary.map((d) => (
+                        <div key={`mob-sal-${d.id}`} className="flex items-start justify-between gap-2 p-2.5 rounded-lg border border-zinc-200 dark:border-zinc-800">
+                          <div className="min-w-0">
+                            <p className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">
+                              {d.type === "SALARY" ? "Salary Payment" : "Drawing"}
+                            </p>
+                            <p className="text-[11px] text-zinc-400">{formatDate(d.date)}</p>
+                            {d.remarks && <p className="text-[11px] text-zinc-500 mt-0.5 break-words">{d.remarks}</p>}
+                          </div>
+                          <span className="text-xs font-bold text-emerald-600 shrink-0">{formatCurrency(d.amount)}</span>
+                        </div>
+                      ))}
+                      {entry.recoveries.map((d) => (
+                        <div key={`mob-rec-${d.id}`} className="flex items-start justify-between gap-2 p-2.5 rounded-lg border border-red-200 dark:border-red-900/50 bg-red-50/70 dark:bg-red-950/20">
+                          <div className="min-w-0">
+                            <p className="text-xs font-semibold text-red-600">Advance Recovery</p>
+                            <p className="text-[11px] text-zinc-400">{formatDate(d.date)}</p>
+                            {d.remarks && <p className="text-[11px] text-zinc-500 mt-0.5 break-words">{d.remarks}</p>}
+                          </div>
+                          <span className="text-xs font-bold text-red-600 shrink-0">−{formatCurrency(d.amount)}</span>
+                        </div>
+                      ))}
+                      <div className="flex items-center justify-between p-2.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/50">
+                        <span className="text-xs font-bold text-emerald-700 dark:text-emerald-400">Net Received</span>
+                        <span className="text-sm font-extrabold text-emerald-700 dark:text-emerald-400">{formatCurrency(netReceived)}</span>
+                      </div>
+                    </div>
+
+                    <div className="hidden md:block mt-3 rounded-lg overflow-hidden"
                       style={{ border: "1px solid #E4E4E7" }}>
                       <table style={{ width: "100%", borderCollapse: "collapse" }}>
                         <thead>
@@ -630,7 +660,7 @@ function AdvancesTab({ advances, pendingBalance }: {
   return (
     <div>
       {/* Summary strip */}
-      <div className="grid grid-cols-3 gap-3 mb-5">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
         {[
           { label: "Total Borrowed",     val: formatCurrency(totalAdvanced),  color: "#DC2626", bg: "#FEF2F2" },
           { label: "Total Recovered",    val: formatCurrency(totalRecovered), color: "#16A34A", bg: "#F0FDF4" },
@@ -653,7 +683,48 @@ function AdvancesTab({ advances, pendingBalance }: {
       ) : (
         <div className="rounded-lg overflow-hidden"
           style={{ background: "#fff", border: "1px solid #E4E4E7", boxShadow: "0 1px 2px rgba(0,0,0,0.04)" }}>
-          <div className="overflow-x-auto">
+          {/* Mobile Vertical Cards (< 768px) */}
+          <div className="block md:hidden divide-y divide-zinc-200 dark:divide-zinc-800">
+            {[...advances].sort((a, b) => new Date(b.advanceDate).getTime() - new Date(a.advanceDate).getTime()).map((a) => {
+              const s = ADVANCE_STATUS[a.status] ?? { label: a.status, color: "#52525B", bg: "#F4F4F5" };
+              const progress = a.amount > 0 ? (a.recoveredAmount / a.amount) * 100 : 0;
+              return (
+                <div key={`mob-adv-${a.id}`} className="p-3.5 space-y-2.5">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-[13px] font-semibold text-zinc-900 dark:text-zinc-100 break-words">{a.reason ?? "Advance"}</p>
+                      <p className="text-[11px] text-zinc-400 mt-0.5">{formatDate(a.advanceDate)}</p>
+                    </div>
+                    <span className="shrink-0 text-[11px] px-2.5 py-0.5 rounded-full font-semibold" style={{ background: s.bg, color: s.color }}>
+                      {s.label}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 text-xs">
+                    <div>
+                      <p className="text-[10px] uppercase tracking-wider text-zinc-400">Amount</p>
+                      <p className="font-bold text-red-600 mt-0.5">{formatCurrency(a.amount)}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] uppercase tracking-wider text-zinc-400">Recovered</p>
+                      <p className="font-semibold text-emerald-600 mt-0.5">{formatCurrency(a.recoveredAmount)}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] uppercase tracking-wider text-zinc-400">Balance</p>
+                      <p className="font-bold mt-0.5" style={{ color: a.balanceAmount > 0 ? "#D97706" : "#16A34A" }}>
+                        {a.balanceAmount > 0 ? formatCurrency(a.balanceAmount) : "Nil"}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="h-1.5 w-full rounded-full bg-zinc-200 dark:bg-zinc-800 overflow-hidden">
+                    <div className="h-full bg-emerald-600 rounded-full" style={{ width: `${progress}%` }} />
+                  </div>
+                  {a.notes && <p className="text-[11px] text-zinc-500 break-words">{a.notes}</p>}
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="hidden md:block overflow-x-auto">
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ background: "#F9FAFB", borderBottom: "1px solid #E4E4E7" }}>
@@ -717,7 +788,7 @@ function BonusesTab({ bonuses, ytdBonus, currentYear }: {
   return (
     <div>
       {/* Summary */}
-      <div className="grid grid-cols-3 gap-3 mb-5">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
         {[
           { label: `YTD ${currentYear}`,    val: formatCurrency(ytdBonus),    color: "#D97706", bg: "#FFFBEB" },
           { label: "All Time Total",         val: formatCurrency(totalAllTime), color: "#7C3AED", bg: "#F5F3FF" },
@@ -740,7 +811,48 @@ function BonusesTab({ bonuses, ytdBonus, currentYear }: {
       ) : (
         <div className="rounded-lg overflow-hidden"
           style={{ background: "#fff", border: "1px solid #E4E4E7", boxShadow: "0 1px 2px rgba(0,0,0,0.04)" }}>
-          <div className="overflow-x-auto">
+          {/* Mobile Vertical Cards (< 768px) */}
+          <div className="block md:hidden divide-y divide-zinc-200 dark:divide-zinc-800">
+            {[...advances].sort((a, b) => new Date(b.advanceDate).getTime() - new Date(a.advanceDate).getTime()).map((a) => {
+              const s = ADVANCE_STATUS[a.status] ?? { label: a.status, color: "#52525B", bg: "#F4F4F5" };
+              const progress = a.amount > 0 ? (a.recoveredAmount / a.amount) * 100 : 0;
+              return (
+                <div key={`mob-adv-${a.id}`} className="p-3.5 space-y-2.5">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-[13px] font-semibold text-zinc-900 dark:text-zinc-100 break-words">{a.reason ?? "Advance"}</p>
+                      <p className="text-[11px] text-zinc-400 mt-0.5">{formatDate(a.advanceDate)}</p>
+                    </div>
+                    <span className="shrink-0 text-[11px] px-2.5 py-0.5 rounded-full font-semibold" style={{ background: s.bg, color: s.color }}>
+                      {s.label}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 text-xs">
+                    <div>
+                      <p className="text-[10px] uppercase tracking-wider text-zinc-400">Amount</p>
+                      <p className="font-bold text-red-600 mt-0.5">{formatCurrency(a.amount)}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] uppercase tracking-wider text-zinc-400">Recovered</p>
+                      <p className="font-semibold text-emerald-600 mt-0.5">{formatCurrency(a.recoveredAmount)}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] uppercase tracking-wider text-zinc-400">Balance</p>
+                      <p className="font-bold mt-0.5" style={{ color: a.balanceAmount > 0 ? "#D97706" : "#16A34A" }}>
+                        {a.balanceAmount > 0 ? formatCurrency(a.balanceAmount) : "Nil"}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="h-1.5 w-full rounded-full bg-zinc-200 dark:bg-zinc-800 overflow-hidden">
+                    <div className="h-full bg-emerald-600 rounded-full" style={{ width: `${progress}%` }} />
+                  </div>
+                  {a.notes && <p className="text-[11px] text-zinc-500 break-words">{a.notes}</p>}
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="hidden md:block overflow-x-auto">
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ background: "#F9FAFB", borderBottom: "1px solid #E4E4E7" }}>

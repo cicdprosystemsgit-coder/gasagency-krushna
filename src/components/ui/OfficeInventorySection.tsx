@@ -129,6 +129,26 @@ export function OfficeInventorySection({ movements }: Props) {
                 </div>
 
                 <div className="rounded-lg overflow-hidden" style={{ border: "1px solid #F4F4F5" }}>
+                  {/* Mobile Vertical Cards (< 768px) */}
+                  <div className="block md:hidden divide-y divide-zinc-100 dark:divide-zinc-800">
+                    {dispatched.length === 0 ? (
+                      <div className="py-8 text-center text-xs text-zinc-400">No dispatches recorded</div>
+                    ) : (historyOpen ? dispatched : dispatched.slice(0, 5)).map((m) => (
+                      <div key={`mob-ois-${m.id}`} className="p-3 space-y-1 text-xs">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-semibold text-zinc-900 dark:text-zinc-100">{m.product.name}</span>
+                          <span className="font-bold text-blue-600">{m.qty}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-[11px] text-zinc-400">
+                          <span>{new Date(m.date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</span>
+                          <span>By {m.recordedBy.name}</span>
+                        </div>
+                        {(m.batchNo || m.notes) && <p className="text-[11px] text-zinc-500">{[m.batchNo, m.notes].filter(Boolean).join(" · ")}</p>}
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="hidden md:block overflow-x-auto">
                   <table className="w-full">
                     <thead>
                       <tr style={{ background: "#FAFAFA", borderBottom: "1px solid #F4F4F5" }}>
@@ -162,6 +182,7 @@ export function OfficeInventorySection({ movements }: Props) {
                       )}
                     </tbody>
                   </table>
+                  </div>
                 </div>
 
                 {/* Month-grouped summary (only when history is open) */}

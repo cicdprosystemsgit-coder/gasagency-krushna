@@ -508,7 +508,27 @@ export default async function GodownKeeperDashboard() {
                 </Link>
               </div>
 
-              <div className="overflow-x-auto">
+              {/* Mobile Vertical Cards (< 768px) */}
+              <div className="block md:hidden divide-y divide-zinc-100 dark:divide-zinc-800">
+                {todayTrips.length === 0 ? (
+                  <div className="px-4 py-10 text-center text-xs text-zinc-400 italic">{t("noFleetMovements")}</div>
+                ) : todayTrips.map((tr) => {
+                  const style = TRIP_STATUS_STYLES[tr.tripStatus] || { label: tr.tripStatus, bg: "#F4F4F5", text: "#71717A" };
+                  return (
+                    <div key={`mob-gk-${tr.id}`} className="p-3.5 flex items-center justify-between gap-2 text-xs">
+                      <div className="min-w-0">
+                        <p className="font-mono font-extrabold text-zinc-800 dark:text-zinc-100">{tr.vehicle.vehicleNo}</p>
+                        <p className="text-[11px] text-zinc-500 truncate">{tr.vehicle.assignedTo?.name ?? "—"} · <strong className="text-blue-600">{tr.cylindersLoaded} cyl</strong></p>
+                      </div>
+                      <span className="inline-block px-2.5 py-1 rounded-full text-[10px] font-bold shrink-0" style={{ background: style.bg, color: style.text }}>
+                        {style.label}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="hidden md:block overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="bg-zinc-50 border-b border-zinc-100">

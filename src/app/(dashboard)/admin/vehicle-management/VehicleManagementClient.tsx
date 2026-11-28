@@ -668,7 +668,34 @@ export function VehicleManagementClient({ initialVehicles, initialTripLogs, empl
                 <p className="text-sm text-gray-400 mt-1">Try adjusting your filters or record a new trip from the Fleet tab.</p>
               </div>
             ) : (
-              <div className="overflow-x-auto">
+              <>
+              {/* Mobile Vertical Cards (< 768px) */}
+              <div className="block md:hidden divide-y divide-gray-100 dark:divide-zinc-800">
+                {filteredTrips.map(t => (
+                  <div key={`mob-trip-${t.id}`} className="p-3.5 space-y-2 text-xs">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <p className="font-mono font-bold text-gray-800 dark:text-zinc-100">{t.vehicle?.vehicleNo ?? "—"} <span className="font-sans font-normal text-gray-400">· {t.vehicle?.vehicleName}</span></p>
+                        <p className="text-[11px] text-gray-400">{fmtDate(t.date)} · Driver: {t.vehicle?.assignedTo?.name ?? "—"}</p>
+                      </div>
+                      <TripStatusBadge status={t.tripStatus} />
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div><p className="text-[10px] text-gray-400">Loaded</p><p className="font-semibold text-gray-800 dark:text-zinc-200">{t.cylindersLoaded}</p></div>
+                      <div><p className="text-[10px] text-gray-400">Delivered</p><p className="font-semibold text-green-700">{t.cylindersDelivered || "—"}</p></div>
+                      <div><p className="text-[10px] text-gray-400">Returned</p><p className="font-semibold text-blue-700">{t.cylindersReturned || "—"}</p></div>
+                    </div>
+                    <div className="flex items-center justify-between pt-1 text-[11px] text-gray-500">
+                      <span>Dep: {fmtTime(t.departureTime)} · Ret: {fmtTime(t.returnTime)}</span>
+                      {(t.tripStatus === "LOADED" || t.tripStatus === "OUT_FOR_DELIVERY") && (
+                        <button onClick={() => openUpdateTrip(t)} className="px-2.5 py-1 text-xs bg-blue-50 text-blue-600 rounded-lg font-medium">Update</button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="hidden md:block overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-gray-50 border-b border-gray-100">
@@ -712,6 +739,7 @@ export function VehicleManagementClient({ initialVehicles, initialTripLogs, empl
                   </tbody>
                 </table>
               </div>
+              </>
             )}
           </div>
         </div>
@@ -1079,7 +1107,7 @@ export function VehicleManagementClient({ initialVehicles, initialTripLogs, empl
               )}
 
               {/* Trip stats */}
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {[
                   { label: "Total Trips", value: vTrips.length },
                   { label: "Total Cylinders", value: vTrips.reduce((s, t) => s + t.cylindersLoaded, 0) },

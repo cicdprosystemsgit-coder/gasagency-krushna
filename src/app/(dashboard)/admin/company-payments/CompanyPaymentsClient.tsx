@@ -344,7 +344,39 @@ export function CompanyPaymentsClient({
 
       {/* Main payments table */}
       <div className="card overflow-hidden">
-        <div className="overflow-x-auto">
+        {/* Mobile Vertical Cards (< 768px) */}
+        <div className="block md:hidden divide-y divide-slate-100 dark:divide-zinc-800">
+          {payments.length === 0 ? (
+            <div className="py-12 px-4 text-center text-slate-400 text-xs">No payment records found matching filters</div>
+          ) : payments.map((p) => (
+            <div key={`mob-cpay-${p.id}`} className="p-3.5 space-y-2 text-xs">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="font-semibold text-sm text-slate-800 dark:text-zinc-100 truncate">{p.oilCompany || "N/A"}</p>
+                  <p className="text-[11px] text-slate-400">{formatDate(p.date)} · {p.addedBy.name}</p>
+                </div>
+                <span className="font-bold text-sm text-red-600 shrink-0">{formatCurrency(p.amount)}</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div><p className="text-[10px] uppercase text-slate-400">Invoice / Ref</p><p className="font-mono text-slate-600 dark:text-zinc-300 truncate">{p.invoiceNo || p.referenceNo || "—"}</p></div>
+                <div><p className="text-[10px] uppercase text-slate-400">Product / Qty</p><p className="text-slate-700 dark:text-zinc-300">{p.product?.name || "Mixed"} ({p.qtyCylinders ?? "—"})</p></div>
+              </div>
+              <div className="flex items-center justify-between pt-1">
+                <span className={`badge border text-[10px] px-2 py-0.5 rounded-full ${paymentModeColors[p.paymentMode] || "badge-neutral"}`}>
+                  {p.paymentMode}
+                </span>
+                {canEdit && (
+                  <div className="flex items-center gap-1.5">
+                    <button onClick={() => openEditModal(p)} className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-800"><Edit className="w-3.5 h-3.5" /></button>
+                    <button onClick={() => handleDelete(p.id)} className="p-1.5 rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600"><Trash2 className="w-3.5 h-3.5" /></button>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="hidden md:block overflow-x-auto">
           <table className="table w-full">
             <thead>
               <tr>

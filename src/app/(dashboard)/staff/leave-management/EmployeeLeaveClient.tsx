@@ -323,7 +323,86 @@ export function EmployeeLeaveClient({
           <span className="text-[12px]" style={{ color: "#A1A1AA" }}>{leaves.length} requests</span>
         </div>
 
-        <div className="overflow-x-auto">
+        {/* Mobile Vertical Cards (< 768px) */}
+        <div className="block md:hidden divide-y divide-zinc-200 dark:divide-zinc-800">
+          {leaves.length === 0 ? (
+            <div className="py-12 px-4 text-center">
+              <CalendarDays className="w-8 h-8 mx-auto mb-2 text-zinc-300 dark:text-zinc-600" />
+              <p className="text-[13px] font-medium text-zinc-600 dark:text-zinc-300">No leave requests yet</p>
+              <p className="text-[12px] mt-0.5 text-zinc-400 dark:text-zinc-500">
+                Click &quot;Apply for Leave&quot; to submit your first request
+              </p>
+            </div>
+          ) : leaves.map((leave) => {
+            const st = STATUS_STYLES[leave.status] ?? STATUS_STYLES.PENDING;
+            return (
+              <div key={`mob-${leave.id}`} className="p-3.5 space-y-2.5">
+                <div className="flex items-start justify-between gap-2">
+                  <span className={`text-[11px] px-2.5 py-0.5 rounded-full font-semibold ${leaveTypeColor(leave.leaveType)}`}>
+                    {leaveTypeLabel(leave.leaveType)}
+                  </span>
+                  <span className={`inline-flex items-center gap-1 text-[11px] px-2.5 py-0.5 rounded-full font-semibold ${st.chip}`}>
+                    {st.icon} {leave.status}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wider text-zinc-400 dark:text-zinc-500">From</p>
+                    <p className="font-medium text-zinc-800 dark:text-zinc-200 mt-0.5">{formatDate(leave.startDate)}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wider text-zinc-400 dark:text-zinc-500">To</p>
+                    <p className="font-medium text-zinc-800 dark:text-zinc-200 mt-0.5">{formatDate(leave.endDate)}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wider text-zinc-400 dark:text-zinc-500">Days</p>
+                    <p className="font-semibold text-zinc-900 dark:text-zinc-100 mt-0.5">{leave.totalDays} day{leave.totalDays !== 1 ? "s" : ""}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wider text-zinc-400 dark:text-zinc-500">Reviewed By</p>
+                    <p className="text-zinc-700 dark:text-zinc-300 mt-0.5">
+                      {leave.reviewedBy ? leave.reviewedBy.name : "—"}
+                    </p>
+                  </div>
+                </div>
+
+                {leave.reason && (
+                  <div className="text-xs">
+                    <p className="text-[10px] uppercase tracking-wider text-zinc-400 dark:text-zinc-500">Reason</p>
+                    <p className="text-zinc-700 dark:text-zinc-300 mt-0.5 break-words">{leave.reason}</p>
+                  </div>
+                )}
+
+                {leave.status === "REJECTED" && leave.reviewNote && (
+                  <div className="text-xs px-2.5 py-1.5 rounded-md bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 font-medium">
+                    Rejection note: {leave.reviewNote}
+                  </div>
+                )}
+
+                <div className="flex items-center justify-end gap-2 pt-2 border-t border-zinc-100 dark:border-zinc-800">
+                  <button
+                    onClick={() => setViewLeave(leave)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200"
+                  >
+                    <FileText className="w-3.5 h-3.5" /> Details
+                  </button>
+                  {leave.status === "PENDING" && (
+                    <button
+                      onClick={() => setCancelId(leave.id)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-red-200 dark:border-red-900/60 bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" /> Cancel
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Desktop Table (>= 768px) */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="table">
             <thead>
               <tr>

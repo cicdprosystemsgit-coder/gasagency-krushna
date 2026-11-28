@@ -125,12 +125,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       />
 
       <main
-        className={`transition-all duration-200 ${collapsed ? "ml-0 md:ml-[52px]" : "ml-0 md:ml-[220px]"} min-h-screen flex flex-col justify-between pb-[var(--app-bottom-nav-height,60px)] md:pb-0`}
+        className={`transition-all duration-200 ${collapsed ? "ml-0 md:ml-[52px]" : "ml-0 md:ml-[220px]"} min-h-screen min-w-0 max-w-full overflow-x-hidden flex flex-col justify-between pb-[var(--app-bottom-nav-height,60px)] md:pb-0`}
         style={{
           paddingTop: "var(--app-header-height, 52px)",
         }}
       >
-        <div className="px-2.5 pt-2 pb-3 sm:p-5 lg:p-6 animate-fade-up flex-1">
+        <div className="px-2.5 pt-2 pb-3 sm:p-5 lg:p-6 animate-fade-up flex-1 min-w-0 max-w-full">
           {children}
         </div>
         <Footer className="hidden md:block md:pb-4" />

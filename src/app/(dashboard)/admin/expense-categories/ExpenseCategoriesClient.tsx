@@ -184,6 +184,29 @@ export function ExpenseCategoriesClient({ budgetData: initial, uncategorizedSpen
       {/* Categories table */}
       <div className="card overflow-hidden mb-6">
         <div className="card-section"><p className="text-[13px] font-semibold" style={{ color: "#18181B" }}>Categories ({categories.length})</p></div>
+        {/* Mobile Vertical Cards (< 768px) */}
+        <div className="block md:hidden divide-y divide-zinc-200 dark:divide-zinc-800">
+          {categories.length === 0 ? (
+            <div className="py-10 px-4 text-center text-[13px] text-zinc-400">
+              No categories yet. <button onClick={handleSeedDefaults} className="text-blue-600 underline">Seed defaults</button> or create one.
+            </div>
+          ) : categories.map((c) => (
+            <div key={`mob-cat-${c.id}`} className="p-3.5 flex items-center justify-between gap-2 text-xs">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-3.5 h-3.5 rounded-full shrink-0" style={{ background: c.color ?? "#6B7280" }} />
+                <div className="min-w-0">
+                  <p className="font-semibold text-zinc-900 dark:text-zinc-100 truncate">{c.name}</p>
+                  <p className="text-[11px] text-zinc-400">{c.monthlyBudget > 0 ? `Budget: ${formatCurrency(c.monthlyBudget)}` : "No budget limit"}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-1 shrink-0">
+                <button onClick={() => startEdit(c)} title="Edit" className="btn-action btn-action-primary w-7 h-7"><Pencil className="w-3.5 h-3.5" /></button>
+                <button onClick={() => handleDelete(c.id)} title="Delete" className="btn-action btn-action-danger w-7 h-7"><Trash2 className="w-3.5 h-3.5" /></button>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="hidden md:block overflow-x-auto">
         <table className="table">
           <thead><tr><th>Name</th><th>Monthly Budget</th><th>Color</th><th></th></tr></thead>
           <tbody>
@@ -218,11 +241,29 @@ export function ExpenseCategoriesClient({ budgetData: initial, uncategorizedSpen
             ))}
           </tbody>
         </table>
+        </div>
       </div>
 
       {/* Recent expenses */}
       <div className="card overflow-hidden">
         <div className="card-section"><p className="text-[13px] font-semibold" style={{ color: "#18181B" }}>This Month's Expenses</p></div>
+        {/* Mobile Vertical Cards (< 768px) */}
+        <div className="block md:hidden divide-y divide-zinc-200 dark:divide-zinc-800">
+          {expenses.length === 0 ? (
+            <div className="py-8 px-4 text-center text-[13px] text-zinc-400">No expenses this month</div>
+          ) : expenses.map((e) => (
+            <div key={`mob-exp-${e.id}`} className="p-3.5 flex items-start justify-between gap-2 text-xs">
+              <div className="min-w-0">
+                <p className="font-semibold text-zinc-900 dark:text-zinc-100 break-words">{e.description}</p>
+                <p className="text-[11px] text-zinc-400 mt-0.5">
+                  {e.expenseCategory ? e.expenseCategory.name : e.category} · {new Date(e.date).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })} · {e.addedBy.name}
+                </p>
+              </div>
+              <span className="font-bold text-red-600 shrink-0">{formatCurrency(e.amount)}</span>
+            </div>
+          ))}
+        </div>
+        <div className="hidden md:block overflow-x-auto">
         <table className="table">
           <thead><tr><th>Description</th><th>Category</th><th>Amount</th><th>Date</th><th>By</th></tr></thead>
           <tbody>
@@ -246,6 +287,7 @@ export function ExpenseCategoriesClient({ budgetData: initial, uncategorizedSpen
             ))}
           </tbody>
         </table>
+        </div>
       </div>
     </div>
   );

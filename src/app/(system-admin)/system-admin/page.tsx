@@ -113,6 +113,32 @@ export default async function SystemAdminDashboard() {
             <p style={{ fontSize: 12, color: "#CBD5E1", marginTop: 4 }}>Agency owners who fill the landing page form will appear here.</p>
           </div>
         ) : (
+          <>
+          {/* Mobile Vertical Cards (< 768px) */}
+          <div className="block md:hidden divide-y divide-slate-100">
+            {demoRequests.map((d) => {
+              const ds = DEMO_STATUS[d.status] ?? DEMO_STATUS.NEW;
+              return (
+                <div key={`mob-dr-${d.id}`} className="p-3.5 space-y-1.5 text-xs">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="font-semibold text-slate-900">{d.name}</p>
+                      <p className="text-[11px] text-slate-400">{formatDate(d.createdAt)}</p>
+                    </div>
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 10, fontWeight: 600, background: ds.bg, color: ds.color, padding: "3px 8px", borderRadius: 999 }}>
+                      {ds.icon} {ds.label}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-[11px] text-slate-600">
+                    <a href={`tel:${d.phone}`}>{d.phone}</a>
+                    <a href={`mailto:${d.email}`} className="truncate max-w-[160px]">{d.email}</a>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="hidden md:block overflow-x-auto">
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
             <thead>
               <tr style={{ borderBottom: "1px solid #F1F5F9" }}>
@@ -165,6 +191,8 @@ export default async function SystemAdminDashboard() {
               })}
             </tbody>
           </table>
+          </div>
+          </>
         )}
       </div>
 
@@ -176,6 +204,33 @@ export default async function SystemAdminDashboard() {
             View all <ChevronRight style={{ width: 13, height: 13 }} />
           </Link>
         </div>
+        {/* Mobile Vertical Cards (< 768px) */}
+        <div className="block md:hidden divide-y divide-slate-100">
+          {recentAgencies.length === 0 ? (
+            <div className="py-10 px-4 text-center text-xs text-slate-400">
+              No agencies onboarded yet. <Link href="/system-admin/agencies/new" style={{ color: "#6366F1" }}>Add first agency →</Link>
+            </div>
+          ) : recentAgencies.map((a) => {
+            const s = STATUS_STYLE[a.status] ?? STATUS_STYLE.INACTIVE;
+            return (
+              <div key={`mob-ra-${a.id}`} className="p-3.5 space-y-1.5 text-xs">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <p className="font-semibold text-slate-900">{a.name}</p>
+                    <p className="text-[11px] text-slate-400">{a.ownerName} · {a.oilCompany ?? "—"}</p>
+                  </div>
+                  <span style={{ fontSize: 10, fontWeight: 500, background: s.bg, color: s.color, padding: "2px 8px", borderRadius: 999 }}>{a.status}</span>
+                </div>
+                <div className="flex items-center justify-between text-[11px] text-slate-500">
+                  <span>{a.plan.toUpperCase()} · {a._count.users} users</span>
+                  <span>{formatDate(a.createdAt)}</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="hidden md:block overflow-x-auto">
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
           <thead>
             <tr style={{ borderBottom: "1px solid #F1F5F9" }}>
@@ -226,6 +281,7 @@ export default async function SystemAdminDashboard() {
             })}
           </tbody>
         </table>
+        </div>
       </div>
     </div>
   );

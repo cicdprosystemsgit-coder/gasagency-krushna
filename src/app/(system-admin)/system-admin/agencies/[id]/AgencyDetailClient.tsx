@@ -209,6 +209,33 @@ export function AgencyDetailClient({
           </form>
         )}
 
+        {/* Mobile Vertical Cards (< 768px) */}
+        <div className="block md:hidden divide-y divide-slate-100">
+          {users.length === 0 ? (
+            <div className="py-10 text-center text-xs text-slate-400">No users yet</div>
+          ) : users.map((u) => {
+            const r = ROLE_STYLE[u.role] ?? { bg: "#F1F5F9", color: "#475569" };
+            return (
+              <div key={`mob-adu-${u.id}`} className="p-3.5 space-y-1.5 text-xs">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="font-semibold text-slate-900 truncate">{u.name}</p>
+                    <p className="text-[11px] text-slate-400 truncate">{u.email}{u.phone ? ` · ${u.phone}` : ""}</p>
+                  </div>
+                  <button onClick={() => handleToggle(u.id, u.isActive)} disabled={isPending} style={{ background: "none", border: "none", cursor: "pointer", padding: 2 }}>
+                    {u.isActive ? <ToggleRight style={{ width: 20, height: 20, color: "#16A34A" }} /> : <ToggleLeft style={{ width: 20, height: 20, color: "#94A3B8" }} />}
+                  </button>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span style={{ fontSize: 10, fontWeight: 500, background: r.bg, color: r.color, padding: "2px 8px", borderRadius: 999 }}>{u.role.replace(/_/g, " ")}</span>
+                  <span className="text-[11px] text-slate-400">{formatDate(u.createdAt)}</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="hidden md:block overflow-x-auto">
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
           <thead>
             <tr style={{ borderBottom: "1px solid #F1F5F9" }}>
@@ -257,6 +284,7 @@ export function AgencyDetailClient({
             })}
           </tbody>
         </table>
+        </div>
       </div>
 
       {/* ── Feature Access Panel ─────────────────────────────────────────────── */}

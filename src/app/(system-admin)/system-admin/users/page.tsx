@@ -30,6 +30,33 @@ export default async function AllUsersPage() {
       </div>
 
       <div style={{ background: "#fff", border: "1px solid #E2E8F0", borderRadius: 10, boxShadow: "0 1px 3px rgba(0,0,0,0.04)", overflow: "hidden" }}>
+        {/* Mobile Vertical Cards (< 768px) */}
+        <div className="block md:hidden divide-y divide-slate-100">
+          {users.map((u) => {
+            const r = ROLE_STYLE[u.role] ?? { bg: "#F4F4F5", color: "#52525B" };
+            return (
+              <div key={`mob-usr-${u.id}`} className="p-3.5 space-y-1.5 text-xs">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="font-semibold text-slate-900 truncate">{u.name}</p>
+                    <p className="text-[11px] text-slate-400 truncate">{u.email}</p>
+                  </div>
+                  <span style={{ fontSize: 10, fontWeight: 500, background: u.isActive ? "#DCFCE7" : "#F4F4F5", color: u.isActive ? "#15803D" : "#52525B", padding: "2px 8px", borderRadius: 999 }}>
+                    {u.isActive ? "Active" : "Inactive"}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-[11px] text-slate-500">
+                  <span style={{ fontSize: 10, fontWeight: 500, background: r.bg, color: r.color, padding: "2px 8px", borderRadius: 999 }}>
+                    {u.role.replace(/_/g, " ")}
+                  </span>
+                  <span>{u.agency?.name ?? "—"}</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="hidden md:block overflow-x-auto">
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
           <thead>
             <tr style={{ borderBottom: "1px solid #F1F5F9" }}>
@@ -69,6 +96,7 @@ export default async function AllUsersPage() {
             })}
           </tbody>
         </table>
+        </div>
       </div>
     </div>
   );

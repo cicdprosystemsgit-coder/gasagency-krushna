@@ -121,7 +121,34 @@ export function OfficeSalesPanel({
             <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">
               Office Counter Sales Breakdown
             </h4>
-            <div className="overflow-x-auto rounded-xl border border-slate-100">
+            {/* Mobile Vertical Cards (< 768px) */}
+            <div className="block md:hidden divide-y divide-slate-100 dark:divide-zinc-800 rounded-xl border border-slate-100 dark:border-zinc-800">
+              {employee.officeTransactionItems.length === 0 ? (
+                <div className="px-4 py-6 text-center text-slate-400 text-xs">No transactions recorded for this date</div>
+              ) : (
+                <>
+                  {employee.officeTransactionItems.map((item, index) => (
+                    <div key={`mob-osp-${index}`} className="p-3 space-y-1.5 text-xs">
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="text-[10px] bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full font-bold">{item.type}</span>
+                        <span className="font-black text-slate-800 dark:text-zinc-100">{formatCurrency(item.amount)}</span>
+                      </div>
+                      <p className="text-slate-600 dark:text-zinc-300 break-words">{item.description}</p>
+                      <div className="flex items-center justify-between text-[11px] text-slate-400">
+                        <span>Qty: {item.qty} × {formatCurrency(item.unitRate)}</span>
+                        <span className="font-medium text-slate-600">{getPaymentModeDisplay(item.paymentMode)}</span>
+                      </div>
+                    </div>
+                  ))}
+                  <div className="p-3 bg-slate-50/60 dark:bg-zinc-900/50 flex items-center justify-between text-xs font-bold">
+                    <span>Total ({employee.officeTransactionItems.reduce((sum, i) => sum + i.qty, 0)} items)</span>
+                    <span className="text-emerald-700 font-black">{formatCurrency(employee.expectedTotal)}</span>
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="hidden md:block overflow-x-auto rounded-xl border border-slate-100">
               <table className="w-full text-xs text-left">
                 <thead>
                   <tr className="bg-slate-50/50 border-b border-slate-100 text-slate-500 font-bold uppercase text-[10px]">

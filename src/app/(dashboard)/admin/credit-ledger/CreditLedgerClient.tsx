@@ -724,7 +724,7 @@ export function CreditLedgerClient({ customers, initialEntries, canEdit, userId 
             </div>
 
             {/* Cylinder Statistics Cards */}
-            <div className="grid grid-cols-3 gap-4 px-6 pb-6 pt-0 border-b border-slate-100 bg-slate-50/20">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 px-4 sm:px-6 pb-4 sm:pb-6 pt-0 border-b border-slate-100 bg-slate-50/20">
               <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col hover:shadow-md transition duration-200">
                 <span className="text-[10px] uppercase tracking-wider font-extrabold text-slate-400">Total Refills</span>
                 <span className="text-base font-extrabold text-blue-600 mt-1.5 flex items-center gap-1">

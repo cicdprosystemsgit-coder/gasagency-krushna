@@ -694,7 +694,37 @@ export function InternalVehiclesClient({
             </button>
           </div>
           <div className="rounded-lg overflow-hidden" style={{ background: "#fff", border: "1px solid #E4E4E7", boxShadow: "0 1px 2px rgba(0,0,0,0.04)" }}>
-            <div className="overflow-x-auto">
+            {/* Mobile Vertical Cards (< 768px) */}
+            <div className="block md:hidden divide-y divide-zinc-200 dark:divide-zinc-800">
+              {tripLogs.length === 0 ? (
+                <div className="py-12 px-4 text-center">
+                  <Truck className="w-8 h-8 mx-auto mb-2 text-zinc-300" />
+                  <p className="text-[13px] text-zinc-400">No trips recorded yet today</p>
+                </div>
+              ) : tripLogs.map((t) => (
+                <div key={`mob-iv-${t.id}`} className="p-3.5 space-y-2 text-xs">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="font-mono font-semibold text-zinc-900 dark:text-zinc-100">{t.vehicle.vehicleNo}</p>
+                      <p className="text-[11px] text-zinc-400">{t.vehicle.vehicleName} · {t.vehicle.assignedTo?.name ?? "—"}</p>
+                    </div>
+                    <span className={`badge ${TRIP_STATUS_COLORS[t.tripStatus] ?? "badge-neutral"} shrink-0`}>
+                      {TRIP_STATUS_LABELS[t.tripStatus] ?? t.tripStatus}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div><p className="text-[10px] text-zinc-400">Loaded</p><p className="font-bold text-blue-600">{t.cylindersLoaded}</p></div>
+                    <div><p className="text-[10px] text-zinc-400">Delivered</p><p className="font-bold text-emerald-600">{t.cylindersDelivered || "—"}</p></div>
+                    <div><p className="text-[10px] text-zinc-400">Returned</p><p className="font-bold text-amber-600">{t.cylindersReturned || "—"}</p></div>
+                  </div>
+                  <p className="text-[11px] text-zinc-400">
+                    Dep: {t.departureTime ? formatDateTime(t.departureTime) : "—"} · Ret: {t.returnTime ? formatDateTime(t.returnTime) : "—"}
+                  </p>
+                </div>
+              ))}
+            </div>
+
+            <div className="hidden md:block overflow-x-auto">
               <table className="table">
                 <thead><tr>
                   <th>Vehicle</th><th>Delivery Boy</th><th>Cylinders Loaded</th>
@@ -848,7 +878,37 @@ export function InternalVehiclesClient({
             </div>
           </div>
           <div className="rounded-lg overflow-hidden" style={{ background: "#fff", border: "1px solid #E4E4E7", boxShadow: "0 1px 2px rgba(0,0,0,0.04)" }}>
-            <div className="overflow-x-auto">
+            {/* Mobile Vertical Cards (< 768px) */}
+            <div className="block md:hidden divide-y divide-zinc-200 dark:divide-zinc-800">
+              {tripLogs.length === 0 ? (
+                <div className="py-12 px-4 text-center">
+                  <Truck className="w-8 h-8 mx-auto mb-2 text-zinc-300" />
+                  <p className="text-[13px] text-zinc-400">No trips recorded yet today</p>
+                </div>
+              ) : tripLogs.map((t) => (
+                <div key={`mob-iv-${t.id}`} className="p-3.5 space-y-2 text-xs">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="font-mono font-semibold text-zinc-900 dark:text-zinc-100">{t.vehicle.vehicleNo}</p>
+                      <p className="text-[11px] text-zinc-400">{t.vehicle.vehicleName} · {t.vehicle.assignedTo?.name ?? "—"}</p>
+                    </div>
+                    <span className={`badge ${TRIP_STATUS_COLORS[t.tripStatus] ?? "badge-neutral"} shrink-0`}>
+                      {TRIP_STATUS_LABELS[t.tripStatus] ?? t.tripStatus}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div><p className="text-[10px] text-zinc-400">Loaded</p><p className="font-bold text-blue-600">{t.cylindersLoaded}</p></div>
+                    <div><p className="text-[10px] text-zinc-400">Delivered</p><p className="font-bold text-emerald-600">{t.cylindersDelivered || "—"}</p></div>
+                    <div><p className="text-[10px] text-zinc-400">Returned</p><p className="font-bold text-amber-600">{t.cylindersReturned || "—"}</p></div>
+                  </div>
+                  <p className="text-[11px] text-zinc-400">
+                    Dep: {t.departureTime ? formatDateTime(t.departureTime) : "—"} · Ret: {t.returnTime ? formatDateTime(t.returnTime) : "—"}
+                  </p>
+                </div>
+              ))}
+            </div>
+
+            <div className="hidden md:block overflow-x-auto">
               <table className="table">
                 <thead><tr>
                   <th>Vehicle</th><th>Delivery Boy</th><th>Cylinders Loaded</th>

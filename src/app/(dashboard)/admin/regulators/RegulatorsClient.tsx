@@ -155,7 +155,50 @@ export function RegulatorsClient({ records }: RegulatorsClientProps) {
 
       {/* Table */}
       <div className="bg-white rounded-2xl border border-slate-100 shadow-xs overflow-hidden">
-        <div className="overflow-x-auto">
+        {/* Mobile Vertical Cards (< 768px) */}
+        <div className="block md:hidden divide-y divide-slate-100 dark:divide-zinc-800">
+          {filteredRecords.length === 0 ? (
+            <div className="px-4 py-12 text-center text-slate-400 text-xs">
+              <ShieldCheck className="w-10 h-10 mx-auto mb-2 text-slate-300" />
+              No regulator records found matching your filters.
+            </div>
+          ) : (
+            filteredRecords.map((r) => (
+              <div key={`mob-reg-${r.id}`} className="p-3.5 space-y-2 text-xs">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <span className="font-extrabold text-slate-800 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-md text-[11px]">
+                      #{r.regulatorNo}
+                    </span>
+                    <p className="font-bold text-slate-800 dark:text-zinc-100 mt-1.5">{r.customer.name}</p>
+                    <p className="text-[11px] text-slate-400">
+                      {r.customer.phone}{r.customer.customerCode ? ` · Conn: ${r.customer.customerCode}` : ""}
+                    </p>
+                  </div>
+                  {r.status === "ISSUED" ? (
+                    <span className="inline-flex items-center gap-1 bg-emerald-100/80 text-emerald-800 font-bold px-2.5 py-0.5 rounded-full text-[10px] shrink-0">
+                      <CheckCircle2 className="w-3 h-3" /> Active
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 bg-indigo-100/80 text-indigo-800 font-bold px-2.5 py-0.5 rounded-full text-[10px] shrink-0">
+                      <RefreshCw className="w-3 h-3" /> Replaced
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center justify-between text-[11px] text-slate-500">
+                  <span>Issued: {formatDate(r.issuedAt)}</span>
+                  {r.officeTransaction && (
+                    <span className="font-bold text-slate-800 dark:text-zinc-200">
+                      {formatCurrency(r.officeTransaction.amount)} ({r.officeTransaction.paymentMode})
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-100 text-xs text-slate-600">

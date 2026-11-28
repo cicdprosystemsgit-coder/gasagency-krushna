@@ -27,7 +27,7 @@ export function Navbar({ userName, role, renewalAlerts = 0, sidebarCollapsed, on
   return (
     <header
       className={cn(
-        "fixed top-0 right-0 z-30 transition-all duration-200 left-0 app-header",
+        "fixed top-0 right-0 z-30 transition-all duration-200 left-0 max-w-full overflow-hidden app-header",
         sidebarCollapsed ? "md:left-[52px]" : "md:left-[220px]"
       )}
       style={{
@@ -35,7 +35,7 @@ export function Navbar({ userName, role, renewalAlerts = 0, sidebarCollapsed, on
         borderBottom: "1px solid var(--color-border)",
       }}
     >
-      <div className="flex items-center w-full h-[52px] px-2 sm:px-3 gap-1">
+      <div className="flex items-center w-full max-w-full min-w-0 h-[52px] px-2 sm:px-3 gap-1">
         {/* Mobile Menu Trigger */}
         {onOpenMobileMenu && (
           <button

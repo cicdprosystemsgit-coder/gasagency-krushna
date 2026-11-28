@@ -88,6 +88,33 @@ export function AgenciesClient({ initialAgencies }: { initialAgencies: Agency[] 
 
       {/* Table */}
       <div style={{ background: "#fff", border: "1px solid #E2E8F0", borderRadius: 10, boxShadow: "0 1px 3px rgba(0,0,0,0.04)", overflow: "hidden" }}>
+        {/* Mobile Vertical Cards (< 768px) */}
+        <div className="block md:hidden divide-y divide-slate-100">
+          {filtered.length === 0 ? (
+            <div className="py-12 px-4 text-center text-xs text-slate-400">
+              {search ? `No agencies matching "${search}"` : "No agencies yet."}
+            </div>
+          ) : filtered.map((a) => {
+            const s = STATUS_STYLE[a.status] ?? STATUS_STYLE.INACTIVE;
+            return (
+              <div key={`mob-ag-${a.id}`} className="p-3.5 space-y-2 text-xs">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="font-semibold text-slate-900 text-sm truncate">{a.name}</p>
+                    <p className="text-[11px] text-slate-400 truncate">{a.ownerName} · {a.city}, {a.state}</p>
+                  </div>
+                  <span style={{ fontSize: 10, fontWeight: 600, background: s.bg, color: s.color, padding: "2px 8px", borderRadius: 999 }}>{a.status}</span>
+                </div>
+                <div className="flex items-center justify-between text-[11px] text-slate-500">
+                  <span>{a.plan.toUpperCase()} · {a.userCount} users</span>
+                  <Link href={`/system-admin/agencies/${a.id}`} className="font-semibold text-indigo-600">Manage →</Link>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="hidden md:block overflow-x-auto">
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
           <thead>
             <tr style={{ borderBottom: "1px solid #F1F5F9" }}>
@@ -160,6 +187,7 @@ export function AgenciesClient({ initialAgencies }: { initialAgencies: Agency[] 
             })}
           </tbody>
         </table>
+        </div>
       </div>
     </>
   );

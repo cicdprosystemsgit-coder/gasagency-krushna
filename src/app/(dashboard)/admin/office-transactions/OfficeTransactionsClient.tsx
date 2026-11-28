@@ -650,7 +650,57 @@ export function OfficeTransactionsClient({
       </div>
 
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden animate-fadeIn">
-        <div className="overflow-x-auto">
+        {/* Mobile Vertical Cards (< 768px) */}
+        <div className="block md:hidden divide-y divide-slate-100 dark:divide-zinc-800">
+          {filteredTxns.length === 0 ? (
+            <div className="px-4 py-12 text-center">
+              <Receipt className="w-10 h-10 mx-auto mb-3 text-slate-300" />
+              <p className="text-slate-400 text-sm">No transactions for this date</p>
+            </div>
+          ) : filteredTxns.map((t) => (
+            <div key={`mob-otx-${t.id}`} className="p-3.5 space-y-2 text-xs">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-[10px] bg-blue-100/70 text-blue-700 px-2 py-0.5 rounded-full font-bold">
+                      {typeMap[t.type] ?? t.type}
+                    </span>
+                    <span className="text-[10px] text-slate-400 font-semibold">
+                      {new Date(t.createdAt).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true })}
+                    </span>
+                  </div>
+                  <p className="font-bold text-slate-800 dark:text-zinc-100 text-[13px] mt-1">
+                    {t.customer ? `${t.customer.name}${t.customer.phone ? ` · ${t.customer.phone}` : ""}` : "Walk-in Customer"}
+                  </p>
+                </div>
+                <p className="font-bold text-sm text-slate-900 dark:text-zinc-100 shrink-0">{formatCurrency(t.amount)}</p>
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <div className="col-span-2">
+                  <p className="text-[10px] uppercase text-slate-400">Item / Description</p>
+                  <p className="text-slate-700 dark:text-zinc-300 break-words">{t.product?.name ?? t.description ?? "—"}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase text-slate-400">Qty × Rate</p>
+                  <p className="font-semibold text-slate-800 dark:text-zinc-200">{t.qty} × {formatCurrency(t.unitRate)}</p>
+                </div>
+              </div>
+              <div className="flex items-center justify-between pt-1">
+                <span className="text-[11px] bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-zinc-300 px-2 py-0.5 rounded-md font-bold">
+                  {getPaymentModeDisplay(t.paymentMode)}
+                </span>
+                {canEdit && (
+                  <button onClick={() => handleDelete(t.id)} className="p-1.5 rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600">
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+              {t.remarks && <p className="text-[11px] text-slate-400 break-words">{t.remarks}</p>}
+            </div>
+          ))}
+        </div>
+
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-100">

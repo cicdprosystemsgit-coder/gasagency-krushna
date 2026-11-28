@@ -267,6 +267,32 @@ export function BillingClient({
             <h2 className="text-sm font-semibold text-zinc-700">Payment History</h2>
           </div>
           <div className="rounded-xl border border-zinc-200 bg-white overflow-hidden">
+            {/* Mobile Vertical Cards (< 768px) */}
+            <div className="block md:hidden divide-y divide-zinc-100 dark:divide-zinc-800">
+              {transactions.map((t) => (
+                <div key={`mob-bill-${t.id}`} className="p-3.5 space-y-1.5 text-xs">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="font-semibold text-zinc-900 dark:text-zinc-100 capitalize">
+                        {plans[t.plan]?.name ?? t.plan} <span className="text-zinc-400">({t.billingCycle})</span>
+                      </p>
+                      <p className="font-mono text-[10px] text-zinc-400 truncate">{t.orderId}</p>
+                    </div>
+                    <span className="font-bold text-sm text-zinc-900 dark:text-zinc-100 shrink-0">{formatINR(t.amount)}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] text-zinc-500">
+                      {new Date(t.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                    </span>
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${STATUS_STYLES[t.status] ?? STATUS_STYLES.EXPIRED}`}>
+                      {t.status}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-zinc-100 bg-zinc-50">
@@ -300,6 +326,7 @@ export function BillingClient({
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
         </div>
       )}

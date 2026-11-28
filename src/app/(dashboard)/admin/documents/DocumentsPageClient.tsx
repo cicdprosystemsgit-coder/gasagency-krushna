@@ -163,6 +163,41 @@ export function DocumentsPageClient({ docs: initial, expiringDocs, employees, ve
 
       <div className="card overflow-hidden">
         <div className="card-section"><p className="text-[13px] font-semibold" style={{ color: "#18181B" }}>{filteredDocs.length} document{filteredDocs.length !== 1 ? "s" : ""}</p></div>
+        {/* Mobile Vertical Cards (< 768px) */}
+        <div className="block md:hidden divide-y divide-zinc-200 dark:divide-zinc-800">
+          {filteredDocs.length === 0 ? (
+            <div className="py-10 px-4 text-center text-[13px] text-zinc-400">No documents found</div>
+          ) : filteredDocs.map((d) => {
+            const days = daysUntilExpiry(d.expiryDate);
+            const isExpired = days !== null && days <= 0;
+            const isWarning = days !== null && days > 0 && days <= 30;
+            return (
+              <div key={`mob-doc-${d.id}`} className="p-3.5 space-y-2 text-xs">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <FileText className="w-4 h-4 shrink-0 text-zinc-400" />
+                    <span className="font-semibold text-zinc-900 dark:text-zinc-100 truncate">{d.fileName}</span>
+                  </div>
+                  <span className="badge badge-blue shrink-0">{d.docType}</span>
+                </div>
+                <div className="flex items-center justify-between text-[11px] text-zinc-500">
+                  <span>{d.entityType} · By {d.uploadedBy.name}</span>
+                  {d.expiryDate ? (
+                    <span className="font-medium" style={{ color: isExpired ? "#DC2626" : isWarning ? "#D97706" : "#16A34A" }}>
+                      Exp: {formatDate(new Date(d.expiryDate))}{isWarning ? ` (${days}d)` : isExpired ? " EXPIRED" : ""}
+                    </span>
+                  ) : <span>{formatDate(new Date(d.createdAt))}</span>}
+                </div>
+                <div className="flex items-center justify-end gap-1.5 pt-1">
+                  <button onClick={() => handleDownload(d.id)} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-zinc-200 text-zinc-600 text-xs"><Download className="w-3.5 h-3.5" /> Download</button>
+                  {role === "ADMIN" && <button onClick={() => handleDelete(d.id)} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-red-200 text-red-600 text-xs"><Trash2 className="w-3.5 h-3.5" /></button>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="hidden md:block overflow-x-auto">
         <table className="table">
           <thead><tr><th>File</th><th>Type</th><th>Entity</th><th>Expiry</th><th>Uploaded</th><th>By</th><th></th></tr></thead>
           <tbody>
@@ -191,6 +226,7 @@ export function DocumentsPageClient({ docs: initial, expiringDocs, employees, ve
             })}
           </tbody>
         </table>
+        </div>
       </div>
     </div>
   );

@@ -95,7 +95,38 @@ export function TeamHeatmap({ employees, records, month, year }: Props) {
         </div>
       </div>
 
-      <div className="overflow-x-auto">
+      {/* Mobile Vertical Summary (< 768px) */}
+      <div className="block md:hidden divide-y divide-zinc-100 dark:divide-zinc-800">
+        {employees.map((emp) => {
+          const present = dayNumbers.filter((d) => getStatus(emp.id, d) === "PRESENT").length;
+          const half = dayNumbers.filter((d) => getStatus(emp.id, d) === "HALF_DAY").length;
+          const absent = dayNumbers.filter((d) => getStatus(emp.id, d) === "ABSENT").length;
+          const leave = dayNumbers.filter((d) => getStatus(emp.id, d) === "ON_LEAVE").length;
+          const totalMarked = present + half + absent + leave;
+          const pct = totalMarked > 0 ? Math.round(((present + half * 0.5) / totalMarked) * 100) : 0;
+          return (
+            <div key={`mob-hm-${emp.id}`} className="py-3 space-y-2 text-xs">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="w-6 h-6 rounded-full bg-blue-500 text-white flex items-center justify-center text-[10px] font-bold shrink-0">
+                    {emp.name.charAt(0)}
+                  </div>
+                  <span className="font-bold text-zinc-800 dark:text-zinc-100 truncate">{emp.name}</span>
+                </div>
+                <span className="font-bold text-blue-600 shrink-0">{pct}%</span>
+              </div>
+              <div className="grid grid-cols-4 gap-1.5 text-center text-[11px]">
+                <div className="rounded py-1 bg-emerald-50 text-emerald-700 font-semibold">P: {present}</div>
+                <div className="rounded py-1 bg-amber-50 text-amber-700 font-semibold">H: {half}</div>
+                <div className="rounded py-1 bg-red-50 text-red-700 font-semibold">A: {absent}</div>
+                <div className="rounded py-1 bg-sky-50 text-sky-700 font-semibold">L: {leave}</div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="hidden md:block overflow-x-auto">
         <table className="min-w-full border-collapse border border-zinc-100">
           <thead>
             <tr className="bg-zinc-50/50">

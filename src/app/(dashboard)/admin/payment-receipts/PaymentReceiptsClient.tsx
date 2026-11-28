@@ -290,6 +290,44 @@ export function PaymentReceiptsClient({ receipts: initial, customers, role }: Pr
         <div className="card-section">
           <p className="text-[13px] font-semibold" style={{ color: "#18181B" }}>All Receipts</p>
         </div>
+        {/* Mobile Vertical Cards (< 768px) */}
+        <div className="block md:hidden divide-y divide-zinc-200 dark:divide-zinc-800">
+          {filteredReceipts.length === 0 ? (
+            <div className="py-10 px-4 text-center text-[13px] text-zinc-400">
+              No receipts found for the selected date range.
+            </div>
+          ) : filteredReceipts.map((r) => {
+            const modeCfg = getModeColor(r.paymentMode);
+            return (
+              <div key={`mob-rec-${r.id}`} className="p-3.5 space-y-2 text-xs">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="font-mono text-[11px] font-semibold text-blue-600">{r.receiptNo}</p>
+                    <p className="font-semibold text-[13px] text-zinc-900 dark:text-zinc-100 truncate">{r.customer?.name ?? "—"}</p>
+                    {r.customer?.phone && <p className="text-[11px] text-zinc-400">{r.customer.phone}</p>}
+                  </div>
+                  <span className="font-bold text-sm text-emerald-600 shrink-0">{formatCurrency(r.amount)}</span>
+                </div>
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <span className="badge flex items-center gap-1 w-fit" style={{ background: modeCfg.bg, color: modeCfg.color }}>
+                    {getModeIcon(r.paymentMode)} {getPaymentModeDisplay(r.paymentMode)}
+                  </span>
+                  <span className="text-[11px] text-zinc-400">{formatDate(new Date(r.date))} · {r.collectedBy?.name ?? "—"}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  {r.utrNo ? <span className="text-[11px] font-mono text-zinc-500">UTR: {r.utrNo}</span> : <span />}
+                  {role === "ADMIN" && (
+                    <button onClick={() => handleDelete(r.id)} className="text-zinc-400 hover:text-red-500 p-1" title="Delete receipt">
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="hidden md:block overflow-x-auto">
         <table className="table">
           <thead>
             <tr>
@@ -350,6 +388,7 @@ export function PaymentReceiptsClient({ receipts: initial, customers, role }: Pr
             })}
           </tbody>
         </table>
+        </div>
       </div>
 
       {/* Quick Add Customer Modal */}

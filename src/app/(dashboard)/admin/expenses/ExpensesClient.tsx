@@ -345,7 +345,7 @@ export function ExpensesClient({
               <input value={assetForm.name} onChange={(e) => setAssetForm({ ...assetForm, name: e.target.value })} placeholder="e.g., MH12AB1234 or Agency License" className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
           </div>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-1.5">Registration Date *</label>
               <input type="date" value={assetForm.registrationDate} onChange={(e) => setAssetForm({ ...assetForm, registrationDate: e.target.value })} className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />

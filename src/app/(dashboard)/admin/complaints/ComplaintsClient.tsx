@@ -94,6 +94,47 @@ export function ComplaintsClient({ complaints: initial, role, userId }: Props) {
 
       {/* Table */}
       <div className="card overflow-hidden">
+        {/* Mobile Vertical Cards (< 768px) */}
+        <div className="block md:hidden divide-y divide-zinc-200 dark:divide-zinc-800">
+          {filtered.length === 0 ? (
+            <div className="py-12 px-4 text-center text-[13px] text-zinc-400">
+              <MessageSquarePlus className="w-6 h-6 mx-auto mb-2 text-zinc-300" />
+              No complaints in this category
+            </div>
+          ) : filtered.map((c) => {
+            const cfg = STATUS_CONFIG[c.status] ?? STATUS_CONFIG.OPEN;
+            return (
+              <div key={`mob-cmp-${c.id}`} className="p-3.5 space-y-2 text-xs">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="font-semibold text-[13px] text-zinc-900 dark:text-zinc-100 truncate">{c.customer.name}</p>
+                    <p className="text-[11px] text-zinc-400">{c.customer.phone} · {formatDate(new Date(c.createdAt))}</p>
+                  </div>
+                  <span className="badge flex items-center gap-1 w-fit shrink-0" style={{ background: cfg.bg, color: cfg.color }}>
+                    {cfg.icon} {cfg.label}
+                  </span>
+                </div>
+                <span className="badge badge-neutral inline-block">{c.category.replace(/_/g, " ")}</span>
+                <p className="text-zinc-600 dark:text-zinc-300 break-words">{c.description}</p>
+                {c.status !== "CLOSED" && c.status !== "RESOLVED" ? (
+                  <div className="flex items-center justify-end gap-1.5 pt-2 border-t border-zinc-100 dark:border-zinc-800">
+                    {c.status === "OPEN" && (
+                      <button onClick={() => handleStatusChange(c.id, "IN_PROGRESS")} disabled={isPending} className="text-[11px] px-2.5 py-1 rounded font-medium" style={{ color: "#D97706", border: "1px solid #FDE68A" }}>Start</button>
+                    )}
+                    <button onClick={() => handleStatusChange(c.id, "RESOLVED")} disabled={isPending} className="text-[11px] px-2.5 py-1 rounded font-medium" style={{ color: "#16A34A", border: "1px solid #86EFAC" }}>Resolve</button>
+                    <button onClick={() => handleStatusChange(c.id, "CLOSED")} disabled={isPending} className="text-[11px] px-2.5 py-1 rounded font-medium" style={{ color: "#71717A", border: "1px solid #E4E4E7" }}>Close</button>
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-zinc-400">
+                    {c.resolvedBy?.name ? `Resolved by ${c.resolvedBy.name}` : ""} {c.resolvedAt ? `on ${formatDate(new Date(c.resolvedAt))}` : ""}
+                  </p>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="hidden md:block overflow-x-auto">
         <table className="table">
           <thead>
             <tr>
@@ -177,6 +218,7 @@ export function ComplaintsClient({ complaints: initial, role, userId }: Props) {
             })}
           </tbody>
         </table>
+        </div>
       </div>
     </div>
   );

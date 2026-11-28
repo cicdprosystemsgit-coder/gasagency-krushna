@@ -84,7 +84,7 @@ export default async function DeliveryLedgerPage() {
       <PageHeader title="Delivery Ledger" subtitle="Complete delivery history" icon={<Package className="w-5 h-5" />} />
 
       {/* Summary strip */}
-      <div className="grid grid-cols-3 gap-4 mb-5">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-5">
         <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4">
           <p className="text-xs text-slate-500 uppercase tracking-wide font-medium">Total Deliveries</p>
           <p className="text-2xl font-bold text-slate-800 mt-1">{deliveries.length}</p>
@@ -102,7 +102,66 @@ export default async function DeliveryLedgerPage() {
       </div>
 
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
+        {/* Mobile Vertical Cards (< 768px) */}
+        <div className="block md:hidden divide-y divide-slate-100 dark:divide-zinc-800">
+          {deliveries.length === 0 ? (
+            <div className="px-5 py-12 text-center text-slate-400 text-xs">No delivery history yet</div>
+          ) : (
+            <>
+              {deliveries.map((d) => {
+                const isDom = d.customer.type === "DOMESTIC";
+                const isPartial = d.paymentMode === "PARTIAL";
+                const isCredit = d.paymentMode === "CREDIT";
+                const isCash = d.paymentMode === "CASH";
+                const isOnline = ["PhonePe", "GPay", "Paytm", "Paybook", "Others"].includes(d.paymentMode);
+                let cashVal = 0, onlineVal = 0, creditVal = 0;
+                if (isCash) cashVal = d.cashCollected;
+                else if (isCredit) creditVal = d.creditAmount || 0;
+                else if (isPartial) {
+                  cashVal = d.cashCollected;
+                  if (isDom) onlineVal = d.creditAmount || 0;
+                  else creditVal = d.creditAmount || 0;
+                } else if (isOnline) onlineVal = d.cashCollected;
+
+                return (
+                  <div key={`mob-ldg-${d.id}`} className="p-3.5 space-y-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-[13px] font-semibold text-slate-800 dark:text-zinc-100 truncate">{d.customer.name}</p>
+                        <p className="text-[11px] text-slate-400">{formatDate(d.date)} · {d.product.name} (×{d.deliveredQty})</p>
+                      </div>
+                      <PaymentBadge mode={d.paymentMode || "CASH"} />
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 text-xs">
+                      <div>
+                        <p className="text-[10px] uppercase text-slate-400">Cash</p>
+                        <p className="font-bold" style={{ color: cashVal > 0 ? "#15803d" : "#94a3b8" }}>{cashVal > 0 ? formatCurrency(cashVal) : "—"}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] uppercase text-slate-400">Online</p>
+                        <p className="font-bold" style={{ color: onlineVal > 0 ? "#7C3AED" : "#94a3b8" }}>{onlineVal > 0 ? formatCurrency(onlineVal) : "—"}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] uppercase text-slate-400">Udhari</p>
+                        <p className="font-bold" style={{ color: creditVal > 0 ? "#B45309" : "#94a3b8" }}>{creditVal > 0 ? formatCurrency(creditVal) : "—"}</p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+              <div className="p-3.5 bg-slate-50 dark:bg-zinc-900/60 space-y-1.5 text-xs">
+                <p className="font-semibold text-slate-600 dark:text-zinc-300">Total ({deliveries.length} records)</p>
+                <div className="grid grid-cols-3 gap-2">
+                  <div><span className="text-slate-400">Cash:</span> <strong className="text-green-700">{totals.cash > 0 ? formatCurrency(totals.cash) : "—"}</strong></div>
+                  <div><span className="text-slate-400">Online:</span> <strong style={{ color: "#7C3AED" }}>{totals.online > 0 ? formatCurrency(totals.online) : "—"}</strong></div>
+                  <div><span className="text-slate-400">Udhari:</span> <strong style={{ color: "#B45309" }}>{totals.udhari > 0 ? formatCurrency(totals.udhari) : "—"}</strong></div>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-100">

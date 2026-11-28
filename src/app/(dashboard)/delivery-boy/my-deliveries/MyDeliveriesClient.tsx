@@ -2581,7 +2581,57 @@ function PaymentBadge({ mode }: { mode: string }) {
 function DeliveryTable({ deliveries, compact = false }: { deliveries: DeliveryRecord[]; compact?: boolean }) {
   return (
     <div className="rounded-xl overflow-hidden" style={{ border: "1px solid #E4E4E7" }}>
-      <div className="overflow-x-auto">
+      {/* Mobile Vertical Cards (< 768px) */}
+      <div className="block md:hidden divide-y divide-zinc-200 dark:divide-zinc-800">
+        {deliveries.map((d) => {
+          const isDom = d.customer.type === "DOMESTIC";
+          const isPartial = d.paymentMode === "PARTIAL";
+          const isCredit = d.paymentMode === "CREDIT";
+          const isCash = d.paymentMode === "CASH";
+          const isOnline = ["PhonePe", "GPay", "Paytm", "Paybook", "Others"].includes(d.paymentMode);
+          let cashVal = 0, onlineVal = 0, creditVal = 0;
+          if (isCash) cashVal = d.cashCollected;
+          else if (isCredit) creditVal = d.creditAmount || 0;
+          else if (isPartial) {
+            cashVal = d.cashCollected;
+            if (isDom) onlineVal = d.creditAmount || 0;
+            else creditVal = d.creditAmount || 0;
+          } else if (isOnline) onlineVal = d.cashCollected;
+
+          return (
+            <div key={`mob-dt-${d.id}`} className="p-3.5 space-y-2 text-xs">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="font-semibold text-[13px] text-zinc-900 dark:text-zinc-100 truncate">{d.customer.name}</p>
+                  <p className="text-[11px] text-zinc-400">
+                    {d.customer.phone}{d.customer.customerCode ? ` · #${d.customer.customerCode}` : ""}
+                  </p>
+                </div>
+                <PaymentBadge mode={d.paymentMode || "CASH"} />
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <p className="text-[10px] uppercase text-zinc-400">Product</p>
+                  <p className="text-zinc-700 dark:text-zinc-300 truncate">{d.product.name}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase text-zinc-400">Del / Ret / Pen</p>
+                  <p className="font-bold text-blue-600">{d.deliveredQty} / {d.returnedQty || 0} / {d.pendingQty || 0}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase text-zinc-400">Amount</p>
+                  <p className="font-semibold text-emerald-600">
+                    {cashVal > 0 ? formatCurrency(cashVal) : onlineVal > 0 ? formatCurrency(onlineVal) : creditVal > 0 ? `${formatCurrency(creditVal)} (Cr)` : "—"}
+                  </p>
+                </div>
+              </div>
+              {!compact && <p className="text-[10px] text-zinc-400">{fmtTime(d.createdAt)}</p>}
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="hidden md:block overflow-x-auto">
         <table className="w-full text-[13px]">
           <thead>
             <tr style={{ background: "#F8F8F8", borderBottom: "1px solid #E4E4E7" }}>

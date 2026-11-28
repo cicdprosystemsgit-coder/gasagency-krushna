@@ -184,6 +184,26 @@ export function GodownInventoryTab({
                 <p className="text-[13px] font-semibold" style={{ color: "#18181B" }}>Current Stock Levels (All Time)</p>
                 <p className="text-[11px] mt-0.5" style={{ color: "#A1A1AA" }}>Net available = total received − dispatched to office</p>
               </div>
+              {/* Mobile Vertical Cards (< 768px) */}
+              <div className="block md:hidden divide-y divide-zinc-100 dark:divide-zinc-800">
+                {stockLevels.map((s) => (
+                  <div key={`mob-gkl-${s.id}`} className="p-3.5 space-y-2 text-xs">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-semibold text-zinc-900 dark:text-zinc-100">{s.name}</span>
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full font-bold text-xs"
+                        style={{ background: s.available > 0 ? "#F0FDF4" : "#FEF2F2", color: s.available > 0 ? "#15803D" : "#B91C1C" }}>
+                        {s.available} avail
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div><p className="text-[10px] text-zinc-400">Received</p><p className="font-bold text-blue-600">{s.received}</p></div>
+                      <div><p className="text-[10px] text-zinc-400">Dispatched</p><p className="font-bold text-emerald-600">{s.dispatched}</p></div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="hidden md:block overflow-x-auto">
               <table className="w-full">
                 <thead>
                   <tr style={{ background: "#FAFAFA", borderBottom: "1px solid #F4F4F5" }}>
@@ -230,6 +250,7 @@ export function GodownInventoryTab({
                   ))}
                 </tbody>
               </table>
+              </div>
             </div>
           )}
         </div>
@@ -269,6 +290,26 @@ export function GodownInventoryTab({
                         {dispatched > 0 && <span style={{ color: "#16A34A" }}>↑ Dispatched: {dispatched}</span>}
                       </div>
                     </div>
+                    {/* Mobile Vertical List (< 768px) */}
+                    <div className="block md:hidden divide-y divide-zinc-100 dark:divide-zinc-800">
+                      {items.map((m) => (
+                        <div key={`mob-gkm-${m.id}`} className="p-3 space-y-1 text-xs">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-semibold text-zinc-900 dark:text-zinc-100">{m.product.name}</span>
+                            <span className="font-bold text-sm" style={{ color: m.moveType === "RECEIVED" ? "#2563EB" : "#16A34A" }}>
+                              {m.moveType === "RECEIVED" ? "+" : "-"}{m.qty}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between text-[11px] text-zinc-400">
+                            <span>{m.moveType === "RECEIVED" ? "↓ Received" : "↑ To Office"} · {m.recordedBy.name}</span>
+                            <span>{new Date(m.date).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}</span>
+                          </div>
+                          {(m.batchNo || m.notes) && <p className="text-[11px] text-zinc-500">{[m.batchNo, m.notes].filter(Boolean).join(" · ")}</p>}
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="hidden md:block overflow-x-auto">
                     <table className="w-full">
                       <thead>
                         <tr style={{ borderBottom: "1px solid #F4F4F5" }}>
@@ -306,6 +347,7 @@ export function GodownInventoryTab({
                         ))}
                       </tbody>
                     </table>
+                    </div>
                   </div>
                 );
               });
