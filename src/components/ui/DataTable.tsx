@@ -92,13 +92,17 @@ export function DataTable<T extends Record<string, unknown>>({
                         ? columns[0].render(row)
                         : String(row[columns[0].key as keyof T] ?? "—")}
                     </div>
-                    {columns.length > 1 && columns[columns.length - 1] && (
-                      <div className="shrink-0 text-xs">
-                        {columns[columns.length - 1].render
-                          ? columns[columns.length - 1].render(row)
-                          : String(row[columns[columns.length - 1].key as keyof T] ?? "—")}
-                      </div>
-                    )}
+                    {(() => {
+                      const lastCol = columns.length > 1 ? columns[columns.length - 1] : null;
+                      if (!lastCol) return null;
+                      return (
+                        <div className="shrink-0 text-xs">
+                          {lastCol.render
+                            ? lastCol.render(row)
+                            : String(row[lastCol.key as keyof T] ?? "—")}
+                        </div>
+                      );
+                    })()}
                   </div>
                 )}
                 {columns.length > 2 && (

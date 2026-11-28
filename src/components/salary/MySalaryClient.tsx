@@ -813,43 +813,27 @@ function BonusesTab({ bonuses, ytdBonus, currentYear }: {
           style={{ background: "#fff", border: "1px solid #E4E4E7", boxShadow: "0 1px 2px rgba(0,0,0,0.04)" }}>
           {/* Mobile Vertical Cards (< 768px) */}
           <div className="block md:hidden divide-y divide-zinc-200 dark:divide-zinc-800">
-            {[...advances].sort((a, b) => new Date(b.advanceDate).getTime() - new Date(a.advanceDate).getTime()).map((a) => {
-              const s = ADVANCE_STATUS[a.status] ?? { label: a.status, color: "#52525B", bg: "#F4F4F5" };
-              const progress = a.amount > 0 ? (a.recoveredAmount / a.amount) * 100 : 0;
-              return (
-                <div key={`mob-adv-${a.id}`} className="p-3.5 space-y-2.5">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="text-[13px] font-semibold text-zinc-900 dark:text-zinc-100 break-words">{a.reason ?? "Advance"}</p>
-                      <p className="text-[11px] text-zinc-400 mt-0.5">{formatDate(a.advanceDate)}</p>
-                    </div>
-                    <span className="shrink-0 text-[11px] px-2.5 py-0.5 rounded-full font-semibold" style={{ background: s.bg, color: s.color }}>
-                      {s.label}
-                    </span>
+            {[...bonuses].sort((a, b) => new Date(b.bonusDate).getTime() - new Date(a.bonusDate).getTime()).map((b) => (
+              <div key={`mob-bon-${b.id}`} className="p-3.5 space-y-2">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-[13px] font-semibold text-zinc-900 dark:text-zinc-100 break-words">
+                      {b.reason ?? "Bonus"}
+                    </p>
+                    <p className="text-[11px] text-zinc-400 mt-0.5">
+                      {MONTHS[(b.month ?? 1) - 1]} {b.year} · {formatDate(b.bonusDate)}
+                    </p>
                   </div>
-                  <div className="grid grid-cols-3 gap-2 text-xs">
-                    <div>
-                      <p className="text-[10px] uppercase tracking-wider text-zinc-400">Amount</p>
-                      <p className="font-bold text-red-600 mt-0.5">{formatCurrency(a.amount)}</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] uppercase tracking-wider text-zinc-400">Recovered</p>
-                      <p className="font-semibold text-emerald-600 mt-0.5">{formatCurrency(a.recoveredAmount)}</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] uppercase tracking-wider text-zinc-400">Balance</p>
-                      <p className="font-bold mt-0.5" style={{ color: a.balanceAmount > 0 ? "#D97706" : "#16A34A" }}>
-                        {a.balanceAmount > 0 ? formatCurrency(a.balanceAmount) : "Nil"}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="h-1.5 w-full rounded-full bg-zinc-200 dark:bg-zinc-800 overflow-hidden">
-                    <div className="h-full bg-emerald-600 rounded-full" style={{ width: `${progress}%` }} />
-                  </div>
-                  {a.notes && <p className="text-[11px] text-zinc-500 break-words">{a.notes}</p>}
+                  <span
+                    className="shrink-0 text-xs font-extrabold px-2 py-0.5 rounded-md"
+                    style={{ color: "#D97706", background: "#FFFBEB" }}
+                  >
+                    {formatCurrency(b.amount)}
+                  </span>
                 </div>
-              );
-            })}
+                {b.remarks && <p className="text-[11px] text-zinc-500 break-words">{b.remarks}</p>}
+              </div>
+            ))}
           </div>
 
           <div className="hidden md:block overflow-x-auto">

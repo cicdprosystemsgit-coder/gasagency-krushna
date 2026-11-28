@@ -394,6 +394,7 @@ export function GodownInventoryClient({ initialMovements, products, userId }: {
                   ))}
                 </tbody>
               </table>
+              </div>
             </div>
           </div>
         )

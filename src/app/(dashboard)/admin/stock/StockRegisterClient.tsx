@@ -500,7 +500,7 @@ export function StockRegisterClient({
                     <div><p className="text-[10px] text-zinc-400">Opening</p><p className="font-semibold">{c.openingFull} Full / {c.openingEmpty} MT</p></div>
                     <div><p className="text-[10px] text-zinc-400">Plant Load</p><p className="font-semibold text-emerald-700">+{c.loadReceivedFull} Full / {c.loadReceivedEmpty} MT</p></div>
                     <div><p className="text-[10px] text-zinc-400">Delivered</p><p className="font-semibold text-rose-600">-{c.deliveredQty} Full</p></div>
-                    <div><p className="text-[10px] text-zinc-400">Empties Ret.</p><p className="font-semibold text-blue-600">+{c.emptyReturnedQty} MT</p></div>
+                    <div><p className="text-[10px] text-zinc-400">Empties Ret.</p><p className="font-semibold text-blue-600">+{c.emptiesReceived} MT</p></div>
                   </div>
                 </div>
               ))}

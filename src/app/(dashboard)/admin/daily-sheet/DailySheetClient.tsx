@@ -393,9 +393,9 @@ export function DailySheetClient({ initialData, selectedDate, userRole = "ADMIN"
                   </div>
                   <div className="grid grid-cols-4 gap-1.5 text-center">
                     <div><p className="text-[10px] text-slate-400">Del</p><p className="font-semibold">{row.deliveredQty}</p></div>
-                    <div><p className="text-[10px] text-slate-400">Empty</p><p className="font-semibold">{row.emptyReturnedQty}</p></div>
-                    <div><p className="text-[10px] text-slate-400">Full Ret</p><p className="font-semibold">{row.fullReturnedQty}</p></div>
-                    <div><p className="text-[10px] text-slate-400">Accounted</p><p className="font-bold text-indigo-700">{row.accountedQty}</p></div>
+                    <div><p className="text-[10px] text-slate-400">Empty</p><p className="font-semibold">{row.emptyReturnQty}</p></div>
+                    <div><p className="text-[10px] text-slate-400">Full Ret</p><p className="font-semibold">{row.fullReturnQty}</p></div>
+                    <div><p className="text-[10px] text-slate-400">Accounted</p><p className="font-bold text-indigo-700">{row.totalAccountedQty}</p></div>
                   </div>
                 </div>
               ))}
@@ -1145,13 +1145,13 @@ export function DailySheetClient({ initialData, selectedDate, userRole = "ADMIN"
                       <p className="text-[11px] text-slate-400">{c.phone !== "-" ? c.phone : ""}{c.customerCode ? ` · ${c.customerCode}` : ""}</p>
                     </div>
                     <span className="px-2 py-0.5 rounded-full text-[11px] font-extrabold bg-amber-100 text-amber-800 shrink-0">
-                      Pending: {c.pendingEmpty}
+                      Pending: {c.pendingEmptyQty}
                     </span>
                   </div>
                   <div className="grid grid-cols-3 gap-2">
                     <div><p className="text-[10px] text-slate-400">Product</p><p className="truncate">{c.productName}</p></div>
                     <div><p className="text-[10px] text-slate-400">Delivered</p><p className="font-semibold">{c.deliveredQty}</p></div>
-                    <div><p className="text-[10px] text-slate-400">Returned</p><p className="font-semibold">{c.emptyReturned}</p></div>
+                    <div><p className="text-[10px] text-slate-400">Returned</p><p className="font-semibold">{c.returnedQty}</p></div>
                   </div>
                 </div>
               ))}
